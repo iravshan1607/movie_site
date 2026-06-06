@@ -43,7 +43,11 @@ async function loadMovies() {
     const r = await fetch('/api/movies?' + params);
     const d = await r.json();
     if (!d.movies || !d.movies.length) {
-      status.innerHTML = '😕 Hech narsa topilmadi. Boshqa qidiruv yoki filtr bilan urinib ko\'ring.';
+      if (d.error) {
+        status.innerHTML = '⚠️ Baza xatosi: ' + d.error;
+      } else {
+        status.innerHTML = '😕 Hech narsa topilmadi. Boshqa qidiruv yoki filtr bilan urinib ko\'ring.';
+      }
       return;
     }
     status.innerHTML = '';
