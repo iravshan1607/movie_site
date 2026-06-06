@@ -205,15 +205,48 @@ def _check(d):
 def admin_login():
     return jsonify({"ok": _check(request.get_json() or {})})
 
-@app.route("/api/admin/add", methods=["POST"])
-def admin_add():
+@app.route("/api/admin/list", methods=["POST"])
+def admin_list():
+    """Admin uchun kinolar ro'yxati (qidiruv bilan) — boshqarish uchun."""
     d = request.get_json() or {}
     if not _check(d):
         return jsonify({"error": "ruxsat yo'q"}), 403
+    q = (d.get("q") or "").strip()
+    try:
+        with get_conn() as conn:
+            cur = conn.cursor()
+            if q:
+                cur.execute("""
+                    SELECT id, title, genre, year, language, quality,
+                           COALESCE(content_type,'movie'), COALESCE(views,0)
+                    FROM movies WHERE title ILIKE %s
+                    ORDER BY created_at DESC LIMIT 200
+                """, (f"%{q}%",))
+            else:
+                cur.execute("""
+                    SELECT id, title, genre, year, language, quality,
+                           COALESCE(content_type,'movie'), COALESCE(views,0)
+                    FROM movies ORDER BY created_at DESC LIMIT 200
+                """)
+            rows = cur.fetchall()
+        movies = [{
+            "id": r[0], "title": r[1], "genre": r[2] or "", "year": r[3],
+            "language": r[4] or "", "quality": r[5] or "", "type": r[6], "views": r[7],
+        } for r in rows]
+        return jsonify({"movies": movies})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/admin/edit", methods=["POST"])
+def admin_edit():
+    """Mavjud kinoni tahrirlash (file_id o'zgartirilmaydi — video botda)."""
+    d = request.get_json() or {}
+    if not _check(d):
+        return jsonify({"error": "ruxsat yo'q"}), 403
+    mid = d.get("id")
     title = (d.get("title") or "").strip()
-    file_id = (d.get("file_id") or "").strip()
-    if not title or not file_id:
-        return jsonify({"error": "Nom va file_id kerak"}), 400
+    if not mid or not title:
+        return jsonify({"error": "ID va nom kerak"}), 400
     try:
         year = int(d.get("year")) if d.get("year") else None
     except Exception:
@@ -222,16 +255,40 @@ def admin_add():
         with get_conn() as conn:
             cur = conn.cursor()
             cur.execute("""
-                INSERT INTO movies (title, file_id, genre, year, language, quality,
-                                    description, content_type)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id
-            """, (title, file_id, (d.get("genre") or "").strip(), year,
+                UPDATE movies SET title=%s, genre=%s, year=%s, language=%s,
+                       quality=%s, content_type=%s, description=%s
+                WHERE id=%s
+            """, (title, (d.get("genre") or "").strip(), year,
                   (d.get("language") or "").strip(), (d.get("quality") or "").strip(),
-                  (d.get("description") or "").strip(),
-                  (d.get("content_type") or "movie").strip()))
-            mid = cur.fetchone()[0]
+                  (d.get("content_type") or "movie").strip(),
+                  (d.get("description") or "").strip(), int(mid)))
             conn.commit()
-        return jsonify({"ok": True, "id": mid})
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/admin/get", methods=["POST"])
+def admin_get():
+    """Tahrirlash uchun bitta kinoning to'liq ma'lumoti."""
+    d = request.get_json() or {}
+    if not _check(d):
+        return jsonify({"error": "ruxsat yo'q"}), 403
+    try:
+        with get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT id, title, genre, year, language, quality,
+                       COALESCE(content_type,'movie'), description
+                FROM movies WHERE id=%s
+            """, (int(d.get("id")),))
+            r = cur.fetchone()
+        if not r:
+            return jsonify({"error": "Topilmadi"}), 404
+        return jsonify({"movie": {
+            "id": r[0], "title": r[1], "genre": r[2] or "", "year": r[3] or "",
+            "language": r[4] or "", "quality": r[5] or "", "type": r[6],
+            "description": r[7] or "",
+        }})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
