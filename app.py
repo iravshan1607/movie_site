@@ -102,18 +102,18 @@ def api_movies():
             params.append(f"%{genre}%")
         wsql = (" WHERE " + " AND ".join(where)) if where else ""
         with get_conn() as conn:
-            with conn.cursor() as cur:
-                cur.execute(f"SELECT COUNT(*) FROM movies{wsql}", params)
-                total = cur.fetchone()[0]
-                cur.execute(f"""
-                    SELECT id, title, genre, year, language, quality,
-                           COALESCE(content_type,'movie'), poster_id,
-                           COALESCE(views,0), rating
-                    FROM movies{wsql}
-                    ORDER BY created_at DESC
-                    LIMIT %s OFFSET %s
-                """, params + [per, offset])
-                rows = cur.fetchall()
+            cur = conn.cursor()
+            cur.execute(f"SELECT COUNT(*) FROM movies{wsql}", params)
+            total = cur.fetchone()[0]
+            cur.execute(f"""
+                SELECT id, title, genre, year, language, quality,
+                       COALESCE(content_type,'movie'), poster_id,
+                       COALESCE(views,0), rating
+                FROM movies{wsql}
+                ORDER BY created_at DESC
+                LIMIT %s OFFSET %s
+            """, params + [per, offset])
+            rows = cur.fetchall()
         movies = [{
             "id": r[0], "title": r[1], "genre": r[2] or "", "year": r[3],
             "language": r[4] or "", "quality": r[5] or "", "type": r[6],
@@ -131,17 +131,17 @@ def api_movies():
 def api_movie(mid):
     try:
         with get_conn() as conn:
-            with conn.cursor() as cur:
-                cur.execute("""
-                    SELECT id, title, genre, year, language, quality, description,
-                           COALESCE(content_type,'movie'), poster_id,
-                           COALESCE(views,0), rating
-                    FROM movies WHERE id=%s
-                """, (mid,))
-                r = cur.fetchone()
-                if r:
-                    cur.execute("UPDATE movies SET views = COALESCE(views,0)+1 WHERE id=%s", (mid,))
-                    conn.commit()
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT id, title, genre, year, language, quality, description,
+                       COALESCE(content_type,'movie'), poster_id,
+                       COALESCE(views,0), rating
+                FROM movies WHERE id=%s
+            """, (mid,))
+            r = cur.fetchone()
+            if r:
+                cur.execute("UPDATE movies SET views = COALESCE(views,0)+1 WHERE id=%s", (mid,))
+                conn.commit()
         if not r:
             return jsonify({"found": False}), 404
         return jsonify({"found": True, "movie": {
@@ -161,9 +161,9 @@ def api_poster(mid):
         return redirect("/static/no-poster.svg")
     try:
         with get_conn() as conn:
-            with conn.cursor() as cur:
-                cur.execute("SELECT poster_id FROM movies WHERE id=%s", (mid,))
-                r = cur.fetchone()
+            cur = conn.cursor()
+            cur.execute("SELECT poster_id FROM movies WHERE id=%s", (mid,))
+            r = cur.fetchone()
         if not r:
             return redirect("/static/no-poster.svg")
         if not r[0]:
@@ -185,9 +185,9 @@ def api_poster(mid):
 def api_genres():
     try:
         with get_conn() as conn:
-            with conn.cursor() as cur:
-                cur.execute("SELECT DISTINCT genre FROM movies WHERE genre IS NOT NULL AND genre <> '' ORDER BY genre LIMIT 40")
-                genres = [row[0] for row in cur.fetchall()]
+            cur = conn.cursor()
+            cur.execute("SELECT DISTINCT genre FROM movies WHERE genre IS NOT NULL AND genre <> '' ORDER BY genre LIMIT 40")
+            genres = [row[0] for row in cur.fetchall()]
         return jsonify({"genres": genres})
     except Exception:
         return jsonify({"genres": []})
@@ -220,17 +220,17 @@ def admin_add():
         year = None
     try:
         with get_conn() as conn:
-            with conn.cursor() as cur:
-                cur.execute("""
-                    INSERT INTO movies (title, file_id, genre, year, language, quality,
-                                        description, content_type)
-                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id
-                """, (title, file_id, (d.get("genre") or "").strip(), year,
-                      (d.get("language") or "").strip(), (d.get("quality") or "").strip(),
-                      (d.get("description") or "").strip(),
-                      (d.get("content_type") or "movie").strip()))
-                mid = cur.fetchone()[0]
-                conn.commit()
+            cur = conn.cursor()
+            cur.execute("""
+                INSERT INTO movies (title, file_id, genre, year, language, quality,
+                                    description, content_type)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id
+            """, (title, file_id, (d.get("genre") or "").strip(), year,
+                  (d.get("language") or "").strip(), (d.get("quality") or "").strip(),
+                  (d.get("description") or "").strip(),
+                  (d.get("content_type") or "movie").strip()))
+            mid = cur.fetchone()[0]
+            conn.commit()
         return jsonify({"ok": True, "id": mid})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -242,9 +242,9 @@ def admin_delete():
         return jsonify({"error": "ruxsat yo'q"}), 403
     try:
         with get_conn() as conn:
-            with conn.cursor() as cur:
-                cur.execute("DELETE FROM movies WHERE id=%s", (int(d.get("id")),))
-                conn.commit()
+            cur = conn.cursor()
+            cur.execute("DELETE FROM movies WHERE id=%s", (int(d.get("id")),))
+            conn.commit()
         return jsonify({"ok": True})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
