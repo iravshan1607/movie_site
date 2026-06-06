@@ -58,15 +58,8 @@ def init_db():
     if not DATABASE_URL:
         log.warning("DATABASE_URL yo'q")
         return
-    try:
-        with get_conn() as conn:
-            with conn.cursor() as cur:
-                # poster_url — web uchun tashqi rasm havolasi (ixtiyoriy)
-                cur.execute("ALTER TABLE movies ADD COLUMN IF NOT EXISTS poster_url TEXT")
-                conn.commit()
-        log.info("Kino baza tayyor (movies jadvaliga ulandi)")
-    except Exception as e:
-        log.warning("init_db: %s", e)
+    # movies jadvali botda allaqachon yaratilgan — qo'shimcha hech narsa kerak emas.
+    log.info("Kino baza: movies jadvaliga ulanadi")
 
 # ── Sahifa ──
 @app.route("/")
@@ -114,7 +107,7 @@ def api_movies():
                 total = cur.fetchone()[0]
                 cur.execute(f"""
                     SELECT id, title, genre, year, language, quality,
-                           COALESCE(content_type,'movie'), poster_id, poster_url,
+                           COALESCE(content_type,'movie'), poster_id,
                            COALESCE(views,0), rating
                     FROM movies{wsql}
                     ORDER BY created_at DESC
@@ -124,8 +117,8 @@ def api_movies():
         movies = [{
             "id": r[0], "title": r[1], "genre": r[2] or "", "year": r[3],
             "language": r[4] or "", "quality": r[5] or "", "type": r[6],
-            "has_poster": bool(r[7]), "poster_url": r[8] or "",
-            "views": r[9], "rating": float(r[10]) if r[10] else None,
+            "has_poster": bool(r[7]), "poster_url": "",
+            "views": r[8], "rating": float(r[9]) if r[9] else None,
         } for r in rows]
         return jsonify({"movies": movies, "total": total, "page": page,
                         "pages": (total + per - 1) // per})
@@ -141,7 +134,7 @@ def api_movie(mid):
             with conn.cursor() as cur:
                 cur.execute("""
                     SELECT id, title, genre, year, language, quality, description,
-                           COALESCE(content_type,'movie'), poster_id, poster_url,
+                           COALESCE(content_type,'movie'), poster_id,
                            COALESCE(views,0), rating
                     FROM movies WHERE id=%s
                 """, (mid,))
@@ -154,8 +147,8 @@ def api_movie(mid):
         return jsonify({"found": True, "movie": {
             "id": r[0], "title": r[1], "genre": r[2] or "", "year": r[3],
             "language": r[4] or "", "quality": r[5] or "", "description": r[6] or "",
-            "type": r[7], "has_poster": bool(r[8]), "poster_url": r[9] or "",
-            "views": r[10], "rating": float(r[11]) if r[11] else None,
+            "type": r[7], "has_poster": bool(r[8]), "poster_url": "",
+            "views": r[9], "rating": float(r[10]) if r[10] else None,
         }})
     except Exception as e:
         return jsonify({"found": False, "error": str(e)}), 500
@@ -169,13 +162,10 @@ def api_poster(mid):
     try:
         with get_conn() as conn:
             with conn.cursor() as cur:
-                cur.execute("SELECT poster_id, poster_url FROM movies WHERE id=%s", (mid,))
+                cur.execute("SELECT poster_id FROM movies WHERE id=%s", (mid,))
                 r = cur.fetchone()
         if not r:
             return redirect("/static/no-poster.svg")
-        # Agar tashqi URL bo'lsa, o'shanga yo'naltiramiz
-        if r[1]:
-            return redirect(r[1])
         if not r[0]:
             return redirect("/static/no-poster.svg")
         # Telegram'dan file path olamiz
@@ -233,13 +223,12 @@ def admin_add():
             with conn.cursor() as cur:
                 cur.execute("""
                     INSERT INTO movies (title, file_id, genre, year, language, quality,
-                                        description, content_type, poster_url)
-                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id
+                                        description, content_type)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id
                 """, (title, file_id, (d.get("genre") or "").strip(), year,
                       (d.get("language") or "").strip(), (d.get("quality") or "").strip(),
                       (d.get("description") or "").strip(),
-                      (d.get("content_type") or "movie").strip(),
-                      (d.get("poster_url") or "").strip()))
+                      (d.get("content_type") or "movie").strip()))
                 mid = cur.fetchone()[0]
                 conn.commit()
         return jsonify({"ok": True, "id": mid})
