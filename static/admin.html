@@ -7,9 +7,9 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
-  :root { --bg:#0a0a0f; --bg2:#14141c; --card:#1a1a24; --line:rgba(255,255,255,0.08); --txt:#f5f5f7; --dim:#9a9aa8; --red:#E50914; --red2:#ff2d3a; --green:#3DDC97; }
+  :root { --bg:#0a0a0f; --bg2:#14141c; --card:#1a1a24; --line:rgba(255,255,255,0.08); --txt:#f5f5f7; --dim:#9a9aa8; --red:#E50914; --red2:#ff2d3a; --green:#3DDC97; --blue:#2BA8FF; --gold:#FFC940; }
   body { background:var(--bg); color:var(--txt); font-family:'Inter',sans-serif; line-height:1.5; }
-  .wrap { max-width:680px; margin:0 auto; padding:24px; }
+  .wrap { max-width:820px; margin:0 auto; padding:24px; }
   .login { max-width:380px; margin:80px auto; background:var(--bg2); border:1px solid var(--line); border-radius:18px; padding:36px; }
   .login h1 { font-size:24px; margin-bottom:6px; } .login p { color:var(--dim); font-size:14px; margin-bottom:22px; }
   input, textarea, select { width:100%; padding:13px 15px; background:var(--card); border:1px solid var(--line); border-radius:11px; color:var(--txt); font-family:inherit; font-size:15px; outline:none; margin-bottom:12px; }
@@ -21,14 +21,34 @@
   .msg { padding:12px; border-radius:10px; font-size:14px; margin-top:10px; text-align:center; }
   .msg.ok { background:rgba(61,220,151,0.12); color:var(--green); }
   .msg.err { background:rgba(255,45,58,0.12); color:var(--red2); }
-  .top { display:flex; justify-content:space-between; align-items:center; margin-bottom:24px; }
+  .top { display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; }
   .top h1 { font-size:22px; } .top a { color:var(--dim); text-decoration:none; font-size:14px; }
-  .card { background:var(--bg2); border:1px solid var(--line); border-radius:16px; padding:24px; margin-bottom:18px; }
-  .card h3 { font-size:17px; margin-bottom:16px; }
+  .search-bar { display:flex; gap:10px; margin-bottom:18px; }
+  .search-bar input { margin-bottom:0; }
+  .search-bar button { padding:13px 20px; background:var(--card); border:1px solid var(--line); border-radius:11px; color:var(--txt); font-family:inherit; cursor:pointer; white-space:nowrap; }
+  .count { color:var(--dim); font-size:14px; margin-bottom:14px; }
+  .row { background:var(--bg2); border:1px solid var(--line); border-radius:12px; padding:14px 16px; margin-bottom:10px; display:flex; align-items:center; gap:14px; }
+  .row .info { flex:1; min-width:0; }
+  .row .title { font-weight:600; font-size:15px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .row .meta { font-size:13px; color:var(--dim); margin-top:2px; }
+  .badge { display:inline-block; padding:2px 8px; border-radius:6px; font-size:11px; font-weight:600; margin-right:6px; }
+  .b-movie { background:rgba(229,9,20,0.15); color:var(--red2); }
+  .b-series { background:rgba(43,168,255,0.15); color:var(--blue); }
+  .b-anime { background:rgba(255,95,162,0.15); color:#ff5fa2; }
+  .b-cartoon { background:rgba(255,201,64,0.15); color:var(--gold); }
+  .row .acts { display:flex; gap:8px; flex-shrink:0; }
+  .row .acts button { width:38px; height:38px; border-radius:9px; border:none; cursor:pointer; font-size:16px; }
+  .edit-b { background:rgba(43,168,255,0.15); color:var(--blue); }
+  .del-b { background:rgba(255,45,58,0.15); color:var(--red2); }
+  .empty { text-align:center; color:var(--dim); padding:40px; }
+  .hidden { display:none; }
+  .mbg { position:fixed; inset:0; background:rgba(0,0,0,0.8); backdrop-filter:blur(6px); z-index:1000; display:none; align-items:center; justify-content:center; padding:20px; }
+  .mbg.open { display:flex; }
+  .modal { background:var(--bg2); border:1px solid var(--line); border-radius:18px; padding:30px; max-width:480px; width:100%; max-height:90vh; overflow-y:auto; }
+  .modal h3 { font-size:20px; margin-bottom:18px; }
   .lbl { font-size:13px; color:var(--dim); margin-bottom:5px; display:block; }
   .row2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
-  .hint { font-size:12px; color:var(--dim); margin:-6px 0 12px; line-height:1.5; }
-  .hidden { display:none; }
+  .modal-close { float:right; background:none; border:none; color:var(--dim); font-size:24px; cursor:pointer; }
 </style>
 </head>
 <body>
@@ -36,7 +56,7 @@
 <div id="login-view" class="wrap">
   <div class="login">
     <h1>🎬 Kino Admin</h1>
-    <p>Kino qo'shish uchun parolni kiriting.</p>
+    <p>Kinolarni boshqarish uchun parolni kiriting.</p>
     <input type="password" id="pass" placeholder="Parol" onkeydown="if(event.key==='Enter')doLogin()">
     <button class="btn" onclick="doLogin()">Kirish</button>
     <div class="err hidden" id="err">❌ Parol noto'g'ri</div>
@@ -45,77 +65,145 @@
 
 <div id="dash" class="wrap hidden">
   <div class="top">
-    <h1>🎬 Kino qo'shish</h1>
+    <h1>🎬 Kinolarni boshqarish</h1>
     <a href="/" target="_blank">↗ Saytni ochish</a>
   </div>
-  <div class="card">
-    <h3>Yangi kino / serial</h3>
+  <div class="search-bar">
+    <input id="search" placeholder="🔍 Kino nomi bo'yicha qidirish..." onkeydown="if(event.key==='Enter')loadList()">
+    <button onclick="loadList()">Qidirish</button>
+  </div>
+  <div class="count" id="count"></div>
+  <div id="list"></div>
+  <p style="text-align:center;color:var(--dim);font-size:13px;margin-top:20px">
+    💡 Yangi kino qo'shish — botda (🎥 Kino qo'shish). Bu yerda mavjudlarni tahrirlash/o'chirish.
+  </p>
+</div>
+
+<div class="mbg" id="edit-modal" onclick="if(event.target===this)closeEdit()">
+  <div class="modal">
+    <button class="modal-close" onclick="closeEdit()">×</button>
+    <h3>✏️ Kinoni tahrirlash</h3>
+    <input type="hidden" id="e-id">
     <span class="lbl">Nomi *</span>
-    <input id="f-title" placeholder="Masalan: Avatar 2">
-    <span class="lbl">Video file_id * (Telegram'dan)</span>
-    <input id="f-fileid" placeholder="BAACAgIAAxk...">
-    <div class="hint">file_id'ni olish: botga video yuboring → bot file_id'ni ko'rsatadi (yoki 🎥 Kino qo'shish orqali)</div>
+    <input id="e-title" placeholder="Nom">
     <div class="row2">
-      <div><span class="lbl">Janr</span><input id="f-genre" placeholder="Jangari, Drama"></div>
-      <div><span class="lbl">Yil</span><input id="f-year" type="number" placeholder="2024"></div>
+      <div><span class="lbl">Janr</span><input id="e-genre"></div>
+      <div><span class="lbl">Yil</span><input id="e-year" type="number"></div>
     </div>
     <div class="row2">
-      <div><span class="lbl">Til</span><input id="f-lang" placeholder="O'zbek"></div>
-      <div><span class="lbl">Sifat</span><input id="f-quality" placeholder="1080p"></div>
+      <div><span class="lbl">Til</span><input id="e-lang"></div>
+      <div><span class="lbl">Sifat</span><input id="e-quality"></div>
     </div>
     <span class="lbl">Turi</span>
-    <select id="f-type">
+    <select id="e-type">
       <option value="movie">🎬 Kino</option>
       <option value="series">📺 Serial</option>
       <option value="anime">🌸 Anime</option>
       <option value="cartoon">🧸 Multfilm</option>
     </select>
-    <span class="lbl">Poster rasm havolasi (URL, ixtiyoriy)</span>
-    <input id="f-poster" placeholder="https://...jpg">
-    <div class="hint">Poster bo'lmasa, botdagi poster_id ishlatiladi yoki standart rasm ko'rinadi.</div>
     <span class="lbl">Tavsif</span>
-    <textarea id="f-desc" placeholder="Kino haqida qisqacha..."></textarea>
-    <button class="btn" onclick="addMovie()">+ Qo'shish</button>
-    <div id="add-msg"></div>
+    <textarea id="e-desc"></textarea>
+    <button class="btn" onclick="saveEdit()">💾 Saqlash</button>
+    <div id="edit-msg"></div>
   </div>
 </div>
 
 <script>
   let PASS = '';
-  function esc(s){ return String(s==null?'':s); }
+  const typeName = { movie:'Kino', series:'Serial', anime:'Anime', cartoon:'Multfilm' };
+  function esc(s){ return String(s==null?'':s).replace(/[<>&"]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c])); }
+
   async function doLogin() {
     const p = document.getElementById('pass').value;
     try {
       const r = await fetch('/api/admin/login', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({password:p}) });
       const d = await r.json();
-      if (d.ok) { PASS = p; document.getElementById('login-view').classList.add('hidden'); document.getElementById('dash').classList.remove('hidden'); }
+      if (d.ok) { PASS = p; document.getElementById('login-view').classList.add('hidden'); document.getElementById('dash').classList.remove('hidden'); loadList(); }
       else document.getElementById('err').classList.remove('hidden');
     } catch(e){ document.getElementById('err').classList.remove('hidden'); }
   }
-  async function addMovie() {
-    const title = document.getElementById('f-title').value.trim();
-    const file_id = document.getElementById('f-fileid').value.trim();
-    const out = document.getElementById('add-msg');
-    if (!title || !file_id) { out.innerHTML = '<div class="msg err">Nom va file_id kerak</div>'; return; }
-    out.innerHTML = '<div class="msg">Qo\'shilmoqda...</div>';
+
+  async function loadList() {
+    const q = document.getElementById('search').value.trim();
+    const list = document.getElementById('list');
+    const count = document.getElementById('count');
+    list.innerHTML = '<div class="empty">Yuklanmoqda...</div>';
     try {
-      const r = await fetch('/api/admin/add', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({
-        password: PASS, title, file_id,
-        genre: document.getElementById('f-genre').value.trim(),
-        year: document.getElementById('f-year').value,
-        language: document.getElementById('f-lang').value.trim(),
-        quality: document.getElementById('f-quality').value.trim(),
-        content_type: document.getElementById('f-type').value,
-        poster_url: document.getElementById('f-poster').value.trim(),
-        description: document.getElementById('f-desc').value.trim()
+      const r = await fetch('/api/admin/list', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({password:PASS, q}) });
+      const d = await r.json();
+      if (d.error) { list.innerHTML = '<div class="empty">❌ '+d.error+'</div>'; return; }
+      if (!d.movies || !d.movies.length) { count.textContent=''; list.innerHTML = '<div class="empty">😕 Kino topilmadi</div>'; return; }
+      count.textContent = d.movies.length + ' ta kino';
+      list.innerHTML = d.movies.map(m => `
+        <div class="row">
+          <div class="info">
+            <div class="title">${esc(m.title)}</div>
+            <div class="meta">
+              <span class="badge b-${m.type}">${typeName[m.type]||'Kino'}</span>
+              ${m.year||''} ${m.genre?'· '+esc(m.genre):''} ${m.quality?'· '+esc(m.quality):''} · 👁 ${m.views}
+            </div>
+          </div>
+          <div class="acts">
+            <button class="edit-b" onclick="openEdit(${m.id})" title="Tahrirlash">✏️</button>
+            <button class="del-b" onclick="delMovie(${m.id}, '${esc(m.title).replace(/'/g,"")}')" title="O'chirish">🗑</button>
+          </div>
+        </div>`).join('');
+    } catch(e){ list.innerHTML = '<div class="empty">❌ Server bilan aloqa yo\'q</div>'; }
+  }
+
+  async function openEdit(id) {
+    document.getElementById('edit-msg').innerHTML = '';
+    try {
+      const r = await fetch('/api/admin/get', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({password:PASS, id}) });
+      const d = await r.json();
+      if (d.error) { alert(d.error); return; }
+      const m = d.movie;
+      document.getElementById('e-id').value = m.id;
+      document.getElementById('e-title').value = m.title;
+      document.getElementById('e-genre').value = m.genre;
+      document.getElementById('e-year').value = m.year;
+      document.getElementById('e-lang').value = m.language;
+      document.getElementById('e-quality').value = m.quality;
+      document.getElementById('e-type').value = m.type;
+      document.getElementById('e-desc').value = m.description;
+      document.getElementById('edit-modal').classList.add('open');
+    } catch(e){ alert('Xatolik'); }
+  }
+  function closeEdit() { document.getElementById('edit-modal').classList.remove('open'); }
+
+  async function saveEdit() {
+    const out = document.getElementById('edit-msg');
+    const title = document.getElementById('e-title').value.trim();
+    if (!title) { out.innerHTML = '<div class="msg err">Nom kerak</div>'; return; }
+    out.innerHTML = '<div class="msg">Saqlanmoqda...</div>';
+    try {
+      const r = await fetch('/api/admin/edit', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({
+        password: PASS,
+        id: document.getElementById('e-id').value,
+        title,
+        genre: document.getElementById('e-genre').value.trim(),
+        year: document.getElementById('e-year').value,
+        language: document.getElementById('e-lang').value.trim(),
+        quality: document.getElementById('e-quality').value.trim(),
+        content_type: document.getElementById('e-type').value,
+        description: document.getElementById('e-desc').value.trim()
       }) });
       const d = await r.json();
-      if (d.ok) {
-        out.innerHTML = '<div class="msg ok">✅ Qo\'shildi! ID: '+d.id+'</div>';
-        ['f-title','f-fileid','f-genre','f-year','f-lang','f-quality','f-poster','f-desc'].forEach(i=>document.getElementById(i).value='');
-      } else out.innerHTML = '<div class="msg err">❌ '+(d.error||'Xato')+'</div>';
-    } catch(e){ out.innerHTML = '<div class="msg err">❌ Server bilan aloqa yo\'q</div>'; }
+      if (d.ok) { out.innerHTML = '<div class="msg ok">✅ Saqlandi!</div>'; setTimeout(()=>{closeEdit(); loadList();}, 700); }
+      else out.innerHTML = '<div class="msg err">❌ '+(d.error||'Xato')+'</div>';
+    } catch(e){ out.innerHTML = '<div class="msg err">❌ Aloqa yo\'q</div>'; }
   }
+
+  async function delMovie(id, title) {
+    if (!confirm('"'+title+'" o\'chirilsinmi?\n\nDiqqat: video botda qoladi, lekin saytdan yo\'qoladi.')) return;
+    try {
+      const r = await fetch('/api/admin/delete', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({password:PASS, id}) });
+      const d = await r.json();
+      if (d.ok) loadList();
+      else alert(d.error || 'Xato');
+    } catch(e){ alert('Server bilan aloqa yo\'q'); }
+  }
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeEdit(); });
 </script>
 </body>
 </html>
