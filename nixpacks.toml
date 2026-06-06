@@ -1,9 +1,4 @@
-# Nixpacks build — psycopg2 uchun libpq (PostgreSQL kutubxonasi) kerak.
-# nixLibs orqali kutubxona LD_LIBRARY_PATH ga qo'shiladi.
-[phases.setup]
-nixPkgs = ["...", "postgresql"]
-nixLibs = ["postgresql"]
-
+# pg8000 sof Python — tizim kutubxonasi kerak emas.
 [phases.install]
 cmds = [
   "pip install --upgrade pip",
