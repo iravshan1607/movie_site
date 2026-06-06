@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KINO — Filmlar, Seriallar, Anime</title>
+<meta name="description" content="Eng so'nggi kinolar, seriallar, anime va multfilmlar. Tez va qulay.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<header id="hdr">
+  <div class="hdr-in">
+    <div class="logo">KINO<span>.</span></div>
+    <div class="search-box">
+      <input id="search" placeholder="🔍 Kino, serial, anime qidirish..." onkeydown="if(event.key==='Enter')doSearch()">
+    </div>
+    <a href="/admin" class="hdr-admin" title="Admin">⚙️</a>
+  </div>
+  <div class="filters" id="filters">
+    <div class="frow">
+      <button class="chip active" data-type="all" onclick="setType('all')">Hammasi</button>
+      <button class="chip" data-type="movie" onclick="setType('movie')">🎬 Kino</button>
+      <button class="chip" data-type="series" onclick="setType('series')">📺 Serial</button>
+      <button class="chip" data-type="anime" onclick="setType('anime')">🌸 Anime</button>
+      <button class="chip" data-type="cartoon" onclick="setType('cartoon')">🧸 Multfilm</button>
+    </div>
+    <div class="frow" id="genre-row"></div>
+  </div>
+</header>
+
+<main>
+  <div id="grid" class="grid"></div>
+  <div id="status" class="status"></div>
+  <div id="pager" class="pager"></div>
+</main>
+
+<!-- Kino modal -->
+<div class="mbg" id="movie-modal" onclick="if(event.target===this)closeMovie()">
+  <div class="mbox" id="movie-box"></div>
+</div>
+
+<footer>
+  <div class="logo" style="font-size:18px">KINO<span>.</span></div>
+  <p>Barcha kinolar Telegram bot orqali ko'riladi. © 2026</p>
+</footer>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

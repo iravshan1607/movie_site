@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin — KINO</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  :root { --bg:#0a0a0f; --bg2:#14141c; --card:#1a1a24; --line:rgba(255,255,255,0.08); --txt:#f5f5f7; --dim:#9a9aa8; --red:#E50914; --red2:#ff2d3a; --green:#3DDC97; }
+  body { background:var(--bg); color:var(--txt); font-family:'Inter',sans-serif; line-height:1.5; }
+  .wrap { max-width:680px; margin:0 auto; padding:24px; }
+  .login { max-width:380px; margin:80px auto; background:var(--bg2); border:1px solid var(--line); border-radius:18px; padding:36px; }
+  .login h1 { font-size:24px; margin-bottom:6px; } .login p { color:var(--dim); font-size:14px; margin-bottom:22px; }
+  input, textarea, select { width:100%; padding:13px 15px; background:var(--card); border:1px solid var(--line); border-radius:11px; color:var(--txt); font-family:inherit; font-size:15px; outline:none; margin-bottom:12px; }
+  input:focus, textarea:focus, select:focus { border-color:var(--red2); }
+  textarea { resize:vertical; min-height:70px; }
+  .btn { width:100%; padding:14px; background:var(--red); color:#fff; border:none; border-radius:11px; font-family:inherit; font-weight:600; font-size:15px; cursor:pointer; transition:all 0.2s; }
+  .btn:hover { background:var(--red2); }
+  .err { color:var(--red2); font-size:14px; margin-top:10px; text-align:center; }
+  .msg { padding:12px; border-radius:10px; font-size:14px; margin-top:10px; text-align:center; }
+  .msg.ok { background:rgba(61,220,151,0.12); color:var(--green); }
+  .msg.err { background:rgba(255,45,58,0.12); color:var(--red2); }
+  .top { display:flex; justify-content:space-between; align-items:center; margin-bottom:24px; }
+  .top h1 { font-size:22px; } .top a { color:var(--dim); text-decoration:none; font-size:14px; }
+  .card { background:var(--bg2); border:1px solid var(--line); border-radius:16px; padding:24px; margin-bottom:18px; }
+  .card h3 { font-size:17px; margin-bottom:16px; }
+  .lbl { font-size:13px; color:var(--dim); margin-bottom:5px; display:block; }
+  .row2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .hint { font-size:12px; color:var(--dim); margin:-6px 0 12px; line-height:1.5; }
+  .hidden { display:none; }
+</style>
+</head>
+<body>
+
+<div id="login-view" class="wrap">
+  <div class="login">
+    <h1>🎬 Kino Admin</h1>
+    <p>Kino qo'shish uchun parolni kiriting.</p>
+    <input type="password" id="pass" placeholder="Parol" onkeydown="if(event.key==='Enter')doLogin()">
+    <button class="btn" onclick="doLogin()">Kirish</button>
+    <div class="err hidden" id="err">❌ Parol noto'g'ri</div>
+  </div>
+</div>
+
+<div id="dash" class="wrap hidden">
+  <div class="top">
+    <h1>🎬 Kino qo'shish</h1>
+    <a href="/" target="_blank">↗ Saytni ochish</a>
+  </div>
+  <div class="card">
+    <h3>Yangi kino / serial</h3>
+    <span class="lbl">Nomi *</span>
+    <input id="f-title" placeholder="Masalan: Avatar 2">
+    <span class="lbl">Video file_id * (Telegram'dan)</span>
+    <input id="f-fileid" placeholder="BAACAgIAAxk...">
+    <div class="hint">file_id'ni olish: botga video yuboring → bot file_id'ni ko'rsatadi (yoki 🎥 Kino qo'shish orqali)</div>
+    <div class="row2">
+      <div><span class="lbl">Janr</span><input id="f-genre" placeholder="Jangari, Drama"></div>
+      <div><span class="lbl">Yil</span><input id="f-year" type="number" placeholder="2024"></div>
+    </div>
+    <div class="row2">
+      <div><span class="lbl">Til</span><input id="f-lang" placeholder="O'zbek"></div>
+      <div><span class="lbl">Sifat</span><input id="f-quality" placeholder="1080p"></div>
+    </div>
+    <span class="lbl">Turi</span>
+    <select id="f-type">
+      <option value="movie">🎬 Kino</option>
+      <option value="series">📺 Serial</option>
+      <option value="anime">🌸 Anime</option>
+      <option value="cartoon">🧸 Multfilm</option>
+    </select>
+    <span class="lbl">Poster rasm havolasi (URL, ixtiyoriy)</span>
+    <input id="f-poster" placeholder="https://...jpg">
+    <div class="hint">Poster bo'lmasa, botdagi poster_id ishlatiladi yoki standart rasm ko'rinadi.</div>
+    <span class="lbl">Tavsif</span>
+    <textarea id="f-desc" placeholder="Kino haqida qisqacha..."></textarea>
+    <button class="btn" onclick="addMovie()">+ Qo'shish</button>
+    <div id="add-msg"></div>
+  </div>
+</div>
+
+<script>
+  let PASS = '';
+  function esc(s){ return String(s==null?'':s); }
+  async function doLogin() {
+    const p = document.getElementById('pass').value;
+    try {
+      const r = await fetch('/api/admin/login', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({password:p}) });
+      const d = await r.json();
+      if (d.ok) { PASS = p; document.getElementById('login-view').classList.add('hidden'); document.getElementById('dash').classList.remove('hidden'); }
+      else document.getElementById('err').classList.remove('hidden');
+    } catch(e){ document.getElementById('err').classList.remove('hidden'); }
+  }
+  async function addMovie() {
+    const title = document.getElementById('f-title').value.trim();
+    const file_id = document.getElementById('f-fileid').value.trim();
+    const out = document.getElementById('add-msg');
+    if (!title || !file_id) { out.innerHTML = '<div class="msg err">Nom va file_id kerak</div>'; return; }
+    out.innerHTML = '<div class="msg">Qo\'shilmoqda...</div>';
+    try {
+      const r = await fetch('/api/admin/add', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({
+        password: PASS, title, file_id,
+        genre: document.getElementById('f-genre').value.trim(),
+        year: document.getElementById('f-year').value,
+        language: document.getElementById('f-lang').value.trim(),
+        quality: document.getElementById('f-quality').value.trim(),
+        content_type: document.getElementById('f-type').value,
+        poster_url: document.getElementById('f-poster').value.trim(),
+        description: document.getElementById('f-desc').value.trim()
+      }) });
+      const d = await r.json();
+      if (d.ok) {
+        out.innerHTML = '<div class="msg ok">✅ Qo\'shildi! ID: '+d.id+'</div>';
+        ['f-title','f-fileid','f-genre','f-year','f-lang','f-quality','f-poster','f-desc'].forEach(i=>document.getElementById(i).value='');
+      } else out.innerHTML = '<div class="msg err">❌ '+(d.error||'Xato')+'</div>';
+    } catch(e){ out.innerHTML = '<div class="msg err">❌ Server bilan aloqa yo\'q</div>'; }
+  }
+</script>
+</body>
+</html>
