@@ -7,8 +7,8 @@ Poster: bot orqali Telegram file_id'dan proxy qilinadi.
 import os
 import logging
 import io
-import psycopg2
-from psycopg2.pool import SimpleConnectionPool
+from urllib.parse import urlparse, unquote
+import pg8000.dbapi
 import requests
 from flask import Flask, request, jsonify, send_from_directory, Response, redirect
 
@@ -25,20 +25,29 @@ PORT           = int(os.getenv("PORT", "8080"))
 
 app = Flask(__name__, static_folder="static")
 
-# ── Baza (pool) ───────────────────────────────────────────────────────────────
-_pool = None
-def get_pool():
-    global _pool
-    if _pool is None and DATABASE_URL:
-        _pool = SimpleConnectionPool(1, 5, dsn=DATABASE_URL)
-        log.info("Kino DB pool yaratildi")
-    return _pool
+# ── Baza (pg8000 — sof Python, libpq kerak emas) ──────────────────────────────
+def _parse_db_url(url):
+    """postgresql://user:pass@host:port/dbname → pg8000 parametrlari."""
+    u = urlparse(url)
+    return {
+        "user": unquote(u.username) if u.username else None,
+        "password": unquote(u.password) if u.password else None,
+        "host": u.hostname,
+        "port": u.port or 5432,
+        "database": u.path.lstrip("/") if u.path else None,
+        "ssl_context": True,  # Neon/Railway SSL talab qiladi
+    }
 
 class _Conn:
     def __enter__(self):
-        self.conn = get_pool().getconn(); return self.conn
+        params = _parse_db_url(DATABASE_URL)
+        self.conn = pg8000.dbapi.connect(**params)
+        return self.conn
     def __exit__(self, *a):
-        get_pool().putconn(self.conn)
+        try:
+            self.conn.close()
+        except Exception:
+            pass
 
 def get_conn():
     return _Conn()
