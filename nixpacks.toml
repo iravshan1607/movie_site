@@ -1,0 +1,14 @@
+# Nixpacks build — psycopg2 uchun libpq (PostgreSQL kutubxonasi) kerak.
+# nixLibs orqali kutubxona LD_LIBRARY_PATH ga qo'shiladi.
+[phases.setup]
+nixPkgs = ["...", "postgresql"]
+nixLibs = ["postgresql"]
+
+[phases.install]
+cmds = [
+  "pip install --upgrade pip",
+  "pip install -r requirements.txt",
+]
+
+[start]
+cmd = "gunicorn app:app --bind 0.0.0.0:$PORT"
