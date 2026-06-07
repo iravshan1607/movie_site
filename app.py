@@ -19,7 +19,7 @@ log = logging.getLogger("kino")
 
 DATABASE_URL   = os.getenv("DATABASE_URL", "")
 BOT_TOKEN      = os.getenv("BOT_TOKEN", "")
-BOT_USERNAME   = os.getenv("BOT_USERNAME", "@AstraUz_AIBot")          # botga yo'naltirish uchun
+BOT_USERNAME   = os.getenv("BOT_USERNAME", "")          # botga yo'naltirish uchun
 ADMIN_PASSWORD = os.getenv("KINO_ADMIN_PASSWORD", "admin123")
 PORT           = int(os.getenv("PORT", "8080"))
 
