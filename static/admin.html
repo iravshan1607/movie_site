@@ -197,9 +197,13 @@
       </div>
       <div class="field">
         <span class="lbl">Telegram Poster ID (file_id)</span>
-        <input id="e-poster-id" placeholder="AgACAgIAAxkBAAI..." oninput="previewPoster()">
+        <input id="e-poster-id" placeholder="AgACAgIAAxkBAAI...">
       </div>
-      <p class="poster-note">Botdan olingan rasm file_id ni kiriting. Saqlash tugmasi asosiy ma'lumotlarni ham saqlaydi.</p>
+      <div class="field">
+        <span class="lbl">Yoki tashqi URL (TMDB, IMDB va h.k.)</span>
+        <input id="e-poster-url" placeholder="https://image.tmdb.org/t/p/w500/...">
+      </div>
+      <p class="poster-note">file_id bo'lsa — u ishlatiladi. Bo'lmasa tashqi URL ishlatiladi.</p>
       <button class="btn" onclick="savePoster()">🖼 Posterni saqlash</button>
       <div id="poster-msg"></div>
     </div>
@@ -307,6 +311,7 @@ async function openEdit(id){
     document.getElementById('e-type').value=m.type;
     document.getElementById('e-desc').value=m.description;
     document.getElementById('e-poster-id').value=m.poster_id||'';
+    document.getElementById('e-poster-url').value=m.poster_url||'';
     // poster preview
     const prev=document.getElementById('poster-preview');
     if(m.poster_id){
