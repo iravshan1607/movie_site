@@ -19,7 +19,7 @@ log = logging.getLogger("kino")
 
 DATABASE_URL   = os.getenv("DATABASE_URL", "")
 BOT_TOKEN      = os.getenv("BOT_TOKEN", "")
-BOT_USERNAME   = os.getenv("BOT_USERNAME", "@AstraUz_AIBot")          # botga yo'naltirish uchun
+BOT_USERNAME   = os.getenv("BOT_USERNAME", "")          # botga yo'naltirish uchun
 ADMIN_PASSWORD = os.getenv("KINO_ADMIN_PASSWORD", "admin123")
 PORT           = int(os.getenv("PORT", "8080"))
 
@@ -158,6 +158,7 @@ def api_movie(mid):
 def api_poster(mid):
     """Telegram'dagi poster_id rasmni web uchun proxy qiladi."""
     if not BOT_TOKEN:
+        log.warning("Poster: BOT_TOKEN yo'q! Railway Variables'ga BOT_TOKEN qo'shing.")
         return redirect("/static/no-poster.svg")
     try:
         with get_conn() as conn:
@@ -172,12 +173,18 @@ def api_poster(mid):
         fr = requests.get(f"https://api.telegram.org/bot{BOT_TOKEN}/getFile",
                           params={"file_id": r[0]}, timeout=10).json()
         if not fr.get("ok"):
+            log.warning("Poster getFile xato (id=%s): %s", mid, fr.get("description", fr))
             return redirect("/static/no-poster.svg")
         fpath = fr["result"]["file_path"]
         img = requests.get(f"https://api.telegram.org/file/bot{BOT_TOKEN}/{fpath}", timeout=15)
-        return Response(img.content, mimetype="image/jpeg",
+        if img.status_code != 200:
+            log.warning("Poster yuklab bo'lmadi (id=%s): status %s", mid, img.status_code)
+            return redirect("/static/no-poster.svg")
+        ct = img.headers.get("Content-Type", "image/jpeg")
+        return Response(img.content, mimetype=ct,
                         headers={"Cache-Control": "public, max-age=86400"})
-    except Exception:
+    except Exception as e:
+        log.warning("Poster xato (id=%s): %s", mid, e)
         return redirect("/static/no-poster.svg")
 
 # ── Janrlar ro'yxati ──
@@ -278,7 +285,7 @@ def admin_get():
             cur = conn.cursor()
             cur.execute("""
                 SELECT id, title, genre, year, language, quality,
-                       COALESCE(content_type,'movie'), description, poster_id
+                       COALESCE(content_type,'movie'), description
                 FROM movies WHERE id=%s
             """, (int(d.get("id")),))
             r = cur.fetchone()
@@ -287,115 +294,8 @@ def admin_get():
         return jsonify({"movie": {
             "id": r[0], "title": r[1], "genre": r[2] or "", "year": r[3] or "",
             "language": r[4] or "", "quality": r[5] or "", "type": r[6],
-            "description": r[7] or "", "poster_id": r[8] or "",
+            "description": r[7] or "",
         }})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
-@app.route("/api/admin/poster", methods=["POST"])
-def admin_poster():
-    """Poster file_id ni yangilash."""
-    d = request.get_json() or {}
-    if not _check(d):
-        return jsonify({"error": "ruxsat yo'q"}), 403
-    mid = d.get("id")
-    poster_id = (d.get("poster_id") or "").strip() or None
-    if not mid:
-        return jsonify({"error": "ID kerak"}), 400
-    try:
-        with get_conn() as conn:
-            cur = conn.cursor()
-            cur.execute("UPDATE movies SET poster_id=%s WHERE id=%s", (poster_id, int(mid)))
-            conn.commit()
-        return jsonify({"ok": True})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-@app.route("/api/admin/episodes", methods=["POST"])
-def admin_episodes():
-    """Serial qismlarini royxatini qaytaradi."""
-    d = request.get_json() or {}
-    if not _check(d):
-        return jsonify({"error": "ruxsat yo'q"}), 403
-    movie_id = d.get("movie_id")
-    if not movie_id:
-        return jsonify({"error": "movie_id kerak"}), 400
-    try:
-        with get_conn() as conn:
-            cur = conn.cursor()
-            cur.execute("""
-                SELECT column_name FROM information_schema.columns
-                WHERE table_name='episodes' ORDER BY ordinal_position
-            """)
-            cols = [row[0] for row in cur.fetchall()]
-            season_col = next((c for c in cols if 'season' in c.lower()), None)
-            ep_col = next((c for c in cols if 'episode' in c.lower() and 'season' not in c.lower()), None)
-            title_col = next((c for c in cols if c.lower() in ('title','name','episode_title')), None)
-            quality_col = next((c for c in cols if 'quality' in c.lower()), None)
-            file_col = next((c for c in cols if 'file_id' in c.lower()), None)
-
-            order_parts = []
-            if season_col: order_parts.append(f"{season_col} ASC NULLS FIRST")
-            if ep_col: order_parts.append(f"{ep_col} ASC NULLS FIRST")
-            if not order_parts: order_parts.append("id ASC")
-
-            sel = """
-                SELECT id, {} AS season_number, {} AS episode_number,
-                       {} AS title, {} AS quality, {} AS file_id
-                FROM episodes WHERE movie_id=%s ORDER BY {}
-            """.format(
-                season_col or "NULL", ep_col or "NULL",
-                title_col or "NULL", quality_col or "NULL", file_col or "NULL",
-                ", ".join(order_parts)
-            )
-            cur.execute(sel, (int(movie_id),))
-            rows = cur.fetchall()
-        episodes = [{"id": r[0], "season_number": r[1], "episode_number": r[2],
-                     "title": r[3] or "", "quality": r[4] or "", "file_id": bool(r[5])} for r in rows]
-        return jsonify({"episodes": episodes, "columns": {"season": season_col, "episode": ep_col}})
-    except Exception as e:
-        log.warning("episodes: %s", e)
-        return jsonify({"error": str(e)}), 500
-
-@app.route("/api/admin/episode/edit", methods=["POST"])
-def admin_episode_edit():
-    """Qism raqami va nomini tahrirlash."""
-    d = request.get_json() or {}
-    if not _check(d):
-        return jsonify({"error": "ruxsat yo'q"}), 403
-    ep_id = d.get("id")
-    ep_num = d.get("episode_number")
-    season_num = d.get("season_number")
-    title = (d.get("title") or "").strip() or None
-    if not ep_id or not ep_num:
-        return jsonify({"error": "ID va qism raqami kerak"}), 400
-    try:
-        with get_conn() as conn:
-            cur = conn.cursor()
-            cur.execute("""
-                SELECT column_name FROM information_schema.columns
-                WHERE table_name='episodes' ORDER BY ordinal_position
-            """)
-            cols = [row[0] for row in cur.fetchall()]
-            season_col = next((c for c in cols if 'season' in c.lower()), None)
-            ep_col = next((c for c in cols if 'episode' in c.lower() and 'season' not in c.lower()), None)
-            title_col = next((c for c in cols if c.lower() in ('title','name','episode_title')), None)
-
-            sets = []
-            params = []
-            if ep_col:
-                sets.append(f"{ep_col}=%s"); params.append(int(ep_num))
-            if season_col and season_num is not None and str(season_num).strip():
-                sets.append(f"{season_col}=%s"); params.append(int(season_num))
-            if title_col:
-                sets.append(f"{title_col}=%s"); params.append(title)
-            if not sets:
-                return jsonify({"error": "Yangilanadigan ustun topilmadi"}), 400
-            params.append(int(ep_id))
-            cur.execute(f"UPDATE episodes SET {', '.join(sets)} WHERE id=%s", params)
-            conn.commit()
-        return jsonify({"ok": True})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
