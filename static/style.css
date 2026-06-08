@@ -539,6 +539,12 @@
     .cards { grid-template-columns: repeat(3, 1fr); }
     .cards-top10 { grid-template-columns: repeat(3, 1fr); }
     .footer-links { grid-template-columns: repeat(2, 1fr); }
+    /* Telefonda poster tepada, matn pastda o'qilsin */
+    .hero-poster-bg { background-position: center top !important; }
+    .hero-bg {
+      background:
+        linear-gradient(to top, rgba(20,20,20,1) 0%, rgba(20,20,20,0.5) 35%, transparent 70%) !important;
+    }
   }
   @media (max-width: 560px) {
     .cards { grid-template-columns: repeat(2, 1fr); }
