@@ -214,6 +214,93 @@ def api_genres():
 def api_botlink():
     return jsonify({"bot": BOT_USERNAME})
 
+# ══════════════════ SEO (Google uchun) ══════════════════
+import html as _html
+
+@app.route("/robots.txt")
+def robots():
+    base = request.url_root.rstrip("/")
+    txt = f"User-agent: *\nAllow: /\nSitemap: {base}/sitemap.xml\n"
+    return Response(txt, mimetype="text/plain")
+
+@app.route("/sitemap.xml")
+def sitemap():
+    base = request.url_root.rstrip("/")
+    urls = [f"{base}/"]
+    try:
+        with get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT id FROM movies ORDER BY created_at DESC LIMIT 2000")
+            for row in cur.fetchall():
+                urls.append(f"{base}/kino/{row[0]}")
+    except Exception as e:
+        log.warning("sitemap: %s", e)
+    items = "".join(f"<url><loc>{u}</loc></url>" for u in urls)
+    xml = f'<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">{items}</urlset>'
+    return Response(xml, mimetype="application/xml")
+
+@app.route("/kino/<int:mid>")
+def movie_page(mid):
+    """Har kino uchun alohida HTML sahifa — Google o'qiy oladi (SEO).
+    Foydalanuvchi ko'rsa, JS uni chiroyli ko'rsatadi; Google matnni o'qiydi."""
+    try:
+        with get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT id, title, genre, year, language, quality, description,
+                       COALESCE(content_type,'movie'), poster_id, poster_url
+                FROM movies WHERE id=%s
+            """, (mid,))
+            r = cur.fetchone()
+    except Exception:
+        r = None
+    if not r:
+        return send_from_directory("static", "index.html")
+    title = r[1] or "Kino"
+    genre = r[2] or ""
+    year = r[3] or ""
+    desc = (r[6] or f"{title} — o'zbek tilida onlayn ko'rish.")[:300]
+    ctype = r[7]
+    poster = r[9] or (f"/api/poster/{mid}" if r[8] else "")
+    bot_link = f"https://t.me/{BOT_USERNAME}?start=movie_{mid}" if BOT_USERNAME else "#"
+    e = _html.escape
+    type_uz = {"movie":"Kino","series":"Serial","anime":"Anime","cartoon":"Multfilm"}.get(ctype,"Kino")
+    page_title = f"{title} ({year}) — o'zbek tilida | CINEMAX" if year else f"{title} — o'zbek tilida | CINEMAX"
+    page = f"""<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{e(page_title)}</title>
+<meta name="description" content="{e(desc)}">
+<meta name="keywords" content="{e(title)}, {e(genre)}, o'zbek tilida, uzbek tilida, {year}, onlayn kino, tarjima">
+<link rel="canonical" href="{e(request.url_root.rstrip('/'))}/kino/{mid}">
+<meta property="og:type" content="video.movie">
+<meta property="og:title" content="{e(title)}">
+<meta property="og:description" content="{e(desc)}">
+{f'<meta property="og:image" content="{e(poster)}">' if poster else ''}
+<meta property="og:locale" content="uz_UZ">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<nav id="navbar"><a href="/" class="nav-logo">CINEMAX</a></nav>
+<main style="padding-top:90px; max-width:900px; margin:0 auto;">
+  <article style="display:flex; gap:24px; flex-wrap:wrap; padding:20px;">
+    {f'<img src="{e(poster)}" alt="{e(title)}" style="width:220px; border-radius:10px;">' if poster else ''}
+    <div style="flex:1; min-width:260px;">
+      <h1 style="font-family:Bebas Neue,sans-serif; font-size:40px; letter-spacing:1px;">{e(title)}</h1>
+      <p style="color:#a3a3a3; margin:8px 0;">{type_uz}{f' · {year}' if year else ''}{f' · {e(genre)}' if genre else ''}</p>
+      <p style="line-height:1.7; color:#c8c8c8; margin:16px 0;">{e(desc)}</p>
+      <a href="{e(bot_link)}" style="display:inline-block; background:#e50914; color:#fff; padding:14px 28px; border-radius:6px; text-decoration:none; font-weight:600;">▶ Botda ko'rish / yuklab olish</a>
+      <p style="margin-top:24px;"><a href="/" style="color:#a3a3a3;">← Barcha kinolar</a></p>
+    </div>
+  </article>
+</main>
+</body>
+</html>"""
+    return Response(page, mimetype="text/html")
+
 # ══════════════════ ADMIN ══════════════════
 def _check(d):
     return (d.get("password") or "") == ADMIN_PASSWORD
