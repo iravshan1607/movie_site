@@ -613,3 +613,31 @@
 
   /* Hero almashinish (fade) */
   .hero-poster-bg { transition: opacity 0.6s ease; }
+
+  /* Hero slide almashinish */
+  .hero-content { transition: transform 0.4s ease, opacity 0.4s ease; }
+  .hero-slide-out { transform: translateX(-40px); opacity: 0; }
+  .hero-slide-in { animation: heroSlideIn 0.6s ease; }
+  @keyframes heroSlideIn {
+    from { transform: translateX(40px); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+  }
+
+  /* Saralash tugmalari */
+  .sort-bar { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:24px; }
+  .sort-bar .sort-label { color:var(--text-muted); font-size:13px; margin-right:4px; }
+  .sort-btn { padding:7px 14px; border-radius:18px; border:1px solid rgba(255,255,255,0.2); font-size:13px; color:#e5e5e5; cursor:pointer; background:rgba(255,255,255,0.05); transition:all 0.2s; }
+  .sort-btn:hover, .sort-btn.active { background:#fff; color:#000; border-color:#fff; }
+  .random-btn { padding:7px 16px; border-radius:18px; border:1px solid var(--red); background:rgba(229,9,20,0.1); color:var(--red); font-size:13px; cursor:pointer; margin-left:auto; transition:all 0.2s; }
+  .random-btn:hover { background:var(--red); color:#fff; }
+
+  /* O'xshash kinolar (modalda) */
+  .similar-row { margin-top:20px; }
+  .similar-row h4 { font-size:15px; margin-bottom:12px; color:#e5e5e5; }
+  .similar-cards { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; }
+  @media(max-width:560px){ .similar-cards{ grid-template-columns:repeat(3,1fr); } }
+  .similar-card { cursor:pointer; transition:transform 0.2s; }
+  .similar-card:hover { transform:scale(1.05); }
+  .similar-poster { aspect-ratio:2/3; border-radius:6px; overflow:hidden; position:relative; background:#2a2a34; }
+  .similar-poster img { width:100%; height:100%; object-fit:cover; }
+  .similar-card .st { font-size:11px; color:#c8c8c8; margin-top:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
