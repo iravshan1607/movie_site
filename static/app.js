@@ -1,141 +1,203 @@
-let curType = 'all', curGenre = 'all', curQuery = '', curPage = 1, BOT = '';
-
+let BOT = '';
+let curType = 'all', curGenre = 'all';
 const typeLabel = { movie: 'Kino', series: 'Serial', anime: 'Anime', cartoon: 'Multfilm' };
-const typeColor = { movie: '#E50914', series: '#2BA8FF', anime: '#ff5fa2', cartoon: '#FFC940' };
+// Fake poster ranglari (poster bo'lmasa)
+const palettes = ['c1','c2','c3','c4','c5','c6','c7','c8','c9','c10'];
 
-function esc(s) { return String(s == null ? '' : s).replace(/[<>&"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c])); }
+function esc(s){ return String(s==null?'':s).replace(/[<>&"]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c])); }
+function pal(id){ return palettes[id % palettes.length]; }
+
+// Hero strip kataklari
+document.getElementById('heroStrip').innerHTML = Array(42).fill('<div class="hero-strip-cell"></div>').join('');
+
+// Navbar scroll
+window.addEventListener('scroll', () => {
+  document.getElementById('navbar').classList.toggle('scrolled', window.scrollY > 50);
+});
 
 // Bot username
-fetch('/api/botlink').then(r => r.json()).then(d => { BOT = d.bot || ''; }).catch(() => {});
+fetch('/api/botlink').then(r=>r.json()).then(d=>{ BOT = d.bot || ''; }).catch(()=>{});
 
 // Janrlar
-fetch('/api/genres').then(r => r.json()).then(d => {
+fetch('/api/genres').then(r=>r.json()).then(d=>{
   if (d.genres && d.genres.length) {
-    const row = document.getElementById('genre-row');
-    row.innerHTML = '<button class="chip active" data-genre="all" onclick="setGenre(\'all\')">Barcha janr</button>' +
-      d.genres.map(g => `<button class="chip" data-genre="${esc(g)}" onclick="setGenre('${esc(g)}')">${esc(g)}</button>`).join('');
+    const box = document.getElementById('genres');
+    box.innerHTML = '<div class="genre-pill active" onclick="setGenre(\'all\', this)">Barchasi</div>' +
+      d.genres.map(g => `<div class="genre-pill" onclick="setGenre('${esc(g)}', this)">${esc(g)}</div>`).join('');
   }
-}).catch(() => {});
+}).catch(()=>{});
 
-function setType(t) {
-  curType = t; curPage = 1;
-  document.querySelectorAll('[data-type]').forEach(b => b.classList.toggle('active', b.dataset.type === t));
-  loadMovies();
+// Poster URL
+function posterUrl(m){ return m.has_poster ? `/api/poster/${m.id}` : ''; }
+
+// Oddiy karta (16:9)
+function cardHtml(m){
+  const p = posterUrl(m);
+  const bg = p ? `<img src="${p}" loading="lazy" onerror="this.style.display='none'">` : '';
+  return `<div class="card ${pal(m.id)}" onclick="openMovie(${m.id})">
+    <div class="card-img">${bg}<span class="card-name">${esc(m.title)}</span></div>
+    <div class="card-overlay"><div class="card-play"><svg viewBox="0 0 24 24" fill="#000"><path d="M8 5v14l11-7z"/></svg></div></div>
+  </div>`;
 }
-function setGenre(g) {
-  curGenre = g; curPage = 1;
-  document.querySelectorAll('[data-genre]').forEach(b => b.classList.toggle('active', b.dataset.genre === g));
-  loadMovies();
-}
-function doSearch() {
-  curQuery = document.getElementById('search').value.trim(); curPage = 1;
-  loadMovies();
+// Top 10 karta (2:3 + raqam)
+function top10Html(m, rank){
+  const p = posterUrl(m);
+  const bg = p ? `<img src="${p}" loading="lazy" onerror="this.style.display='none'">` : '';
+  return `<div class="card-top10" onclick="openMovie(${m.id})">
+    <div class="card-top10-img ${pal(m.id)}">${bg}
+      <div style="padding:8px;font-size:11px;font-weight:500;color:#fff;position:absolute;bottom:8px;left:8px;text-shadow:0 1px 4px #000;z-index:2;">${esc(m.title)}</div>
+    </div>
+    <div class="top10-number">${rank}</div>
+  </div>`;
 }
 
-async function loadMovies() {
-  const grid = document.getElementById('grid');
-  const status = document.getElementById('status');
-  const pager = document.getElementById('pager');
-  grid.innerHTML = ''; pager.innerHTML = '';
-  status.innerHTML = '<div class="spinner"></div>Yuklanmoqda...';
+function rowHtml(title, cardsHtml, isTop10){
+  return `<div class="row">
+    <div class="row-header"><span class="row-title">${title}</span></div>
+    <div class="${isTop10?'cards-top10':'cards'}">${cardsHtml}</div>
+  </div>`;
+}
+
+async function fetchMovies(params){
+  const q = new URLSearchParams(params);
+  const r = await fetch('/api/movies?' + q);
+  return await r.json();
+}
+
+// Asosiy yuklash — bir nechta qator
+async function loadHome(){
+  const rows = document.getElementById('rows');
+  rows.innerHTML = '<div class="loader"><div class="spin"></div>Kinolar yuklanmoqda...</div>';
   try {
-    const params = new URLSearchParams({ type: curType, genre: curGenre, q: curQuery, page: curPage });
-    const r = await fetch('/api/movies?' + params);
-    const d = await r.json();
-    if (!d.movies || !d.movies.length) {
-      if (d.error) {
-        status.innerHTML = '⚠️ Baza xatosi: ' + d.error;
-      } else {
-        status.innerHTML = '😕 Hech narsa topilmadi. Boshqa qidiruv yoki filtr bilan urinib ko\'ring.';
-      }
+    const typeFilter = curType !== 'all' ? { type: curType } : {};
+    const genreFilter = curGenre !== 'all' ? { genre: curGenre } : {};
+    const base = { ...typeFilter, ...genreFilter };
+
+    // Hammasini olamiz (1-sahifa, ko'proq)
+    const all = await fetchMovies({ ...base, page: 1 });
+    if (all.error) { rows.innerHTML = `<div class="state-msg">⚠️ Xato: ${esc(all.error)}</div>`; return; }
+    if (!all.movies || !all.movies.length) {
+      rows.innerHTML = '<div class="state-msg">😕 Hech narsa topilmadi.</div>';
+      setHero(null);
       return;
     }
-    status.innerHTML = '';
-    grid.innerHTML = d.movies.map(m => {
-      const poster = m.has_poster ? `/api/poster/${m.id}` : (m.poster_url || '');
-      const posterHtml = poster
-        ? `<img src="${esc(poster)}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=ph>🎬</div>'">`
-        : `<div class="ph">🎬</div>`;
-      const tcol = typeColor[m.type] || '#E50914';
-      return `<div class="movie" onclick="openMovie(${m.id})">
-        <div class="poster">
-          ${posterHtml}
-          <span class="badge-type" style="color:${tcol}">${typeLabel[m.type] || 'Kino'}</span>
-          ${m.quality ? `<span class="badge-q">${esc(m.quality)}</span>` : ''}
-          <div class="poster-ov"><div class="play">▶</div></div>
-        </div>
-        <div class="m-title">${esc(m.title)}</div>
-        <div class="m-meta">${m.year || ''} ${m.rating ? `· <span class="m-rating">★ ${m.rating}</span>` : ''}</div>
-      </div>`;
-    }).join('');
-    // Pager
-    if (d.pages > 1) {
-      let html = '';
-      html += `<button onclick="goPage(${curPage - 1})" ${curPage <= 1 ? 'disabled' : ''}>‹</button>`;
-      const start = Math.max(1, curPage - 2), end = Math.min(d.pages, curPage + 2);
-      if (start > 1) html += `<button onclick="goPage(1)">1</button>`;
-      if (start > 2) html += `<button disabled>…</button>`;
-      for (let i = start; i <= end; i++) html += `<button class="${i === curPage ? 'active' : ''}" onclick="goPage(${i})">${i}</button>`;
-      if (end < d.pages - 1) html += `<button disabled>…</button>`;
-      if (end < d.pages) html += `<button onclick="goPage(${d.pages})">${d.pages}</button>`;
-      html += `<button onclick="goPage(${curPage + 1})" ${curPage >= d.pages ? 'disabled' : ''}>›</button>`;
-      pager.innerHTML = html;
+    const movies = all.movies;
+    setHero(movies[0]);
+
+    let html = '';
+    // Yangi qo'shilganlar (kelgan tartib — created_at DESC)
+    html += rowHtml('Yangi qo\'shildi', movies.slice(0, 12).map(cardHtml).join(''));
+
+    // Top 10 (eng ko'p ko'rilgan)
+    const top = [...movies].sort((a,b)=>(b.views||0)-(a.views||0)).slice(0,10);
+    if (top.some(m=>m.views>0)) {
+      html += rowHtml('🔥 Eng ko\'p ko\'rilgan', top.map((m,i)=>top10Html(m,i+1)).join(''), true);
     }
-  } catch (e) {
-    status.innerHTML = '❌ Yuklashda xatolik. Internetni tekshiring.';
+
+    // Turlar bo'yicha (faqat "Barchasi" rejimida)
+    if (curType === 'all' && curGenre === 'all') {
+      for (const [t, label] of [['movie','🎬 Kinolar'],['series','📺 Seriallar'],['anime','🌸 Anime'],['cartoon','🧸 Multfilmlar']]) {
+        const sub = movies.filter(m=>m.type===t);
+        if (sub.length) html += rowHtml(label, sub.slice(0,12).map(cardHtml).join(''));
+      }
+    }
+    rows.innerHTML = html;
+  } catch(e){
+    rows.innerHTML = '<div class="state-msg">❌ Yuklashda xatolik.</div>';
   }
 }
-function goPage(p) { curPage = p; loadMovies(); window.scrollTo({ top: 0, behavior: 'smooth' }); }
 
-async function openMovie(id) {
-  const modal = document.getElementById('movie-modal');
-  const box = document.getElementById('movie-box');
-  box.innerHTML = '<div class="status"><div class="spinner"></div></div>';
-  modal.classList.add('open'); document.body.style.overflow = 'hidden';
+function setHero(m){
+  const h = document.getElementById('heroContent');
+  if (!m) { return; }
+  const badge = typeLabel[m.type] || 'Kino';
+  h.innerHTML = `
+    <div class="hero-badge">${badge}${m.year?' · '+m.year:''}</div>
+    <div class="hero-title">${esc(m.title)}</div>
+    ${m.genre?`<div class="hero-subtitle">${esc(m.genre)}</div>`:''}
+    <div class="hero-meta">
+      ${m.rating?`<span class="match">★ ${m.rating}</span>`:''}
+      ${m.year?`<span>${m.year}</span>`:''}
+      ${m.quality?`<span class="age">${esc(m.quality)}</span>`:''}
+      ${m.language?`<span>${esc(m.language)}</span>`:''}
+    </div>
+    <div class="hero-btns">
+      <a class="btn btn-play" onclick="openMovie(${m.id})"><svg viewBox="0 0 24 24" fill="#000"><path d="M8 5v14l11-7z"/></svg> Ko'rish</a>
+      <button class="btn btn-info" onclick="openMovie(${m.id})">ℹ Batafsil</button>
+    </div>`;
+}
+
+function setType(t){
+  curType = t; curGenre = 'all';
+  document.querySelectorAll('.genre-pill').forEach((p,i)=>p.classList.toggle('active', i===0));
+  window.scrollTo({top:0,behavior:'smooth'});
+  loadHome();
+}
+function setGenre(g, el){
+  curGenre = g;
+  document.querySelectorAll('.genre-pill').forEach(p=>p.classList.remove('active'));
+  if (el) el.classList.add('active');
+  loadHome();
+}
+
+// Qidiruv
+function openSearch(){ document.getElementById('searchOverlay').classList.add('open'); setTimeout(()=>document.getElementById('searchInput').focus(),100); }
+function closeSearch(){ document.getElementById('searchOverlay').classList.remove('open'); document.getElementById('searchResults').innerHTML=''; document.getElementById('searchInput').value=''; }
+async function doSearch(){
+  const q = document.getElementById('searchInput').value.trim();
+  const box = document.getElementById('searchResults');
+  if (!q) return;
+  box.innerHTML = '<div class="loader"><div class="spin"></div></div>';
   try {
-    const r = await fetch('/api/movie/' + id);
+    const d = await fetchMovies({ q, page: 1 });
+    if (!d.movies || !d.movies.length) { box.innerHTML = '<div class="state-msg">Topilmadi</div>'; return; }
+    box.innerHTML = `<div class="cards">${d.movies.map(cardHtml).join('')}</div>`;
+  } catch(e){ box.innerHTML = '<div class="state-msg">Xato</div>'; }
+}
+
+// Modal
+async function openMovie(id){
+  const modal = document.getElementById('movieModal');
+  const box = document.getElementById('movieBox');
+  box.innerHTML = '<div class="loader"><div class="spin"></div></div>';
+  modal.classList.add('open'); document.body.style.overflow='hidden';
+  try {
+    const r = await fetch('/api/movie/'+id);
     const d = await r.json();
-    if (!d.found) { box.innerHTML = '<div class="status">Topilmadi</div>'; return; }
+    if (!d.found) { box.innerHTML = '<div class="state-msg">Topilmadi</div>'; return; }
     const m = d.movie;
-    const poster = m.has_poster ? `/api/poster/${m.id}` : (m.poster_url || '');
-    const isSeries = m.type === 'series' || m.type === 'anime';
-    // Botga havola: start parametri bilan
+    const p = m.has_poster ? `/api/poster/${m.id}` : '';
+    const isSeries = m.type==='series' || m.type==='anime';
     const botLink = BOT ? `https://t.me/${BOT}?start=movie_${m.id}` : '#';
-    const tcol = typeColor[m.type] || '#E50914';
     box.innerHTML = `
-      <div class="m-hero" style="${poster ? `background-image:url('${esc(poster)}')` : ''}">
-        <button class="m-close" onclick="closeMovie()">×</button>
-        <div class="m-hero-content">
-          ${poster ? `<img class="m-hero-poster" src="${esc(poster)}" onerror="this.outerHTML='<div class=\\'m-hero-poster ph\\'>🎬</div>'">` : `<div class="m-hero-poster ph">🎬</div>`}
-          <div class="m-hero-info">
+      <div class="mm-hero" style="${p?`background-image:url('${p}')`:''}">
+        <button class="mm-close" onclick="closeMovie()">×</button>
+        <div class="mm-hero-in">
+          ${p?`<img class="mm-poster" src="${p}" onerror="this.outerHTML='<div class=\\'mm-poster ph\\'>🎬</div>'">`:`<div class="mm-poster ph">🎬</div>`}
+          <div class="mm-info">
             <h2>${esc(m.title)}</h2>
-            <div class="m-tags">
-              <span class="m-tag r" style="background:${tcol}">${typeLabel[m.type] || 'Kino'}</span>
-              ${m.year ? `<span class="m-tag">${m.year}</span>` : ''}
-              ${m.quality ? `<span class="m-tag">${esc(m.quality)}</span>` : ''}
-              ${m.language ? `<span class="m-tag">${esc(m.language)}</span>` : ''}
-              ${m.rating ? `<span class="m-tag">★ ${m.rating}</span>` : ''}
+            <div class="mm-tags">
+              <span class="mm-tag r">${typeLabel[m.type]||'Kino'}</span>
+              ${m.year?`<span class="mm-tag">${m.year}</span>`:''}
+              ${m.quality?`<span class="mm-tag">${esc(m.quality)}</span>`:''}
+              ${m.language?`<span class="mm-tag">${esc(m.language)}</span>`:''}
+              ${m.rating?`<span class="mm-tag">★ ${m.rating}</span>`:''}
             </div>
-            ${m.genre ? `<div style="color:var(--dim);font-size:14px">${esc(m.genre)}</div>` : ''}
           </div>
         </div>
       </div>
-      <div class="mbox-body">
-        ${m.description ? `<p class="desc">${esc(m.description)}</p>` : '<p class="desc" style="opacity:0.6">Tavsif yo\'q.</p>'}
-        <a href="${botLink}" target="_blank" class="watch-btn">
-          ${isSeries ? '📺 Botda epizodlarni ko\'rish' : '▶ Botda ko\'rish / yuklab olish'}
+      <div class="mm-body">
+        ${m.genre?`<div style="color:var(--text-muted);font-size:13px;margin-bottom:14px;">${esc(m.genre)}</div>`:''}
+        ${m.description?`<p class="mm-desc">${esc(m.description)}</p>`:'<p class="mm-desc" style="opacity:0.5">Tavsif yo\'q.</p>'}
+        <a href="${botLink}" target="_blank" class="mm-watch">
+          ${isSeries?'📺 Botda qismlarni ko\'rish':'▶ Botda ko\'rish / yuklab olish'}
         </a>
-        <p class="watch-note">👁 ${m.views} marta ko'rilgan · Telegram bot orqali ochiladi</p>
+        <p class="mm-note">👁 ${m.views} marta ko'rilgan · Telegram bot orqali ochiladi</p>
       </div>`;
-  } catch (e) {
-    box.innerHTML = '<div class="status">❌ Xatolik</div>';
-  }
+  } catch(e){ box.innerHTML = '<div class="state-msg">❌ Xatolik</div>'; }
 }
-function closeMovie() {
-  document.getElementById('movie-modal').classList.remove('open');
-  document.body.style.overflow = '';
-}
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closeMovie(); });
+function closeMovie(){ document.getElementById('movieModal').classList.remove('open'); document.body.style.overflow=''; }
+document.addEventListener('keydown', e=>{ if(e.key==='Escape'){ closeMovie(); closeSearch(); } });
 
-// Boshlang'ich yuklash
-loadMovies();
+// Boshlash
+loadHome();
