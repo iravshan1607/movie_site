@@ -34,21 +34,21 @@ function posterUrl(m){ return m.poster_url ? m.poster_url : (m.has_poster ? `/ap
 function cardHtml(m){
   const p = posterUrl(m);
   const bg = p ? `<img src="${p}" loading="lazy" onerror="this.remove()">` : '';
-  return `<div class="card ${pal(m.id)}" onclick="openMovie(${m.id})">
+  return `<a href="/kino/${m.id}" class="card ${pal(m.id)}" onclick="event.preventDefault();openMovie(${m.id})">
     <div class="card-img">${bg}<span class="card-name">${esc(m.title)}</span></div>
     <div class="card-overlay"><div class="card-play"><svg viewBox="0 0 24 24" fill="#000"><path d="M8 5v14l11-7z"/></svg></div></div>
-  </div>`;
+  </a>`;
 }
 // Top 10 karta (2:3 + raqam)
 function top10Html(m, rank){
   const p = posterUrl(m);
   const bg = p ? `<img src="${p}" loading="lazy" onerror="this.remove()">` : '';
-  return `<div class="card-top10" onclick="openMovie(${m.id})">
+  return `<a href="/kino/${m.id}" class="card-top10" onclick="event.preventDefault();openMovie(${m.id})">
     <div class="card-top10-img ${pal(m.id)}">${bg}
       <div style="padding:8px;font-size:11px;font-weight:500;color:#fff;position:absolute;bottom:8px;left:8px;text-shadow:0 1px 4px #000;z-index:2;">${esc(m.title)}</div>
     </div>
     <div class="top10-number">${rank}</div>
-  </div>`;
+  </a>`;
 }
 
 function rowHtml(title, cardsHtml, isTop10){
