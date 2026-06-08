@@ -303,12 +303,16 @@
     cursor: pointer;
     transition: transform 0.3s, z-index 0s 0.3s;
     aspect-ratio: 16/9;
+    display: block;
+    text-decoration: none;
+    color: inherit;
   }
   .card:hover {
     transform: scale(1.08);
     z-index: 10;
     transition: transform 0.3s, z-index 0s;
   }
+  .card-top10 { text-decoration: none; color: inherit; }
 
   .card-img {
     width: 100%;
