@@ -28,7 +28,7 @@ fetch('/api/genres').then(r=>r.json()).then(d=>{
 }).catch(()=>{});
 
 // Poster URL
-function posterUrl(m){ return m.has_poster ? `/api/poster/${m.id}` : ''; }
+function posterUrl(m){ return m.poster_url ? m.poster_url : (m.has_poster ? `/api/poster/${m.id}` : ''); }
 
 // Oddiy karta (16:9)
 function cardHtml(m){
@@ -166,7 +166,7 @@ async function openMovie(id){
     const d = await r.json();
     if (!d.found) { box.innerHTML = '<div class="state-msg">Topilmadi</div>'; return; }
     const m = d.movie;
-    const p = m.has_poster ? `/api/poster/${m.id}` : '';
+    const p = posterUrl(m);
     const isSeries = m.type==='series' || m.type==='anime';
     const botLink = BOT ? `https://t.me/${BOT}?start=movie_${m.id}` : '#';
     box.innerHTML = `
