@@ -3,49 +3,74 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>KINO — Filmlar, Seriallar, Anime</title>
+<title>CINEMAX — Onlayn Kino</title>
 <meta name="description" content="Eng so'nggi kinolar, seriallar, anime va multfilmlar. Tez va qulay.">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
 
-<header id="hdr">
-  <div class="hdr-in">
-    <div class="logo">KINO<span>.</span></div>
-    <div class="search-box">
-      <input id="search" placeholder="🔍 Kino, serial, anime qidirish..." onkeydown="if(event.key==='Enter')doSearch()">
-    </div>
-    <a href="/admin" class="hdr-admin" title="Admin">⚙️</a>
+<!-- Search overlay -->
+<div class="search-overlay" id="searchOverlay">
+  <div class="search-input-wrap">
+    <input class="search-input" type="text" placeholder="Kino, serial, anime..." id="searchInput" onkeydown="if(event.key==='Enter')doSearch()">
+    <button class="search-close" onclick="closeSearch()">✕</button>
   </div>
-  <div class="filters" id="filters">
-    <div class="frow">
-      <button class="chip active" data-type="all" onclick="setType('all')">Hammasi</button>
-      <button class="chip" data-type="movie" onclick="setType('movie')">🎬 Kino</button>
-      <button class="chip" data-type="series" onclick="setType('series')">📺 Serial</button>
-      <button class="chip" data-type="anime" onclick="setType('anime')">🌸 Anime</button>
-      <button class="chip" data-type="cartoon" onclick="setType('cartoon')">🧸 Multfilm</button>
-    </div>
-    <div class="frow" id="genre-row"></div>
-  </div>
-</header>
-
-<main>
-  <div id="grid" class="grid"></div>
-  <div id="status" class="status"></div>
-  <div id="pager" class="pager"></div>
-</main>
-
-<!-- Kino modal -->
-<div class="mbg" id="movie-modal" onclick="if(event.target===this)closeMovie()">
-  <div class="mbox" id="movie-box"></div>
+  <div id="searchResults" style="width:100%;max-width:900px;margin-top:30px;"></div>
 </div>
 
+<!-- Navbar -->
+<nav id="navbar">
+  <a href="/" class="nav-logo">CINEMAX</a>
+  <ul class="nav-links">
+    <li><a href="javascript:void(0)" onclick="setType('all')">Bosh sahifa</a></li>
+    <li><a href="javascript:void(0)" onclick="setType('movie')">Kinolar</a></li>
+    <li><a href="javascript:void(0)" onclick="setType('series')">Seriallar</a></li>
+    <li><a href="javascript:void(0)" onclick="setType('anime')">Anime</a></li>
+    <li><a href="javascript:void(0)" onclick="setType('cartoon')">Multfilm</a></li>
+  </ul>
+  <div class="nav-right">
+    <button class="nav-search" onclick="openSearch()">🔍</button>
+  </div>
+</nav>
+
+<!-- Hero -->
+<section class="hero">
+  <div class="hero-poster-bg"></div>
+  <div class="hero-strip" id="heroStrip"></div>
+  <div class="hero-bg"></div>
+  <div class="hero-content" id="heroContent">
+    <div class="hero-badge">Yuklanmoqda...</div>
+    <div class="hero-title">CINEMAX</div>
+    <div class="hero-subtitle">ONLAYN KINO</div>
+    <p class="hero-desc">Eng so'nggi kinolar, seriallar va anime — barchasi bir joyda.</p>
+  </div>
+  <div class="scroll-hint"><span>Pastga</span><div class="scroll-line"></div></div>
+</section>
+
+<!-- Main content -->
+<main>
+  <!-- Genre filters -->
+  <div class="genres" id="genres">
+    <div class="genre-pill active" onclick="setGenre('all', this)">Barchasi</div>
+  </div>
+
+  <!-- Rows (JS bilan to'ldiriladi) -->
+  <div id="rows"></div>
+</main>
+
+<!-- Footer -->
 <footer>
-  <div class="logo" style="font-size:18px">KINO<span>.</span></div>
-  <p>Barcha kinolar Telegram bot orqali ko'riladi. © 2026</p>
+  <div class="footer-bottom">
+    <div class="footer-logo">CINEMAX</div>
+    <div class="footer-copy">© 2026 Cinemax. Barcha kinolar Telegram bot orqali.</div>
+  </div>
 </footer>
+
+<!-- Movie modal -->
+<div class="movie-modal-bg" id="movieModal" onclick="if(event.target===this)closeMovie()">
+  <div class="movie-modal" id="movieBox"></div>
+</div>
 
 <script src="/static/app.js"></script>
 </body>
