@@ -32,8 +32,22 @@
   </ul>
   <div class="nav-right">
     <button class="nav-search" onclick="openSearch()">🔍</button>
+    <button class="nav-burger" onclick="toggleMenu()" aria-label="Menyu"><span></span><span></span><span></span></button>
   </div>
 </nav>
+
+<!-- Mobil menyu (chapdan ochiladi) -->
+<div class="mobile-menu-bg" id="mobileMenuBg" onclick="closeMenu()"></div>
+<aside class="mobile-menu" id="mobileMenu">
+  <div class="mm-logo">CINEMAX</div>
+  <a href="javascript:void(0)" onclick="setType('all');closeMenu()">🏠 Bosh sahifa</a>
+  <a href="javascript:void(0)" onclick="setType('movie');closeMenu()">🎬 Kinolar</a>
+  <a href="javascript:void(0)" onclick="setType('series');closeMenu()">📺 Seriallar</a>
+  <a href="javascript:void(0)" onclick="setType('anime');closeMenu()">🌸 Anime</a>
+  <a href="javascript:void(0)" onclick="setType('cartoon');closeMenu()">🧸 Multfilm</a>
+  <a href="javascript:void(0)" onclick="openSearch();closeMenu()">🔍 Qidirish</a>
+</aside>
+
 
 <!-- Hero -->
 <section class="hero">
