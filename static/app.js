@@ -7,6 +7,10 @@ const palettes = ['c1','c2','c3','c4','c5','c6','c7','c8','c9','c10'];
 function esc(s){ return String(s==null?'':s).replace(/[<>&"]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c])); }
 function pal(id){ return palettes[id % palettes.length]; }
 
+// Mobil menyu
+function toggleMenu(){ document.body.classList.toggle('menu-open'); }
+function closeMenu(){ document.body.classList.remove('menu-open'); }
+
 // Hero strip kataklari
 document.getElementById('heroStrip').innerHTML = Array(42).fill('<div class="hero-strip-cell"></div>').join('');
 
@@ -82,11 +86,14 @@ async function loadHome(){
       return;
     }
     const movies = all.movies;
-    setHero(movies[0]);
+
+    // Hero uchun — eng ko'p ko'rilgan 5 ta (yoki birinchi 5) aylanadi
+    const heroPool = [...movies].sort((a,b)=>(b.views||0)-(a.views||0)).slice(0,5);
+    startHeroRotation(heroPool.length ? heroPool : movies.slice(0,5));
 
     let html = '';
     // Yangi qo'shilganlar (kelgan tartib — created_at DESC)
-    html += rowHtml('Yangi qo\'shildi', movies.slice(0, 12).map(cardHtml).join(''));
+    html += rowHtml('🆕 Yangi qo\'shildi', movies.slice(0, 12).map(cardHtml).join(''));
 
     // Top 10 (eng ko'p ko'rilgan)
     const top = [...movies].sort((a,b)=>(b.views||0)-(a.views||0)).slice(0,10);
@@ -104,6 +111,22 @@ async function loadHome(){
     rows.innerHTML = html;
   } catch(e){
     rows.innerHTML = '<div class="state-msg">❌ Yuklashda xatolik.</div>';
+  }
+}
+
+// Hero avtomatik almashinishi
+let heroTimer = null, heroIdx = 0, heroList = [];
+function startHeroRotation(list){
+  heroList = list || [];
+  heroIdx = 0;
+  if (heroTimer) clearInterval(heroTimer);
+  if (!heroList.length) { setHero(null); return; }
+  setHero(heroList[0]);
+  if (heroList.length > 1) {
+    heroTimer = setInterval(() => {
+      heroIdx = (heroIdx + 1) % heroList.length;
+      setHero(heroList[heroIdx]);
+    }, 6000);
   }
 }
 
@@ -206,7 +229,7 @@ async function openMovie(id){
   } catch(e){ box.innerHTML = '<div class="state-msg">❌ Xatolik</div>'; }
 }
 function closeMovie(){ document.getElementById('movieModal').classList.remove('open'); document.body.style.overflow=''; }
-document.addEventListener('keydown', e=>{ if(e.key==='Escape'){ closeMovie(); closeSearch(); } });
+document.addEventListener('keydown', e=>{ if(e.key==='Escape'){ closeMovie(); closeSearch(); closeMenu(); } });
 
 // Boshlash
 loadHome();
