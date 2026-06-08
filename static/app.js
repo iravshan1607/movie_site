@@ -109,7 +109,16 @@ async function loadHome(){
 
 function setHero(m){
   const h = document.getElementById('heroContent');
+  const bgEl = document.getElementById('heroPosterBg') || document.querySelector('.hero-poster-bg');
   if (!m) { return; }
+  // Poster bo'lsa — hero foniga qo'yamiz
+  const p = posterUrl(m);
+  if (p && bgEl) {
+    bgEl.style.backgroundImage = `url('${p}')`;
+    bgEl.style.backgroundSize = 'cover';
+    bgEl.style.backgroundPosition = 'center';
+    bgEl.style.backgroundRepeat = 'no-repeat';
+  }
   const badge = typeLabel[m.type] || 'Kino';
   h.innerHTML = `
     <div class="hero-badge">${badge}${m.year?' · '+m.year:''}</div>
