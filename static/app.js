@@ -33,7 +33,7 @@ function posterUrl(m){ return m.has_poster ? `/api/poster/${m.id}` : ''; }
 // Oddiy karta (16:9)
 function cardHtml(m){
   const p = posterUrl(m);
-  const bg = p ? `<img src="${p}" loading="lazy" onerror="this.style.display='none'">` : '';
+  const bg = p ? `<img src="${p}" loading="lazy" onerror="this.remove()">` : '';
   return `<div class="card ${pal(m.id)}" onclick="openMovie(${m.id})">
     <div class="card-img">${bg}<span class="card-name">${esc(m.title)}</span></div>
     <div class="card-overlay"><div class="card-play"><svg viewBox="0 0 24 24" fill="#000"><path d="M8 5v14l11-7z"/></svg></div></div>
@@ -42,7 +42,7 @@ function cardHtml(m){
 // Top 10 karta (2:3 + raqam)
 function top10Html(m, rank){
   const p = posterUrl(m);
-  const bg = p ? `<img src="${p}" loading="lazy" onerror="this.style.display='none'">` : '';
+  const bg = p ? `<img src="${p}" loading="lazy" onerror="this.remove()">` : '';
   return `<div class="card-top10" onclick="openMovie(${m.id})">
     <div class="card-top10-img ${pal(m.id)}">${bg}
       <div style="padding:8px;font-size:11px;font-weight:500;color:#fff;position:absolute;bottom:8px;left:8px;text-shadow:0 1px 4px #000;z-index:2;">${esc(m.title)}</div>
