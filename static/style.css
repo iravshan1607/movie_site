@@ -320,14 +320,31 @@
     display: flex;
     align-items: flex-end;
     padding: 8px;
+    position: relative;
+  }
+  /* Nom ostida qoraytiruvchi gradient — har qanday posterda o'qilsin */
+  .card-img::after {
+    content: '';
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    height: 55%;
+    background: linear-gradient(to top, rgba(0,0,0,0.92) 0%, rgba(0,0,0,0.5) 45%, transparent 100%);
+    z-index: 1;
+    pointer-events: none;
   }
 
   .card-name {
-    font-size: 11px;
-    font-weight: 500;
+    font-size: 12.5px;
+    font-weight: 600;
     color: #fff;
-    text-shadow: 0 1px 4px rgba(0,0,0,0.8);
-    line-height: 1.2;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.9);
+    line-height: 1.25;
+    position: relative;
+    z-index: 2;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
   }
 
   .card-overlay {
@@ -563,7 +580,7 @@
   @keyframes spin { to { transform:rotate(360deg); } }
 
   /* Real poster image in cards */
-  .card-img img, .card-top10-img img { width:100%; height:100%; object-fit:cover; position:absolute; inset:0; z-index:1; }
+  .card-img img, .card-top10-img img { width:100%; height:100%; object-fit:cover; position:absolute; inset:0; z-index:0; }
   .card-img { position:relative; }
   .card-name { position:relative; z-index:2; }
 
