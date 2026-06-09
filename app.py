@@ -265,7 +265,7 @@ def movie_page(mid):
     bot_link = f"https://t.me/{BOT_USERNAME}?start=movie_{mid}" if BOT_USERNAME else "#"
     e = _html.escape
     type_uz = {"movie":"Kino","series":"Serial","anime":"Anime","cartoon":"Multfilm"}.get(ctype,"Kino")
-    page_title = f"{title} ({year}) — o'zbek tilida | CINEMAX" if year else f"{title} — o'zbek tilida | CINEMAX"
+    page_title = f"{title} ({year}) — o'zbek tilida | ASTRA" if year else f"{title} — o'zbek tilida | ASTRA"
     page = f"""<!DOCTYPE html>
 <html lang="uz">
 <head>
@@ -285,7 +285,7 @@ def movie_page(mid):
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-<nav id="navbar"><a href="/" class="nav-logo">CINEMAX</a></nav>
+<nav id="navbar"><a href="/" class="nav-logo">🌌 ASTRA</a></nav>
 <main style="padding-top:90px; max-width:900px; margin:0 auto;">
   <article style="display:flex; gap:24px; flex-wrap:wrap; padding:20px;">
     {f'<img src="{e(poster)}" alt="{e(title)}" style="width:220px; border-radius:10px;">' if poster else ''}
