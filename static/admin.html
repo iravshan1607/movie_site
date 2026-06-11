@@ -70,6 +70,13 @@
   </div>
   <div class="search-bar">
     <input id="search" placeholder="🔍 Kino nomi bo'yicha qidirish..." onkeydown="if(event.key==='Enter')loadList()">
+    <select id="filter-type" onchange="loadList()" style="margin-bottom:0;width:auto;min-width:130px;">
+      <option value="">Hammasi</option>
+      <option value="movie">🎬 Kino</option>
+      <option value="series">📺 Serial</option>
+      <option value="anime">🌸 Anime</option>
+      <option value="cartoon">🧸 Multfilm</option>
+    </select>
     <button onclick="loadList()">Qidirish</button>
   </div>
   <div class="count" id="count"></div>
@@ -84,8 +91,10 @@
     <button class="modal-close" onclick="closeEdit()">×</button>
     <h3>✏️ Kinoni tahrirlash</h3>
     <input type="hidden" id="e-id">
-    <span class="lbl">Nomi *</span>
-    <input id="e-title" placeholder="Nom">
+    <span class="lbl">Nomi * <span style="color:var(--dim);font-weight:400">(to'liq sarlavha)</span></span>
+    <input id="e-title" placeholder="Nom" oninput="syncEpisode()">
+    <span class="lbl">📺 Qism raqami <span style="color:var(--dim);font-weight:400">(faqat raqam, masalan: 81)</span></span>
+    <input id="e-episode" type="number" min="1" placeholder="Qism raqami (ixtiyoriy)" oninput="applyEpisode()">
     <div class="row2">
       <div><span class="lbl">Janr</span><input id="e-genre"></div>
       <div><span class="lbl">Yil</span><input id="e-year" type="number"></div>
@@ -127,15 +136,16 @@
 
   async function loadList() {
     const q = document.getElementById('search').value.trim();
+    const ftype = document.getElementById('filter-type').value;
     const list = document.getElementById('list');
     const count = document.getElementById('count');
     list.innerHTML = '<div class="empty">Yuklanmoqda...</div>';
     try {
-      const r = await fetch('/api/admin/list', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({password:PASS, q}) });
+      const r = await fetch('/api/admin/list', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({password:PASS, q, type: ftype, limit: 500}) });
       const d = await r.json();
       if (d.error) { list.innerHTML = '<div class="empty">❌ '+d.error+'</div>'; return; }
       if (!d.movies || !d.movies.length) { count.textContent=''; list.innerHTML = '<div class="empty">😕 Kino topilmadi</div>'; return; }
-      count.textContent = d.movies.length + ' ta kino';
+      count.textContent = d.movies.length + ' ta natija';
       list.innerHTML = d.movies.map(m => `
         <div class="row">
           <div class="info">
@@ -151,6 +161,36 @@
           </div>
         </div>`).join('');
     } catch(e){ list.innerHTML = '<div class="empty">❌ Server bilan aloqa yo\'q</div>'; }
+  }
+
+  // Sarlavhadan qism raqamini topish
+  function detectEpisode(title) {
+    // "82-qism", "82 qism", "82-серия", "ep82", "episode 82" kabi formatlar
+    const m = title.match(/(\d+)\s*[-–]?\s*(qism|серия|episode|ep|part)/i)
+                || title.match(/(qism|серия|episode|ep|part)\s*[-–]?\s*(\d+)/i);
+    if (m) return parseInt(m[1] || m[2]);
+    return null;
+  }
+
+  // Qism raqami o'zgarganda sarlavhani yangilash
+  function applyEpisode() {
+    const ep = parseInt(document.getElementById('e-episode').value);
+    if (!ep) return;
+    let title = document.getElementById('e-title').value;
+    // Mavjud raqamni almashtirish
+    const updated = title.replace(/(\d+)(\s*[-–]?\s*)(qism|серия|episode|ep|part)/i, ep + '$2$3')
+                         .replace(/(qism|серия|episode|ep|part)(\s*[-–]?\s*)(\d+)/i, '$1$2' + ep);
+    if (updated !== title) {
+      document.getElementById('e-title').value = updated;
+    }
+  }
+
+  // Sarlavha o'zgarganda qism raqamini sinxronlash
+  function syncEpisode() {
+    const title = document.getElementById('e-title').value;
+    const ep = detectEpisode(title);
+    if (ep) document.getElementById('e-episode').value = ep;
+    else document.getElementById('e-episode').value = '';
   }
 
   async function openEdit(id) {
@@ -169,6 +209,9 @@
       document.getElementById('e-type').value = m.type;
       document.getElementById('e-poster').value = m.poster_url || '';
       document.getElementById('e-desc').value = m.description;
+      // Qism raqamini avtomatik aniqlash
+      const ep = detectEpisode(m.title);
+      document.getElementById('e-episode').value = ep || '';
       document.getElementById('edit-modal').classList.add('open');
     } catch(e){ alert('Xatolik'); }
   }
