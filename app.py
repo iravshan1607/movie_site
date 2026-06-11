@@ -312,27 +312,34 @@ def admin_login():
 
 @app.route("/api/admin/list", methods=["POST"])
 def admin_list():
-    """Admin uchun kinolar ro'yxati (qidiruv bilan) — boshqarish uchun."""
+    """Admin uchun kinolar ro'yxati (qidiruv + tur filter bilan) — boshqarish uchun."""
     d = request.get_json() or {}
     if not _check(d):
         return jsonify({"error": "ruxsat yo'q"}), 403
     q = (d.get("q") or "").strip()
+    ftype = (d.get("type") or "").strip()
     try:
+        limit = min(int(d.get("limit") or 200), 500)
+    except Exception:
+        limit = 200
+    try:
+        where = []
+        params = []
+        if q:
+            where.append("title ILIKE %s")
+            params.append(f"%{q}%")
+        if ftype:
+            where.append("COALESCE(content_type,'movie') = %s")
+            params.append(ftype)
+        wsql = (" WHERE " + " AND ".join(where)) if where else ""
         with get_conn() as conn:
             cur = conn.cursor()
-            if q:
-                cur.execute("""
-                    SELECT id, title, genre, year, language, quality,
-                           COALESCE(content_type,'movie'), COALESCE(views,0)
-                    FROM movies WHERE title ILIKE %s
-                    ORDER BY created_at DESC LIMIT 200
-                """, (f"%{q}%",))
-            else:
-                cur.execute("""
-                    SELECT id, title, genre, year, language, quality,
-                           COALESCE(content_type,'movie'), COALESCE(views,0)
-                    FROM movies ORDER BY created_at DESC LIMIT 200
-                """)
+            cur.execute(f"""
+                SELECT id, title, genre, year, language, quality,
+                       COALESCE(content_type,'movie'), COALESCE(views,0)
+                FROM movies{wsql}
+                ORDER BY created_at DESC LIMIT %s
+            """, params + [limit])
             rows = cur.fetchall()
         movies = [{
             "id": r[0], "title": r[1], "genre": r[2] or "", "year": r[3],
