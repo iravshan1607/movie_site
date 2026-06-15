@@ -265,12 +265,13 @@ def movie_page(mid):
     bot_link = f"https://t.me/{BOT_USERNAME}?start=movie_{mid}" if BOT_USERNAME else "#"
     e = _html.escape
     type_uz = {"movie":"Kino","series":"Serial","anime":"Anime","cartoon":"Multfilm"}.get(ctype,"Kino")
-    page_title = f"{title} ({year}) — o'zbek tilida | ASTRA" if year else f"{title} — o'zbek tilida | ASTRA"
+    page_title = f"{title} ({year}) — o'zbek tilida | CINEMAX" if year else f"{title} — o'zbek tilida | CINEMAX"
     page = f"""<!DOCTYPE html>
 <html lang="uz">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
 <meta name="google-site-verification" content="NWyfq_vRf53C8JMiGFZ8xL666JbpZg4NJAfKzabPoik" />
 <title>{e(page_title)}</title>
 <meta name="description" content="{e(desc)}">
@@ -285,7 +286,7 @@ def movie_page(mid):
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-<nav id="navbar"><a href="/" class="nav-logo">🌌 ASTRA</a></nav>
+<nav id="navbar"><a href="/" class="nav-logo">CINEMAX</a></nav>
 <main style="padding-top:90px; max-width:900px; margin:0 auto;">
   <article style="display:flex; gap:24px; flex-wrap:wrap; padding:20px;">
     {f'<img src="{e(poster)}" alt="{e(title)}" style="width:220px; border-radius:10px;">' if poster else ''}
@@ -312,34 +313,27 @@ def admin_login():
 
 @app.route("/api/admin/list", methods=["POST"])
 def admin_list():
-    """Admin uchun kinolar ro'yxati (qidiruv + tur filter bilan) — boshqarish uchun."""
+    """Admin uchun kinolar ro'yxati (qidiruv bilan) — boshqarish uchun."""
     d = request.get_json() or {}
     if not _check(d):
         return jsonify({"error": "ruxsat yo'q"}), 403
     q = (d.get("q") or "").strip()
-    ftype = (d.get("type") or "").strip()
     try:
-        limit = min(int(d.get("limit") or 200), 500)
-    except Exception:
-        limit = 200
-    try:
-        where = []
-        params = []
-        if q:
-            where.append("title ILIKE %s")
-            params.append(f"%{q}%")
-        if ftype:
-            where.append("COALESCE(content_type,'movie') = %s")
-            params.append(ftype)
-        wsql = (" WHERE " + " AND ".join(where)) if where else ""
         with get_conn() as conn:
             cur = conn.cursor()
-            cur.execute(f"""
-                SELECT id, title, genre, year, language, quality,
-                       COALESCE(content_type,'movie'), COALESCE(views,0)
-                FROM movies{wsql}
-                ORDER BY created_at DESC LIMIT %s
-            """, params + [limit])
+            if q:
+                cur.execute("""
+                    SELECT id, title, genre, year, language, quality,
+                           COALESCE(content_type,'movie'), COALESCE(views,0)
+                    FROM movies WHERE title ILIKE %s
+                    ORDER BY created_at DESC LIMIT 200
+                """, (f"%{q}%",))
+            else:
+                cur.execute("""
+                    SELECT id, title, genre, year, language, quality,
+                           COALESCE(content_type,'movie'), COALESCE(views,0)
+                    FROM movies ORDER BY created_at DESC LIMIT 200
+                """)
             rows = cur.fetchall()
         movies = [{
             "id": r[0], "title": r[1], "genre": r[2] or "", "year": r[3],
