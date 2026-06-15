@@ -286,7 +286,7 @@ def movie_page(mid):
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-<nav id="navbar"><a href="/" class="nav-logo">CINEMAX</a></nav>
+<nav id="navbar"><a href="/" class="nav-logo" aria-label="ASTRA"><img src="/static/logo.svg" alt="ASTRA" class="nav-logo-img"></a></nav>
 <main style="padding-top:90px; max-width:900px; margin:0 auto;">
   <article style="display:flex; gap:24px; flex-wrap:wrap; padding:20px;">
     {f'<img src="{e(poster)}" alt="{e(title)}" style="width:220px; border-radius:10px;">' if poster else ''}
