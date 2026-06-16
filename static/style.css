@@ -994,3 +994,19 @@
     opacity: 0; pointer-events: none; transform: translateY(12px); transition: opacity .25s, transform .25s; }
   #toTop.show { opacity: 1; pointer-events: auto; transform: translateY(0); }
   #toTop:hover { transform: translateY(-3px) scale(1.05); }
+
+  /* ============ SEVIMLILAR (heart tugmasi) ============ */
+  .card { position: relative; }
+  .fav-btn {
+    position: absolute; top: 8px; right: 8px; z-index: 4;
+    width: 34px; height: 34px; border-radius: 50%; border: none; cursor: pointer;
+    background: rgba(10,8,24,0.55); backdrop-filter: blur(4px);
+    display: flex; align-items: center; justify-content: center;
+    opacity: 0; transform: scale(0.8); transition: opacity .2s, transform .2s, background .2s;
+  }
+  .card:hover .fav-btn { opacity: 1; transform: scale(1); }
+  .fav-btn.faved { opacity: 1; transform: scale(1); }
+  .fav-btn svg { width: 18px; height: 18px; fill: none; stroke: #fff; stroke-width: 2; }
+  .fav-btn.faved svg { fill: #ff4d6d; stroke: #ff4d6d; }
+  .fav-btn:hover { background: rgba(255,77,109,0.25); }
+  @media (hover:none) { .fav-btn { opacity: 1; transform: scale(1); } }
