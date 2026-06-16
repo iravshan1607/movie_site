@@ -138,35 +138,38 @@ textarea { resize:vertical; min-height:80px; }
   display:grid;
   grid-template-columns:repeat(auto-fill, minmax(150px, 1fr));
   gap:14px;
-  align-items:start;
+  align-items:stretch;
 }
 .mcard {
   background:var(--bg2); border:1px solid var(--line);
   border-radius:14px; overflow:hidden; position:relative;
   transition:transform 0.22s, box-shadow 0.22s, border-color 0.22s;
   animation:mcardIn 0.45s ease both;
+  display:flex; flex-direction:column;
 }
 .mcard:hover {
   transform:translateY(-6px) scale(1.02);
   box-shadow:0 14px 38px rgba(124,92,255,0.45);
   border-color:rgba(157,123,255,0.5);
+  z-index:5;
 }
 @keyframes mcardIn {
   from { opacity:0; transform:translateY(22px) scale(0.95); }
   to { opacity:1; transform:translateY(0) scale(1); }
 }
 .mcard-poster {
-  width:100%; aspect-ratio:2/3; object-fit:cover; display:block;
-  background:linear-gradient(135deg, #2a2658, #1b1840);
+  width:100%; height:225px; object-fit:cover; display:block;
+  background:linear-gradient(135deg, #2a2658, #1b1840); flex-shrink:0;
 }
 .mcard-poster-ph {
-  width:100%; aspect-ratio:2/3; display:flex; flex-direction:column; align-items:center; justify-content:center;
-  gap:8px; padding:12px; text-align:center;
+  width:100%; height:225px; display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:8px; padding:12px; text-align:center; flex-shrink:0;
   background:linear-gradient(135deg, #2a2658, #1b1840); color:rgba(157,123,255,0.7);
 }
 .mcard-poster-ph span { font-size:38px; }
 .mcard-poster-ph b { font-size:12px; color:rgba(220,215,245,0.85); font-weight:600;
   display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; line-height:1.3; }
+.mcard-body { flex:1; }
 
 /* Sahifalash */
 .pagination {
