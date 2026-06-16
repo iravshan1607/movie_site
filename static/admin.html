@@ -135,16 +135,16 @@ textarea { resize:vertical; min-height:80px; }
 
 /* LIST ROWS */
 #listContainer {
-  display:grid;
-  grid-template-columns:repeat(auto-fill, minmax(150px, 1fr));
+  display:grid !important;
+  grid-template-columns:repeat(auto-fill, minmax(150px, 1fr)) !important;
   gap:14px;
   align-items:stretch;
+  grid-auto-rows:1fr;
 }
 .mcard {
   background:var(--bg2); border:1px solid var(--line);
   border-radius:14px; overflow:hidden; position:relative;
   transition:transform 0.22s, box-shadow 0.22s, border-color 0.22s;
-  animation:mcardIn 0.45s ease both;
   display:flex; flex-direction:column;
 }
 .mcard:hover {
@@ -169,7 +169,7 @@ textarea { resize:vertical; min-height:80px; }
 .mcard-poster-ph span { font-size:38px; }
 .mcard-poster-ph b { font-size:12px; color:rgba(220,215,245,0.85); font-weight:600;
   display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; line-height:1.3; }
-.mcard-body { flex:1; }
+.mcard-body { flex:1; padding:10px 11px 12px; }
 
 /* Sahifalash */
 .pagination {
@@ -191,7 +191,6 @@ textarea { resize:vertical; min-height:80px; }
 }
 .pagination button:disabled { opacity:0.35; cursor:not-allowed; }
 .pagination .pg-dots { color:var(--dim); padding:0 4px; }
-.mcard-body { padding:10px 11px 12px; }
 .mcard-title { font-weight:600; font-size:13.5px; line-height:1.3; margin-bottom:5px;
   display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
 .mcard-meta { font-size:11px; color:var(--dim); display:flex; flex-wrap:wrap; gap:4px; align-items:center; }
