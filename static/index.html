@@ -12,8 +12,19 @@
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
+<div class="aurora"></div>
 <div class="stars2"></div>
 <div class="stars3"></div>
+<div class="bigstars">
+  <span class="bigstar b1">✦</span>
+  <span class="bigstar b2">✦</span>
+  <span class="bigstar b3">✦</span>
+  <span class="bigstar b4">✦</span>
+  <span class="bigstar b5">✦</span>
+  <span class="bigstar b6">✦</span>
+</div>
+<div class="planet"><div class="planet-body"></div><div class="planet-ring"></div></div>
+<div class="stardust" id="stardust"></div>
 <div class="comet c1"></div>
 <div class="comet c2"></div>
 <div class="comet c3"></div>
@@ -96,6 +107,40 @@
   <div class="movie-modal" id="movieBox"></div>
 </div>
 
+<script>
+(function(){
+  // Yulduz changi zarrachalarini yasash
+  var sd = document.getElementById('stardust');
+  if (sd) {
+    var html = '';
+    for (var i=0;i<26;i++){
+      var left = Math.random()*100;
+      var dur = 9 + Math.random()*11;
+      var delay = Math.random()*dur;
+      var size = 1 + Math.random()*2;
+      html += '<span class="dust" style="left:'+left.toFixed(1)+'%;width:'+size.toFixed(1)+'px;height:'+size.toFixed(1)+'px;animation-duration:'+dur.toFixed(1)+'s;animation-delay:'+(-delay).toFixed(1)+'s;"></span>';
+    }
+    sd.innerHTML = html;
+  }
+  // Admin sozlagan effektlarni yuklab, body'ga klass qo'shamiz
+  fetch('/api/settings').then(function(r){return r.json();}).then(function(s){
+    var map = {fx_glow:'fx-glow',fx_bigstars:'fx-bigstars',fx_parallax:'fx-parallax',fx_planet:'fx-planet',fx_stardust:'fx-stardust',fx_aurora:'fx-aurora'};
+    Object.keys(map).forEach(function(k){
+      if (String(s[k])==='1') document.body.classList.add(map[k]);
+    });
+    // Parallaks — sichqoncha harakatiga qarab qatlamlar siljiydi
+    if (document.body.classList.contains('fx-parallax')){
+      var l2=document.querySelector('.stars2'), l3=document.querySelector('.stars3'), bs=document.querySelector('.bigstars');
+      window.addEventListener('mousemove', function(e){
+        var x=(e.clientX/window.innerWidth-0.5), y=(e.clientY/window.innerHeight-0.5);
+        if(l2) l2.style.transform='translate('+(x*10)+'px,'+(y*10)+'px)';
+        if(l3) l3.style.transform='translate('+(x*20)+'px,'+(y*20)+'px)';
+        if(bs) bs.style.transform='translate('+(x*30)+'px,'+(y*30)+'px)';
+      }, {passive:true});
+    }
+  }).catch(function(){});
+})();
+</script>
 <script src="/static/app.js"></script>
 </body>
 </html>
