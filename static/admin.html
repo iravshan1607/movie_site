@@ -44,25 +44,27 @@ body::after {
 .btn { transition:transform 0.15s, box-shadow 0.2s; }
 .btn:hover { transform:translateY(-1px); box-shadow:0 6px 20px rgba(124,92,255,0.4); }
 
-/* Uchar kometalar */
+/* Uchar yulduzlar (kometalar) */
 .comet {
-  position:fixed; top:-10%; width:3px; height:3px; border-radius:50%;
-  background:#fff; box-shadow:0 0 8px 2px rgba(255,255,255,0.9);
+  position:fixed; top:-10%; width:4px; height:4px; border-radius:50%;
+  background:#fff; box-shadow:0 0 12px 3px rgba(255,255,255,0.95);
   z-index:-1; pointer-events:none;
 }
 .comet::after {
-  content:''; position:absolute; top:50%; right:0;
-  width:120px; height:1.5px; transform-origin:right; transform:translateY(-50%) rotate(0deg);
-  background:linear-gradient(270deg, rgba(157,123,255,0.85), transparent);
+  content:''; position:absolute; bottom:50%; left:50%;
+  width:2px; height:160px; transform:translateX(-50%);
+  background:linear-gradient(to top, rgba(157,123,255,0.9), rgba(90,209,255,0.3), transparent);
 }
-.comet.c1 { left:15%; animation:comet-fall 6s linear infinite; }
-.comet.c2 { left:55%; animation:comet-fall 8s linear infinite 2.5s; }
-.comet.c3 { left:80%; animation:comet-fall 7s linear infinite 4s; }
+.comet.c1 { left:15%; animation:comet-fall 7s linear infinite; }
+.comet.c2 { left:48%; animation:comet-fall 9s linear infinite 3s; }
+.comet.c3 { left:78%; animation:comet-fall 8s linear infinite 5s; }
+.comet.c4 { left:33%; animation:comet-fall 10s linear infinite 6.5s; }
+.comet.c5 { left:65%; animation:comet-fall 7.5s linear infinite 1.5s; }
 @keyframes comet-fall {
-  0%   { transform:translate(0,0) rotate(35deg); opacity:0; }
-  8%   { opacity:1; }
-  70%  { opacity:1; }
-  100% { transform:translate(-60vw, 120vh) rotate(35deg); opacity:0; }
+  0%   { transform:translate(0,0) rotate(18deg); opacity:0; }
+  10%  { opacity:1; }
+  75%  { opacity:1; }
+  100% { transform:translate(-22vw, 115vh) rotate(18deg); opacity:0; }
 }
 
 /* LOGIN */
@@ -128,9 +130,34 @@ textarea { resize:vertical; min-height:80px; }
   background:linear-gradient(135deg, #2a2658, #1b1840);
 }
 .mcard-poster-ph {
-  width:100%; aspect-ratio:2/3; display:flex; align-items:center; justify-content:center;
-  font-size:40px; background:linear-gradient(135deg, #2a2658, #1b1840); color:rgba(157,123,255,0.6);
+  width:100%; aspect-ratio:2/3; display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:8px; padding:12px; text-align:center;
+  background:linear-gradient(135deg, #2a2658, #1b1840); color:rgba(157,123,255,0.7);
 }
+.mcard-poster-ph span { font-size:38px; }
+.mcard-poster-ph b { font-size:12px; color:rgba(220,215,245,0.85); font-weight:600;
+  display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; line-height:1.3; }
+
+/* Sahifalash */
+.pagination {
+  display:flex; flex-wrap:wrap; gap:6px; justify-content:center; align-items:center;
+  margin:24px 0 8px;
+}
+.pagination button {
+  min-width:38px; height:38px; padding:0 10px; border-radius:10px;
+  background:var(--bg2); border:1px solid var(--line); color:var(--txt);
+  font-family:inherit; font-size:14px; cursor:pointer; transition:all 0.18s;
+  backdrop-filter:blur(8px);
+}
+.pagination button:hover:not(:disabled) {
+  border-color:var(--red); background:rgba(124,92,255,0.18); transform:translateY(-1px);
+}
+.pagination button.pg-active {
+  background:linear-gradient(135deg, #7c5cff, #5a3fd6); border-color:transparent;
+  font-weight:700; box-shadow:0 4px 14px rgba(124,92,255,0.5);
+}
+.pagination button:disabled { opacity:0.35; cursor:not-allowed; }
+.pagination .pg-dots { color:var(--dim); padding:0 4px; }
 .mcard-body { padding:10px 11px 12px; }
 .mcard-title { font-weight:600; font-size:13.5px; line-height:1.3; margin-bottom:5px;
   display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
@@ -190,6 +217,8 @@ textarea { resize:vertical; min-height:80px; }
 <div class="comet c1"></div>
 <div class="comet c2"></div>
 <div class="comet c3"></div>
+<div class="comet c4"></div>
+<div class="comet c5"></div>
 
 <!-- LOGIN -->
 <div id="loginPage" class="login-wrap">
@@ -278,6 +307,9 @@ textarea { resize:vertical; min-height:80px; }
 <script>
 let PASS = '';
 const TYPE = { movie:'Kino', series:'Serial', anime:'Anime', cartoon:'Multfilm' };
+let allMovies = [];
+let curPage = 1;
+const PER_PAGE = 24;
 
 // ── LOGIN ──
 async function login() {
@@ -314,14 +346,26 @@ async function search() {
   if (!d.movies || !d.movies.length) {
     cnt.textContent = '';
     box.innerHTML = '<div class="empty">Hech narsa topilmadi</div>';
+    allMovies = [];
+    const pg = document.getElementById('pagination');
+    if (pg) pg.innerHTML = '';
     return;
   }
 
+  allMovies = d.movies;
+  curPage = 1;
   cnt.textContent = d.movies.length + ' ta natija';
-  box.innerHTML = d.movies.map(m => {
+  renderPage();
+}
+
+function renderPage() {
+  const box = document.getElementById('listContainer');
+  const start = (curPage - 1) * PER_PAGE;
+  const pageItems = allMovies.slice(start, start + PER_PAGE);
+  box.innerHTML = pageItems.map(m => {
     const poster = m.poster_url
-      ? `<img class="mcard-poster" src="${esc(m.poster_url)}" loading="lazy" onerror="this.outerHTML='<div class=&quot;mcard-poster-ph&quot;>🎬</div>'">`
-      : `<div class="mcard-poster-ph">🎬</div>`;
+      ? `<img class="mcard-poster" src="${esc(m.poster_url)}" loading="lazy" onerror="this.outerHTML='<div class=&quot;mcard-poster-ph&quot;><span>🎬</span><b>'+${JSON.stringify(esc(m.title))}+'</b></div>'">`
+      : `<div class="mcard-poster-ph"><span>🎬</span><b>${esc(m.title)}</b></div>`;
     return `<div class="mcard">
       ${poster}
       <div class="mcard-btns">
@@ -338,6 +382,38 @@ async function search() {
       </div>
     </div>`;
   }).join('');
+  renderPagination();
+}
+
+function renderPagination() {
+  const totalPages = Math.ceil(allMovies.length / PER_PAGE);
+  let pg = document.getElementById('pagination');
+  if (!pg) {
+    pg = document.createElement('div');
+    pg.id = 'pagination';
+    pg.className = 'pagination';
+    document.getElementById('listContainer').after(pg);
+  }
+  if (totalPages <= 1) { pg.innerHTML = ''; return; }
+  let html = '';
+  html += `<button ${curPage===1?'disabled':''} onclick="goPage(${curPage-1})">‹</button>`;
+  const pages = [];
+  for (let i = 1; i <= totalPages; i++) {
+    if (i === 1 || i === totalPages || (i >= curPage-1 && i <= curPage+1)) pages.push(i);
+    else if (pages[pages.length-1] !== '...') pages.push('...');
+  }
+  pages.forEach(p => {
+    if (p === '...') html += `<span class="pg-dots">…</span>`;
+    else html += `<button class="${p===curPage?'pg-active':''}" onclick="goPage(${p})">${p}</button>`;
+  });
+  html += `<button ${curPage===totalPages?'disabled':''} onclick="goPage(${curPage+1})">›</button>`;
+  pg.innerHTML = html;
+}
+
+function goPage(p) {
+  curPage = p;
+  renderPage();
+  document.getElementById('listContainer').scrollIntoView({behavior:'smooth', block:'start'});
 }
 
 // ── TAHRIRLASH OCHISH ──
