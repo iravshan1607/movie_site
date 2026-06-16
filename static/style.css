@@ -906,3 +906,59 @@
   @media (prefers-reduced-motion: reduce) {
     .bigstar, .planet-body, .dust, .aurora::before, .aurora::after { animation: none; }
   }
+
+  /* ============ YANGI EFFEKTLAR ============ */
+
+  /* 7) Burjlar chizig'i — yulduzlarni bog'lovchi xira chiziqlar */
+  .constellation { position: fixed; inset: 0; z-index: -1; pointer-events: none; display: none; }
+  body.fx-constellation .constellation { display: block; }
+  .constellation svg { width: 100%; height: 100%; }
+  .constellation line { stroke: rgba(157,123,255,0.28); stroke-width: 1; }
+  .constellation circle { fill: rgba(255,255,255,0.85); }
+  .constellation .cl-dim { animation: const-pulse 7s ease-in-out infinite; }
+  @keyframes const-pulse { 0%,100% { opacity: 0.25; } 50% { opacity: 0.7; } }
+
+  /* 8) Galaktika pulslari — uzoqdagi porlovchi sharlar */
+  .orbs { position: fixed; inset: 0; z-index: -2; pointer-events: none; display: none; }
+  body.fx-orbs .orbs { display: block; }
+  .orb { position: absolute; border-radius: 50%; filter: blur(30px); opacity: 0.0;
+    animation: orb-pulse 11s ease-in-out infinite; }
+  .orb.o1 { top: 20%; left: 8%;  width: 180px; height: 180px;
+    background: radial-gradient(circle, rgba(124,92,255,0.5), transparent 70%); animation-delay: 0s; }
+  .orb.o2 { top: 60%; left: 78%; width: 220px; height: 220px;
+    background: radial-gradient(circle, rgba(90,209,255,0.45), transparent 70%); animation-delay: 3.5s; }
+  .orb.o3 { top: 78%; left: 30%; width: 150px; height: 150px;
+    background: radial-gradient(circle, rgba(255,110,199,0.4), transparent 70%); animation-delay: 6.5s; }
+  @keyframes orb-pulse {
+    0%, 100% { opacity: 0; transform: scale(0.8); }
+    50%      { opacity: 0.8; transform: scale(1.15); }
+  }
+
+  /* 9) Meteorlar yomg'iri — tez-tez uchadigan qo'shimcha yulduzlar */
+  body.fx-meteors .meteor { display: block; }
+  .meteor { display: none; position: fixed; top: -8%; width: 3px; height: 3px; border-radius: 50%;
+    background: #fff; box-shadow: 0 0 10px 2px rgba(255,255,255,0.9); z-index: -1; pointer-events: none; }
+  .meteor::after { content: ''; position: absolute; bottom: 50%; left: 50%;
+    width: 1.5px; height: 110px; transform: translateX(-50%);
+    background: linear-gradient(to top, rgba(90,209,255,0.9), transparent); }
+  .meteor.m1 { left: 25%; animation: meteor-fall 3.5s linear infinite; }
+  .meteor.m2 { left: 55%; animation: meteor-fall 4.2s linear infinite 1.2s; }
+  .meteor.m3 { left: 85%; animation: meteor-fall 3s linear infinite 2.1s; }
+  .meteor.m4 { left: 10%; animation: meteor-fall 4.6s linear infinite 0.6s; }
+  .meteor.m5 { left: 70%; animation: meteor-fall 3.3s linear infinite 2.8s; }
+  .meteor.m6 { left: 40%; animation: meteor-fall 5s linear infinite 1.7s; }
+  @keyframes meteor-fall {
+    0%   { transform: translate(0,0) rotate(30deg); opacity: 0; }
+    8%   { opacity: 1; }
+    70%  { opacity: 1; }
+    100% { transform: translate(-30vw, 120vh) rotate(30deg); opacity: 0; }
+  }
+
+  /* 10) Rang o'zgaruvchi tumanlik — nebula sekin rang aylantiradi */
+  body.fx-hueshift::before { animation: nebula-drift 22s ease-in-out infinite alternate, hue-cycle 30s linear infinite; }
+  @keyframes hue-cycle { 0% { filter: hue-rotate(0deg); } 100% { filter: hue-rotate(360deg); } }
+
+  @media (prefers-reduced-motion: reduce) {
+    .orb, .meteor, .constellation .cl-dim { animation: none; }
+    body.fx-hueshift::before { animation: none; }
+  }
