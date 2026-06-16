@@ -296,7 +296,7 @@ textarea { resize:vertical; min-height:80px; }
     <button onclick="search()">🔍 Qidirish</button>
   </div>
   <div class="count" id="countText"></div>
-  <div style="font-size:11px;color:#5ad1ff;margin-bottom:10px;">✨ Grid v3 — poster tuzatildi</div>
+  <div style="font-size:11px;color:#5ad1ff;margin-bottom:10px;">✨ Grid v4 — Telegram posterlar</div>
   <div id="listContainer"></div>
 </div>
 
@@ -416,8 +416,9 @@ function renderPage() {
   const start = (curPage - 1) * PER_PAGE;
   const pageItems = allMovies.slice(start, start + PER_PAGE);
   box.innerHTML = pageItems.map(m => {
-    const poster = m.poster_url
-      ? `<img class="mcard-poster" src="${esc(m.poster_url)}" loading="lazy" onerror="this.classList.add('img-failed')">`
+    const hasPoster = m.poster_url || m.has_poster;
+    const poster = hasPoster
+      ? `<img class="mcard-poster" src="/api/poster/${m.id}" loading="lazy" onerror="this.classList.add('img-failed');this.src='/static/no-poster.svg'">`
       : `<div class="mcard-poster-ph"><span>🎬</span><b>${esc(m.title)}</b></div>`;
     return `<div class="mcard">
       ${poster}
