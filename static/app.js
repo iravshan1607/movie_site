@@ -8,6 +8,17 @@ const palettes = ['c1','c2','c3','c4','c5','c6','c7','c8','c9','c10'];
 function esc(s){ return String(s==null?'':s).replace(/[<>&"]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c])); }
 function pal(id){ return palettes[id % palettes.length]; }
 
+// Sevimlilar (qurilmada saqlanadi)
+function getFavs(){ try { return JSON.parse(localStorage.getItem('astra_favs')||'[]'); } catch(e){ return []; } }
+function isFav(id){ return getFavs().indexOf(id) >= 0; }
+function toggleFav(id, el){
+  var f = getFavs(); var i = f.indexOf(id);
+  if (i>=0) f.splice(i,1); else f.push(id);
+  try { localStorage.setItem('astra_favs', JSON.stringify(f)); } catch(e){}
+  if (el) el.classList.toggle('faved', i<0);
+  if (curType === 'fav') loadHome();
+}
+
 // Mobil menyu
 function toggleMenu(){ document.body.classList.toggle('menu-open'); }
 function closeMenu(){ document.body.classList.remove('menu-open'); }
@@ -39,8 +50,10 @@ function posterUrl(m){ return m.poster_url ? m.poster_url : (m.has_poster ? `/ap
 function cardHtml(m){
   const p = posterUrl(m);
   const bg = p ? `<img src="${p}" loading="lazy" onerror="this.remove()">` : '';
+  const fav = isFav(m.id) ? ' faved' : '';
   return `<a href="/kino/${m.id}" class="card ${pal(m.id)}" onclick="event.preventDefault();openMovie(${m.id})">
     <div class="card-img">${bg}<span class="card-name">${esc(m.title)}</span></div>
+    <button class="fav-btn${fav}" onclick="event.stopPropagation();event.preventDefault();toggleFav(${m.id},this)" aria-label="Sevimlilarga qo'shish"><svg viewBox="0 0 24 24"><path d="M12 21s-8-5.3-8-11a4.5 4.5 0 0 1 8-2.8A4.5 4.5 0 0 1 20 10c0 5.7-8 11-8 11z"/></svg></button>
     <div class="card-overlay"><div class="card-play"><svg viewBox="0 0 24 24" fill="#000"><path d="M8 5v14l11-7z"/></svg></div></div>
   </a>`;
 }
@@ -74,6 +87,21 @@ async function loadHome(){
   const rows = document.getElementById('rows');
   rows.innerHTML = '<div class="loader"><div class="spin"></div>Kinolar yuklanmoqda...</div>';
   try {
+    // Sevimlilar rejimi
+    if (curType === 'fav') {
+      const favs = getFavs();
+      if (!favs.length) {
+        rows.innerHTML = '<div class="state-msg">Sevimlilar ro\'yxati bo\'sh. Kino kartasidagi yurakcha ❤ tugmasini bosing.</div>';
+        if (typeof setHero==='function') setHero(null);
+        return;
+      }
+      const res = await fetchMovies({ ids: favs.join(',') });
+      const movies = (res.movies||[]);
+      allMovies = movies;
+      if (typeof setHero==='function') setHero(null);
+      rows.innerHTML = rowHtml('❤ Sevimlilar', movies.map(cardHtml).join(''));
+      return;
+    }
     const typeFilter = curType !== 'all' ? { type: curType } : {};
     const genreFilter = curGenre !== 'all' ? { genre: curGenre } : {};
     const base = { ...typeFilter, ...genreFilter };
