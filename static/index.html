@@ -25,6 +25,19 @@
 </div>
 <div class="planet"><div class="planet-body"></div><div class="planet-ring"></div></div>
 <div class="stardust" id="stardust"></div>
+<div class="orbs"><div class="orb o1"></div><div class="orb o2"></div><div class="orb o3"></div></div>
+<div class="constellation">
+  <svg viewBox="0 0 100 100" preserveAspectRatio="none">
+    <line x1="14" y1="20" x2="22" y2="30"/><line x1="22" y1="30" x2="30" y2="26"/><line x1="30" y1="26" x2="38" y2="38"/>
+    <line x1="70" y1="16" x2="78" y2="24"/><line x1="78" y1="24" x2="74" y2="34"/><line x1="74" y1="34" x2="84" y2="40"/>
+    <line x1="55" y1="70" x2="62" y2="78"/><line x1="62" y1="78" x2="72" y2="74"/>
+    <circle class="cl-dim" cx="14" cy="20" r="1"/><circle class="cl-dim" cx="22" cy="30" r="1.1"/><circle class="cl-dim" cx="30" cy="26" r="0.9"/><circle class="cl-dim" cx="38" cy="38" r="1"/>
+    <circle class="cl-dim" cx="70" cy="16" r="1"/><circle class="cl-dim" cx="78" cy="24" r="1.1"/><circle class="cl-dim" cx="74" cy="34" r="0.9"/><circle class="cl-dim" cx="84" cy="40" r="1"/>
+    <circle class="cl-dim" cx="55" cy="70" r="1"/><circle class="cl-dim" cx="62" cy="78" r="1.1"/><circle class="cl-dim" cx="72" cy="74" r="0.9"/>
+  </svg>
+</div>
+<div class="meteor m1"></div><div class="meteor m2"></div><div class="meteor m3"></div>
+<div class="meteor m4"></div><div class="meteor m5"></div><div class="meteor m6"></div>
 <div class="comet c1"></div>
 <div class="comet c2"></div>
 <div class="comet c3"></div>
@@ -124,7 +137,7 @@
   }
   // Admin sozlagan effektlarni yuklab, body'ga klass qo'shamiz
   fetch('/api/settings').then(function(r){return r.json();}).then(function(s){
-    var map = {fx_glow:'fx-glow',fx_bigstars:'fx-bigstars',fx_parallax:'fx-parallax',fx_planet:'fx-planet',fx_stardust:'fx-stardust',fx_aurora:'fx-aurora'};
+    var map = {fx_glow:'fx-glow',fx_bigstars:'fx-bigstars',fx_parallax:'fx-parallax',fx_planet:'fx-planet',fx_stardust:'fx-stardust',fx_aurora:'fx-aurora',fx_constellation:'fx-constellation',fx_orbs:'fx-orbs',fx_meteors:'fx-meteors',fx_hueshift:'fx-hueshift'};
     Object.keys(map).forEach(function(k){
       if (String(s[k])==='1') document.body.classList.add(map[k]);
     });
