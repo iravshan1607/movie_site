@@ -136,11 +136,12 @@ textarea { resize:vertical; min-height:80px; }
 /* LIST ROWS */
 #listContainer {
   display:grid !important;
-  grid-template-columns:repeat(auto-fill, minmax(150px, 1fr)) !important;
+  grid-template-columns:repeat(5, 1fr) !important;
   gap:14px;
   align-items:stretch;
-  grid-auto-rows:1fr;
 }
+@media (max-width:800px){ #listContainer { grid-template-columns:repeat(3,1fr) !important; } }
+@media (max-width:520px){ #listContainer { grid-template-columns:repeat(2,1fr) !important; } }
 .mcard {
   background:var(--bg2); border:1px solid var(--line);
   border-radius:14px; overflow:hidden; position:relative;
@@ -291,6 +292,7 @@ textarea { resize:vertical; min-height:80px; }
     <button onclick="search()">🔍 Qidirish</button>
   </div>
   <div class="count" id="countText"></div>
+  <div style="font-size:11px;color:#5ad1ff;margin-bottom:10px;">✨ Grid v2 — yangilangan</div>
   <div id="listContainer"></div>
 </div>
 
