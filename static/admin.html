@@ -69,6 +69,35 @@ body::after {
 
 /* LOGIN */
 .login-wrap { max-width:360px; margin:100px auto; padding:24px; }
+.login-box { text-align:center; position:relative; overflow:hidden; }
+.login-box::before {
+  content:''; position:absolute; top:-50%; left:-50%; width:200%; height:200%;
+  background:radial-gradient(circle, rgba(124,92,255,0.15), transparent 60%);
+  animation:login-glow 6s ease-in-out infinite alternate;
+}
+@keyframes login-glow { 0%{opacity:0.5; transform:scale(1)} 100%{opacity:1; transform:scale(1.1)} }
+.login-logo { display:flex; justify-content:center; margin-bottom:14px; position:relative; z-index:1; }
+.login-orb {
+  width:72px; height:72px; border-radius:50%;
+  background:radial-gradient(circle at 35% 30%, rgba(157,123,255,0.25), rgba(27,24,64,0.6));
+  border:1px solid rgba(157,123,255,0.4); padding:16px;
+  box-shadow:0 0 30px rgba(124,92,255,0.5), inset 0 0 20px rgba(90,209,255,0.2);
+  animation:orb-float 3s ease-in-out infinite;
+}
+@keyframes orb-float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-7px)} }
+.login-box h1, .login-box p, .login-box .pass-wrap, .login-box .btn, .login-box .alert { position:relative; z-index:1; }
+.login-box h1 {
+  background:linear-gradient(90deg,#9d7bff,#5ad1ff); -webkit-background-clip:text;
+  background-clip:text; -webkit-text-fill-color:transparent; font-size:24px;
+}
+.pass-wrap { position:relative; }
+.pass-wrap input { width:100%; padding-right:46px; }
+.pass-toggle {
+  position:absolute; right:8px; top:50%; transform:translateY(-50%);
+  background:none; border:none; cursor:pointer; font-size:18px; padding:6px; opacity:0.7;
+  transition:opacity 0.2s;
+}
+.pass-toggle:hover { opacity:1; }
 .box { background:var(--bg2); border:1px solid var(--line); border-radius:16px; padding:32px; }
 .box h1 { font-size:22px; margin-bottom:6px; }
 .box p { color:var(--dim); font-size:14px; margin-bottom:20px; }
@@ -109,6 +138,7 @@ textarea { resize:vertical; min-height:80px; }
   display:grid;
   grid-template-columns:repeat(auto-fill, minmax(150px, 1fr));
   gap:14px;
+  align-items:start;
 }
 .mcard {
   background:var(--bg2); border:1px solid var(--line);
@@ -222,12 +252,20 @@ textarea { resize:vertical; min-height:80px; }
 
 <!-- LOGIN -->
 <div id="loginPage" class="login-wrap">
-  <div class="box">
-    <h1>🎬 Kino Admin</h1>
-    <p>Parolni kiriting</p>
-    <input type="password" id="passInput" placeholder="Parol" onkeydown="if(event.key==='Enter')login()">
-    <button class="btn" onclick="login()">Kirish</button>
-    <div id="loginErr" class="alert alert-err hidden">❌ Parol noto'g'ri</div>
+  <div class="box login-box">
+    <div class="login-logo">
+      <div class="login-orb">
+        <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="url(#lg)" stroke-width="2"/><path d="M10 8l6 4-6 4z" fill="url(#lg)"/><defs><linearGradient id="lg" x1="0" y1="0" x2="24" y2="24"><stop stop-color="#9d7bff"/><stop offset="1" stop-color="#5ad1ff"/></linearGradient></defs></svg>
+      </div>
+    </div>
+    <h1>🌌 ASTRA Admin</h1>
+    <p>Boshqaruv paneliga kirish</p>
+    <div class="pass-wrap">
+      <input type="password" id="passInput" placeholder="Maxfiy kod" onkeydown="if(event.key==='Enter')login()">
+      <button type="button" class="pass-toggle" onclick="togglePass()" title="Ko'rsatish/yashirish">👁</button>
+    </div>
+    <button class="btn" onclick="login()">🚀 Kirish</button>
+    <div id="loginErr" class="alert alert-err hidden">❌ Kod noto'g'ri</div>
   </div>
 </div>
 
@@ -312,6 +350,13 @@ let curPage = 1;
 const PER_PAGE = 24;
 
 // ── LOGIN ──
+function togglePass() {
+  const inp = document.getElementById('passInput');
+  const btn = document.querySelector('.pass-toggle');
+  if (inp.type === 'password') { inp.type = 'text'; btn.textContent = '🙈'; }
+  else { inp.type = 'password'; btn.textContent = '👁'; }
+}
+
 async function login() {
   const p = document.getElementById('passInput').value;
   const r = await fetch('/api/admin/login', {
@@ -534,6 +579,29 @@ async function del(id, title) {
 function closeModal() { document.getElementById('editOverlay').classList.remove('open'); }
 function esc(s) { return String(s==null?'':s).replace(/[<>&"]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c])); }
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+// ── Galaxy click effekti — bosilganda yulduzchalar sachraydi ──
+document.addEventListener('click', e => {
+  const colors = ['#9d7bff', '#5ad1ff', '#ff6ec7', '#ffffff'];
+  const count = 8;
+  for (let i = 0; i < count; i++) {
+    const spark = document.createElement('div');
+    const angle = (Math.PI * 2 * i) / count + Math.random() * 0.5;
+    const dist = 30 + Math.random() * 30;
+    const dx = Math.cos(angle) * dist;
+    const dy = Math.sin(angle) * dist;
+    spark.style.cssText = `position:fixed;left:${e.clientX}px;top:${e.clientY}px;`
+      + `width:6px;height:6px;border-radius:50%;pointer-events:none;z-index:9999;`
+      + `background:${colors[i % colors.length]};box-shadow:0 0 8px currentColor;color:${colors[i % colors.length]};`
+      + `--dx:${dx}px;--dy:${dy}px;animation:spark-burst 0.6s ease-out forwards;`;
+    document.body.appendChild(spark);
+    setTimeout(() => spark.remove(), 650);
+  }
+});
+const sparkStyle = document.createElement('style');
+sparkStyle.textContent = '@keyframes spark-burst{0%{transform:translate(-50%,-50%) scale(1);opacity:1}'
+  + '100%{transform:translate(calc(-50% + var(--dx)),calc(-50% + var(--dy))) scale(0);opacity:0}}';
+document.head.appendChild(sparkStyle);
 </script>
 </body>
 </html>
