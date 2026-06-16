@@ -21,6 +21,8 @@ DATABASE_URL   = os.getenv("DATABASE_URL", "")
 BOT_TOKEN      = os.getenv("BOT_TOKEN", "")
 BOT_USERNAME   = os.getenv("BOT_USERNAME", "")          # botga yo'naltirish uchun
 ADMIN_PASSWORD = os.getenv("KINO_ADMIN_PASSWORD", "admin123")
+TMDB_TOKEN     = os.getenv("TMDB_TOKEN", "")   # TMDB v4 "Read Access Token" (Bearer)
+TMDB_KEY       = os.getenv("TMDB_KEY", "")     # TMDB v3 API key (zaxira)
 PORT           = int(os.getenv("PORT", "8080"))
 
 app = Flask(__name__, static_folder="static")
@@ -133,6 +135,11 @@ def api_movies():
     q = (request.args.get("q") or "").strip()
     ctype = (request.args.get("type") or "").strip()
     genre = (request.args.get("genre") or "").strip()
+    year = (request.args.get("year") or "").strip()
+    quality = (request.args.get("quality") or "").strip()
+    language = (request.args.get("language") or "").strip()
+    sort = (request.args.get("sort") or "new").strip()
+    ids = (request.args.get("ids") or "").strip()
     try:
         page = max(1, int(request.args.get("page", 1)))
     except Exception:
@@ -151,6 +158,32 @@ def api_movies():
         if genre and genre != "all":
             where.append("genre ILIKE %s")
             params.append(f"%{genre}%")
+        if year and year != "all":
+            try:
+                yv = int(year)
+                where.append("year = %s")
+                params.append(yv)
+            except Exception:
+                pass
+        if quality and quality != "all":
+            where.append("quality ILIKE %s")
+            params.append(f"%{quality}%")
+        if language and language != "all":
+            where.append("language ILIKE %s")
+            params.append(f"%{language}%")
+        if ids:
+            id_list = [int(x) for x in ids.split(",") if x.strip().isdigit()][:60]
+            if id_list:
+                ph = ",".join(["%s"] * len(id_list))
+                where.append(f"id IN ({ph})")
+                params += id_list
+        order = {
+            "new": "created_at DESC",
+            "old": "created_at ASC",
+            "popular": "COALESCE(views,0) DESC",
+            "rating": "rating DESC NULLS LAST",
+            "title": "title ASC",
+        }.get(sort, "created_at DESC")
         wsql = (" WHERE " + " AND ".join(where)) if where else ""
         with get_conn() as conn:
             cur = conn.cursor()
@@ -161,7 +194,7 @@ def api_movies():
                        COALESCE(content_type,'movie'), poster_id,
                        COALESCE(views,0), rating, poster_url
                 FROM movies{wsql}
-                ORDER BY created_at DESC
+                ORDER BY {order}
                 LIMIT %s OFFSET %s
             """, params + [per, offset])
             rows = cur.fetchall()
@@ -263,6 +296,23 @@ def api_genres():
         return jsonify({"genres": genres})
     except Exception:
         return jsonify({"genres": []})
+
+# ── Filtr variantlari (yil, sifat, til) ──
+@app.route("/api/filters")
+def api_filters():
+    out = {"years": [], "qualities": [], "languages": []}
+    try:
+        with get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT DISTINCT year FROM movies WHERE year IS NOT NULL ORDER BY year DESC")
+            out["years"] = [r[0] for r in cur.fetchall() if r[0]]
+            cur.execute("SELECT DISTINCT quality FROM movies WHERE quality IS NOT NULL AND quality <> '' ORDER BY quality")
+            out["qualities"] = [r[0] for r in cur.fetchall()]
+            cur.execute("SELECT DISTINCT language FROM movies WHERE language IS NOT NULL AND language <> '' ORDER BY language")
+            out["languages"] = [r[0] for r in cur.fetchall()]
+    except Exception as e:
+        log.warning("filters: %s", e)
+    return jsonify(out)
 
 # ── Fon effektlari sozlamalari (ommaviy o'qish) ──
 @app.route("/api/settings")
@@ -422,6 +472,98 @@ def _check(d):
 @app.route("/api/admin/login", methods=["POST"])
 def admin_login():
     return jsonify({"ok": _check(request.get_json() or {})})
+
+# ── Admin statistika ──
+@app.route("/api/admin/stats", methods=["POST"])
+def admin_stats():
+    d = request.get_json() or {}
+    if not _check(d):
+        return jsonify({"error": "ruxsat yo'q"}), 403
+    out = {"total": 0, "by_type": {}, "total_views": 0, "top": [], "no_poster": 0}
+    try:
+        with get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT COUNT(*), COALESCE(SUM(views),0) FROM movies")
+            row = cur.fetchone(); out["total"] = row[0]; out["total_views"] = int(row[1] or 0)
+            cur.execute("SELECT COALESCE(content_type,'movie'), COUNT(*) FROM movies GROUP BY 1")
+            out["by_type"] = {r[0]: r[1] for r in cur.fetchall()}
+            cur.execute("""SELECT id, title, COALESCE(views,0) FROM movies
+                           ORDER BY COALESCE(views,0) DESC LIMIT 5""")
+            out["top"] = [{"id": r[0], "title": r[1], "views": r[2]} for r in cur.fetchall()]
+            cur.execute("""SELECT COUNT(*) FROM movies
+                           WHERE (poster_url IS NULL OR poster_url='')
+                             AND (poster_id IS NULL OR poster_id='')""")
+            out["no_poster"] = cur.fetchone()[0]
+        return jsonify(out)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# ── TMDB qidiruv (poster + ma'lumotni avtomatik olish) ──
+_TMDB_GENRES = {}
+
+def _tmdb_headers():
+    if TMDB_TOKEN:
+        return {"Authorization": f"Bearer {TMDB_TOKEN}", "accept": "application/json"}
+    return {"accept": "application/json"}
+
+def _tmdb_get(path, params=None):
+    params = dict(params or {})
+    if not TMDB_TOKEN and TMDB_KEY:
+        params["api_key"] = TMDB_KEY
+    url = f"https://api.themoviedb.org/3{path}"
+    r = requests.get(url, headers=_tmdb_headers(), params=params, timeout=10)
+    r.raise_for_status()
+    return r.json()
+
+def _tmdb_load_genres():
+    global _TMDB_GENRES
+    if _TMDB_GENRES:
+        return
+    try:
+        for kind in ("movie", "tv"):
+            data = _tmdb_get(f"/genre/{kind}/list", {"language": "ru-RU"})
+            for g in data.get("genres", []):
+                _TMDB_GENRES[g["id"]] = g["name"]
+    except Exception as e:
+        log.warning("tmdb genres: %s", e)
+
+@app.route("/api/admin/tmdb", methods=["POST"])
+def admin_tmdb():
+    d = request.get_json() or {}
+    if not _check(d):
+        return jsonify({"error": "ruxsat yo'q"}), 403
+    if not (TMDB_TOKEN or TMDB_KEY):
+        return jsonify({"error": "TMDB kaliti sozlanmagan (Railway Variables: TMDB_TOKEN)"}), 400
+    query = (d.get("q") or "").strip()
+    if not query:
+        return jsonify({"results": []})
+    try:
+        _tmdb_load_genres()
+        data = _tmdb_get("/search/multi", {"query": query, "language": "ru-RU", "include_adult": "false"})
+        results = []
+        for it in data.get("results", [])[:12]:
+            mt = it.get("media_type")
+            if mt not in ("movie", "tv"):
+                continue
+            title = it.get("title") or it.get("name") or ""
+            date = it.get("release_date") or it.get("first_air_date") or ""
+            year = date[:4] if date else ""
+            poster = it.get("poster_path")
+            poster_url = f"https://image.tmdb.org/t/p/w500{poster}" if poster else ""
+            genres = [_TMDB_GENRES.get(g, "") for g in it.get("genre_ids", [])]
+            genres = [g for g in genres if g]
+            results.append({
+                "title": title,
+                "year": year,
+                "type": "series" if mt == "tv" else "movie",
+                "poster_url": poster_url,
+                "genre": ", ".join(genres),
+                "description": (it.get("overview") or "")[:500],
+                "rating": round(it.get("vote_average") or 0, 1),
+            })
+        return jsonify({"results": results})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route("/api/admin/list", methods=["POST"])
 def admin_list():
