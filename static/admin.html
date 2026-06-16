@@ -162,6 +162,10 @@ textarea { resize:vertical; min-height:80px; }
   width:100%; height:225px; object-fit:cover; display:block;
   background:linear-gradient(135deg, #2a2658, #1b1840); flex-shrink:0;
 }
+.mcard-poster.img-failed {
+  object-fit:contain; padding:30px;
+  background:linear-gradient(135deg, #2a2658, #1b1840);
+}
 .mcard-poster-ph {
   width:100%; height:225px; display:flex; flex-direction:column; align-items:center; justify-content:center;
   gap:8px; padding:12px; text-align:center; flex-shrink:0;
@@ -292,7 +296,7 @@ textarea { resize:vertical; min-height:80px; }
     <button onclick="search()">🔍 Qidirish</button>
   </div>
   <div class="count" id="countText"></div>
-  <div style="font-size:11px;color:#5ad1ff;margin-bottom:10px;">✨ Grid v2 — yangilangan</div>
+  <div style="font-size:11px;color:#5ad1ff;margin-bottom:10px;">✨ Grid v3 — poster tuzatildi</div>
   <div id="listContainer"></div>
 </div>
 
@@ -413,7 +417,7 @@ function renderPage() {
   const pageItems = allMovies.slice(start, start + PER_PAGE);
   box.innerHTML = pageItems.map(m => {
     const poster = m.poster_url
-      ? `<img class="mcard-poster" src="${esc(m.poster_url)}" loading="lazy" onerror="this.outerHTML='<div class=&quot;mcard-poster-ph&quot;><span>🎬</span><b>'+${JSON.stringify(esc(m.title))}+'</b></div>'">`
+      ? `<img class="mcard-poster" src="${esc(m.poster_url)}" loading="lazy" onerror="this.classList.add('img-failed')">`
       : `<div class="mcard-poster-ph"><span>🎬</span><b>${esc(m.title)}</b></div>`;
     return `<div class="mcard">
       ${poster}
