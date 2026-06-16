@@ -805,3 +805,104 @@
   .similar-poster { aspect-ratio:2/3; border-radius:6px; overflow:hidden; position:relative; background:#2a2a34; }
   .similar-poster img { width:100%; height:100%; object-fit:cover; }
   .similar-card .st { font-size:11px; color:#c8c8c8; margin-top:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+  /* ============================================================
+     FON EFFEKTLARI — har biri body klassi bilan yoqiladi
+     (admin paneldan boshqariladi)
+     ============================================================ */
+
+  /* 1) Porlovchi yulduzlar — yulduz nuqtalari atrofida yumshoq nur */
+  body.fx-glow::after { filter: drop-shadow(0 0 2px rgba(255,255,255,0.55)); }
+  body.fx-glow .stars2 { filter: drop-shadow(0 0 2px rgba(90,209,255,0.55)); }
+  body.fx-glow .stars3 { filter: drop-shadow(0 0 4px rgba(157,123,255,0.7)); }
+
+  /* 2) Yiltirovchi katta yulduzlar (✦) */
+  .bigstars { position: fixed; inset: 0; z-index: -1; pointer-events: none; display: none; }
+  body.fx-bigstars .bigstars { display: block; }
+  .bigstar {
+    position: absolute; color: #fff; line-height: 1;
+    text-shadow: 0 0 8px rgba(157,123,255,0.9), 0 0 14px rgba(90,209,255,0.6);
+    opacity: 0.85; transform: scale(0.6);
+    animation: bigstar-twinkle 6s ease-in-out infinite;
+  }
+  .bigstar.b1 { top: 14%; left: 12%; font-size: 18px; animation-delay: 0s; }
+  .bigstar.b2 { top: 28%; left: 82%; font-size: 22px; color: #cbb8ff; animation-delay: 1.4s; }
+  .bigstar.b3 { top: 62%; left: 22%; font-size: 16px; color: #b8ecff; animation-delay: 2.7s; }
+  .bigstar.b4 { top: 75%; left: 70%; font-size: 24px; animation-delay: 0.8s; }
+  .bigstar.b5 { top: 45%; left: 50%; font-size: 14px; color: #ffd9f0; animation-delay: 3.6s; }
+  .bigstar.b6 { top: 88%; left: 40%; font-size: 18px; color: #cbb8ff; animation-delay: 2.0s; }
+  @keyframes bigstar-twinkle {
+    0%, 100% { opacity: 0.15; transform: scale(0.5) rotate(0deg); }
+    45%      { opacity: 0.95; transform: scale(1.1) rotate(8deg); }
+    55%      { opacity: 1;    transform: scale(1.25) rotate(-4deg); }
+    70%      { opacity: 0.5;  transform: scale(0.8) rotate(0deg); }
+  }
+
+  /* 3) Parallaks — JS qatlamlarni siljitadi (faqat klass bo'lsa ishlaydi) */
+  body.fx-parallax .stars2,
+  body.fx-parallax .stars3,
+  body.fx-parallax .bigstars { transition: transform 0.25s ease-out; will-change: transform; }
+
+  /* 4) Sayyora silueti — burchakda xira sayyora + halqa */
+  .planet { position: fixed; z-index: -1; pointer-events: none; display: none;
+    right: -90px; top: 8%; width: 260px; height: 260px; }
+  body.fx-planet .planet { display: block; }
+  .planet-body {
+    position: absolute; inset: 0; border-radius: 50%;
+    background:
+      radial-gradient(circle at 35% 30%, rgba(157,123,255,0.55), rgba(90,90,160,0.25) 55%, rgba(20,18,46,0.0) 72%),
+      radial-gradient(circle at 70% 75%, rgba(90,209,255,0.30), transparent 60%);
+    box-shadow: inset -18px -10px 40px rgba(0,0,0,0.45), 0 0 60px rgba(124,92,255,0.25);
+    opacity: 0.7;
+    animation: planet-float 18s ease-in-out infinite alternate;
+  }
+  .planet-ring {
+    position: absolute; top: 42%; left: -22%; width: 144%; height: 60px;
+    border-radius: 50%; border: 2px solid rgba(157,123,255,0.35);
+    border-top-color: rgba(90,209,255,0.5);
+    transform: rotate(-22deg); opacity: 0.6;
+  }
+  @keyframes planet-float {
+    0% { transform: translateY(0); } 100% { transform: translateY(26px); }
+  }
+
+  /* 5) Yulduz changi — pastdan yuqoriga ko'tariladigan zarrachalar */
+  .stardust { position: fixed; inset: 0; z-index: -1; pointer-events: none; display: none; overflow: hidden; }
+  body.fx-stardust .stardust { display: block; }
+  .dust {
+    position: absolute; bottom: -12px; width: 2px; height: 2px; border-radius: 50%;
+    background: rgba(255,255,255,0.8);
+    box-shadow: 0 0 6px 1px rgba(157,123,255,0.7);
+    animation: dust-rise linear infinite;
+  }
+  @keyframes dust-rise {
+    0%   { transform: translateY(0) translateX(0); opacity: 0; }
+    10%  { opacity: 0.9; }
+    90%  { opacity: 0.7; }
+    100% { transform: translateY(-110vh) translateX(20px); opacity: 0; }
+  }
+
+  /* 6) Aurora to'lqini — yuqorida sekin to'lqinlanuvchi shafaq */
+  .aurora { position: fixed; top: -10%; left: -20%; width: 140%; height: 55%;
+    z-index: -2; pointer-events: none; display: none; filter: blur(40px); opacity: 0.5; }
+  body.fx-aurora .aurora { display: block; }
+  .aurora::before, .aurora::after {
+    content: ''; position: absolute; inset: 0; border-radius: 50%;
+  }
+  .aurora::before {
+    background: radial-gradient(ellipse 60% 80% at 30% 40%, rgba(90,209,255,0.5), transparent 60%),
+                radial-gradient(ellipse 50% 70% at 70% 30%, rgba(124,92,255,0.45), transparent 60%);
+    animation: aurora-wave 16s ease-in-out infinite alternate;
+  }
+  .aurora::after {
+    background: radial-gradient(ellipse 55% 75% at 55% 50%, rgba(255,110,199,0.30), transparent 60%);
+    animation: aurora-wave 20s ease-in-out infinite alternate-reverse;
+  }
+  @keyframes aurora-wave {
+    0%   { transform: translateX(0) scaleY(1); }
+    50%  { transform: translateX(6%) scaleY(1.15); }
+    100% { transform: translateX(-5%) scaleY(0.95); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .bigstar, .planet-body, .dust, .aurora::before, .aurora::after { animation: none; }
+  }
