@@ -21,7 +21,7 @@ window.addEventListener('scroll', () => {
 });
 
 // Bot username
-fetch('/api/botlink').then(r=>r.json()).then(d=>{ BOT = d.bot || ''; }).catch(()=>{});
+fetch('/api/botlink').then(r=>r.json()).then(d=>{ BOT = d.bot || ''; var tg=document.getElementById('tgLink'); if(tg && BOT) tg.href='https://t.me/'+BOT; }).catch(()=>{});
 
 // Janrlar
 fetch('/api/genres').then(r=>r.json()).then(d=>{
