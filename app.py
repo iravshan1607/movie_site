@@ -325,7 +325,8 @@ def admin_list():
                 cur.execute("""
                     SELECT id, title, genre, year, language, quality,
                            COALESCE(content_type,'movie'), COALESCE(views,0),
-                           COALESCE(poster_url,'')
+                           COALESCE(poster_url,''),
+                           CASE WHEN poster_id IS NOT NULL AND poster_id != '' THEN 1 ELSE 0 END
                     FROM movies WHERE title ILIKE %s
                     ORDER BY created_at DESC LIMIT 200
                 """, (f"%{q}%",))
@@ -333,14 +334,15 @@ def admin_list():
                 cur.execute("""
                     SELECT id, title, genre, year, language, quality,
                            COALESCE(content_type,'movie'), COALESCE(views,0),
-                           COALESCE(poster_url,'')
+                           COALESCE(poster_url,''),
+                           CASE WHEN poster_id IS NOT NULL AND poster_id != '' THEN 1 ELSE 0 END
                     FROM movies ORDER BY created_at DESC LIMIT 200
                 """)
             rows = cur.fetchall()
         movies = [{
             "id": r[0], "title": r[1], "genre": r[2] or "", "year": r[3],
             "language": r[4] or "", "quality": r[5] or "", "type": r[6], "views": r[7],
-            "poster_url": r[8] or "",
+            "poster_url": r[8] or "", "has_poster": bool(r[9]),
         } for r in rows]
         return jsonify({"movies": movies})
     except Exception as e:
