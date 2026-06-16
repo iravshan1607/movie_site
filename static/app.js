@@ -293,5 +293,30 @@ function similarHtml(m){
 function closeMovie(){ document.getElementById('movieModal').classList.remove('open'); document.body.style.overflow=''; }
 document.addEventListener('keydown', e=>{ if(e.key==='Escape'){ closeMovie(); closeSearch(); closeMenu(); } });
 
+// ── Galaxy click effekti — bosilganda yulduzchalar sachraydi ──
+document.addEventListener('click', e => {
+  const colors = ['#9d7bff', '#5ad1ff', '#ff6ec7', '#ffffff'];
+  const count = 8;
+  for (let i = 0; i < count; i++) {
+    const spark = document.createElement('div');
+    const angle = (Math.PI * 2 * i) / count + Math.random() * 0.5;
+    const dist = 30 + Math.random() * 30;
+    const dx = Math.cos(angle) * dist;
+    const dy = Math.sin(angle) * dist;
+    spark.style.cssText = `position:fixed;left:${e.clientX}px;top:${e.clientY}px;`
+      + `width:6px;height:6px;border-radius:50%;pointer-events:none;z-index:9999;`
+      + `background:${colors[i % colors.length]};box-shadow:0 0 8px currentColor;color:${colors[i % colors.length]};`
+      + `--dx:${dx}px;--dy:${dy}px;animation:spark-burst 0.6s ease-out forwards;`;
+    document.body.appendChild(spark);
+    setTimeout(() => spark.remove(), 650);
+  }
+});
+(function(){
+  const s = document.createElement('style');
+  s.textContent = '@keyframes spark-burst{0%{transform:translate(-50%,-50%) scale(1);opacity:1}'
+    + '100%{transform:translate(calc(-50% + var(--dx)),calc(-50% + var(--dy))) scale(0);opacity:0}}';
+  document.head.appendChild(s);
+})();
+
 // Boshlash
 loadHome();
