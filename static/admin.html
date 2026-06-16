@@ -248,6 +248,9 @@ textarea { resize:vertical; min-height:80px; }
 .alert { padding:10px 14px; border-radius:8px; font-size:14px; margin-top:10px; text-align:center; }
 .alert-ok  { background:rgba(61,220,151,0.12); color:var(--green); }
 .alert-err { background:rgba(255,45,58,0.12);  color:var(--red2); }
+.fx-toggle{display:flex;align-items:center;gap:9px;padding:11px 13px;border:1px solid rgba(157,123,255,0.22);border-radius:10px;cursor:pointer;font-size:14px;background:rgba(157,123,255,0.05);transition:background .15s,border-color .15s;}
+.fx-toggle:hover{background:rgba(157,123,255,0.12);border-color:rgba(157,123,255,0.45);}
+.fx-toggle input{width:18px;height:18px;accent-color:#9d7bff;cursor:pointer;}
 </style>
 </head>
 <body>
@@ -281,6 +284,24 @@ textarea { resize:vertical; min-height:80px; }
   <div class="topbar">
     <h1>🎬 Kinolarni boshqarish</h1>
     <a href="/" target="_blank">↗ Saytni ochish</a>
+  </div>
+
+  <!-- FON EFFEKTLARI -->
+  <div class="box" id="fxPanel" style="padding:18px 20px;margin-bottom:18px;border:1px solid rgba(157,123,255,0.25);border-radius:14px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+      <div style="font-size:17px;font-weight:600;">✨ Fon effektlari</div>
+      <button onclick="saveFx()" id="fxSaveBtn" style="padding:8px 18px;">💾 Saqlash</button>
+    </div>
+    <div style="font-size:13px;color:var(--dim);margin:6px 0 14px;">Saytning orqa fonidagi effektlarni yoqing yoki o'chiring.</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;">
+      <label class="fx-toggle"><input type="checkbox" id="fx_glow"> 🌟 Porlovchi yulduzlar</label>
+      <label class="fx-toggle"><input type="checkbox" id="fx_bigstars"> ✦ Yiltirovchi katta yulduzlar</label>
+      <label class="fx-toggle"><input type="checkbox" id="fx_parallax"> 🖱️ Parallaks harakat</label>
+      <label class="fx-toggle"><input type="checkbox" id="fx_planet"> 🪐 Sayyora silueti</label>
+      <label class="fx-toggle"><input type="checkbox" id="fx_stardust"> 💫 Yulduz changi</label>
+      <label class="fx-toggle"><input type="checkbox" id="fx_aurora"> 🌌 Aurora to'lqini</label>
+    </div>
+    <div id="fxMsg" style="font-size:13px;margin-top:10px;"></div>
   </div>
 
   <!-- QIDIRUV -->
@@ -376,9 +397,46 @@ async function login() {
     document.getElementById('loginPage').classList.add('hidden');
     document.getElementById('mainPage').classList.remove('hidden');
     search();
+    loadFx();
   } else {
     document.getElementById('loginErr').classList.remove('hidden');
   }
+}
+
+// ── FON EFFEKTLARI ──
+var FX_KEYS = ['fx_glow','fx_bigstars','fx_parallax','fx_planet','fx_stardust','fx_aurora'];
+async function loadFx() {
+  try {
+    const r = await fetch('/api/admin/settings', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({password: PASS, read: true})
+    });
+    const s = await r.json();
+    FX_KEYS.forEach(function(k){
+      var el = document.getElementById(k);
+      if (el) el.checked = String(s[k]) === '1';
+    });
+  } catch(e) {}
+}
+async function saveFx() {
+  var btn = document.getElementById('fxSaveBtn');
+  var msg = document.getElementById('fxMsg');
+  btn.disabled = true; btn.textContent = '⏳ Saqlanmoqda...';
+  var body = { password: PASS };
+  FX_KEYS.forEach(function(k){ body[k] = document.getElementById(k).checked ? 1 : 0; });
+  try {
+    const r = await fetch('/api/admin/settings', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(body)
+    });
+    const d = await r.json();
+    if (d.ok) { msg.style.color = '#4ade80'; msg.textContent = '✅ Saqlandi! Saytni yangilab ko\'ring.'; }
+    else { msg.style.color = '#f87171'; msg.textContent = '❌ Xatolik: ' + (d.error||''); }
+  } catch(e) {
+    msg.style.color = '#f87171'; msg.textContent = '❌ Tarmoq xatosi';
+  }
+  btn.disabled = false; btn.textContent = '💾 Saqlash';
+  setTimeout(function(){ msg.textContent=''; }, 4000);
 }
 
 // ── QIDIRUV ──
