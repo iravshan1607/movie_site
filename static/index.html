@@ -4,7 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
-<link rel="apple-touch-icon" href="/static/favicon.svg">
+<link rel="apple-touch-icon" href="/static/icon-192.png">
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#12102a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="ASTRA">
 <meta name="google-site-verification" content="NWyfq_vRf53C8JMiGFZ8xL666JbpZg4NJAfKzabPoik" />
 <title>ASTRA — Onlayn Kino, Anime, Serial</title>
 <meta name="description" content="Eng so'nggi kinolar, seriallar, anime va multfilmlar. Tez va qulay.">
@@ -109,9 +113,29 @@
 
 <!-- Footer -->
 <footer>
+  <div class="footer-grid">
+    <div class="footer-col">
+      <img src="/static/logo.svg" alt="ASTRA" style="height:40px;width:auto;margin-bottom:10px;">
+      <p class="footer-about">ASTRA — eng so'nggi kinolar, seriallar, anime va multfilmlar o'zbek tilida. Tez, qulay va bepul.</p>
+    </div>
+    <div class="footer-col">
+      <h4 class="footer-h">Bo'limlar</h4>
+      <a href="javascript:void(0)" onclick="setType('movie')">Kinolar</a>
+      <a href="javascript:void(0)" onclick="setType('series')">Seriallar</a>
+      <a href="javascript:void(0)" onclick="setType('anime')">Anime</a>
+      <a href="javascript:void(0)" onclick="setType('cartoon')">Multfilm</a>
+    </div>
+    <div class="footer-col">
+      <h4 class="footer-h">Aloqa</h4>
+      <a id="tgLink" href="#" target="_blank" rel="noopener" class="footer-tg">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M21.9 4.3l-3.3 15.6c-.25 1.1-.9 1.37-1.82.85l-5.03-3.7-2.43 2.34c-.27.27-.5.5-1 .5l.36-5.1L17 5.6c.4-.36-.08-.56-.62-.2L6.3 11.7l-5-1.56C.2 9.8.18 9.05 1.53 8.53L20.48 3.2c.9-.33 1.7.22 1.42 1.1z"/></svg>
+        <span>Telegram kanal / bot</span>
+      </a>
+      <p class="footer-about" style="margin-top:8px;">Barcha kinolar Telegram bot orqali yuklanadi.</p>
+    </div>
+  </div>
   <div class="footer-bottom">
-    <div class="footer-logo">🌌 ASTRA</div>
-    <div class="footer-copy">© 2026 Cinemax. Barcha kinolar Telegram bot orqali.</div>
+    <div class="footer-copy">© 2026 ASTRA. Barcha huquqlar himoyalangan.</div>
   </div>
 </footer>
 
@@ -120,8 +144,19 @@
   <div class="movie-modal" id="movieBox"></div>
 </div>
 
+<button id="toTop" onclick="window.scrollTo({top:0,behavior:'smooth'})" aria-label="Tepaga qaytish">
+  <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+</button>
+
 <script>
 (function(){
+  // Tepaga qaytish tugmasi — pastga scroll qilganda chiqadi
+  var tt = document.getElementById('toTop');
+  if (tt) {
+    window.addEventListener('scroll', function(){
+      if (window.scrollY > 400) tt.classList.add('show'); else tt.classList.remove('show');
+    }, {passive:true});
+  }
   // Yulduz changi zarrachalarini yasash
   var sd = document.getElementById('stardust');
   if (sd) {
@@ -155,5 +190,12 @@
 })();
 </script>
 <script src="/static/app.js"></script>
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function(){
+    navigator.serviceWorker.register('/sw.js').catch(function(){});
+  });
+}
+</script>
 </body>
 </html>
