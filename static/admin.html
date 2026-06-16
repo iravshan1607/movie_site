@@ -44,6 +44,27 @@ body::after {
 .btn { transition:transform 0.15s, box-shadow 0.2s; }
 .btn:hover { transform:translateY(-1px); box-shadow:0 6px 20px rgba(124,92,255,0.4); }
 
+/* Uchar kometalar */
+.comet {
+  position:fixed; top:-10%; width:3px; height:3px; border-radius:50%;
+  background:#fff; box-shadow:0 0 8px 2px rgba(255,255,255,0.9);
+  z-index:-1; pointer-events:none;
+}
+.comet::after {
+  content:''; position:absolute; top:50%; right:0;
+  width:120px; height:1.5px; transform-origin:right; transform:translateY(-50%) rotate(0deg);
+  background:linear-gradient(270deg, rgba(157,123,255,0.85), transparent);
+}
+.comet.c1 { left:15%; animation:comet-fall 6s linear infinite; }
+.comet.c2 { left:55%; animation:comet-fall 8s linear infinite 2.5s; }
+.comet.c3 { left:80%; animation:comet-fall 7s linear infinite 4s; }
+@keyframes comet-fall {
+  0%   { transform:translate(0,0) rotate(35deg); opacity:0; }
+  8%   { opacity:1; }
+  70%  { opacity:1; }
+  100% { transform:translate(-60vw, 120vh) rotate(35deg); opacity:0; }
+}
+
 /* LOGIN */
 .login-wrap { max-width:360px; margin:100px auto; padding:24px; }
 .box { background:var(--bg2); border:1px solid var(--line); border-radius:16px; padding:32px; }
@@ -82,6 +103,48 @@ textarea { resize:vertical; min-height:80px; }
 .count { color:var(--dim); font-size:13px; margin-bottom:12px; }
 
 /* LIST ROWS */
+#listContainer {
+  display:grid;
+  grid-template-columns:repeat(auto-fill, minmax(150px, 1fr));
+  gap:14px;
+}
+.mcard {
+  background:var(--bg2); border:1px solid var(--line);
+  border-radius:14px; overflow:hidden; position:relative;
+  transition:transform 0.22s, box-shadow 0.22s, border-color 0.22s;
+  animation:mcardIn 0.45s ease both;
+}
+.mcard:hover {
+  transform:translateY(-6px) scale(1.02);
+  box-shadow:0 14px 38px rgba(124,92,255,0.45);
+  border-color:rgba(157,123,255,0.5);
+}
+@keyframes mcardIn {
+  from { opacity:0; transform:translateY(22px) scale(0.95); }
+  to { opacity:1; transform:translateY(0) scale(1); }
+}
+.mcard-poster {
+  width:100%; aspect-ratio:2/3; object-fit:cover; display:block;
+  background:linear-gradient(135deg, #2a2658, #1b1840);
+}
+.mcard-poster-ph {
+  width:100%; aspect-ratio:2/3; display:flex; align-items:center; justify-content:center;
+  font-size:40px; background:linear-gradient(135deg, #2a2658, #1b1840); color:rgba(157,123,255,0.6);
+}
+.mcard-body { padding:10px 11px 12px; }
+.mcard-title { font-weight:600; font-size:13.5px; line-height:1.3; margin-bottom:5px;
+  display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+.mcard-meta { font-size:11px; color:var(--dim); display:flex; flex-wrap:wrap; gap:4px; align-items:center; }
+.mcard-btns {
+  position:absolute; top:8px; right:8px; display:flex; gap:6px;
+  opacity:0; transform:translateY(-6px); transition:all 0.22s;
+}
+.mcard:hover .mcard-btns { opacity:1; transform:translateY(0); }
+.mcard-btns button {
+  width:34px; height:34px; border-radius:9px; border:none; cursor:pointer; font-size:15px;
+  backdrop-filter:blur(6px); box-shadow:0 2px 10px rgba(0,0,0,0.4);
+}
+
 .row {
   background:var(--bg2); border:1px solid var(--line);
   border-radius:12px; padding:14px 16px;
@@ -124,6 +187,9 @@ textarea { resize:vertical; min-height:80px; }
 </style>
 </head>
 <body>
+<div class="comet c1"></div>
+<div class="comet c2"></div>
+<div class="comet c3"></div>
 
 <!-- LOGIN -->
 <div id="loginPage" class="login-wrap">
@@ -252,20 +318,26 @@ async function search() {
   }
 
   cnt.textContent = d.movies.length + ' ta natija';
-  box.innerHTML = d.movies.map(m => `
-    <div class="row">
-      <div class="row-info">
-        <div class="row-title">${esc(m.title)}</div>
-        <div class="row-meta">
+  box.innerHTML = d.movies.map(m => {
+    const poster = m.poster_url
+      ? `<img class="mcard-poster" src="${esc(m.poster_url)}" loading="lazy" onerror="this.outerHTML='<div class=&quot;mcard-poster-ph&quot;>🎬</div>'">`
+      : `<div class="mcard-poster-ph">🎬</div>`;
+    return `<div class="mcard">
+      ${poster}
+      <div class="mcard-btns">
+        <button class="btn-edit" onclick="openEdit(${m.id})" title="Tahrirlash">✏️</button>
+        <button class="btn-del"  onclick="del(${m.id}, '${esc(m.title).replace(/'/g,'')}')" title="O'chirish">🗑</button>
+      </div>
+      <div class="mcard-body">
+        <div class="mcard-title">${esc(m.title)}</div>
+        <div class="mcard-meta">
           <span class="badge b-${m.type}">${TYPE[m.type]||'Kino'}</span>
-          ${m.year||''} ${m.genre ? '· '+esc(m.genre) : ''} · 👁 ${m.views}
+          <span>${m.year||''}</span>
+          <span>👁 ${m.views}</span>
         </div>
       </div>
-      <div class="row-btns">
-        <button class="btn-edit" onclick="openEdit(${m.id})" title="Tahrirlash">✏️</button>
-        <button class="btn-del"  onclick="del(${m.id}, '${esc(m.title).replace(/'/g,'')}')">🗑</button>
-      </div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 
 // ── TAHRIRLASH OCHISH ──
