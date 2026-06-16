@@ -63,10 +63,50 @@ def init_db():
         with get_conn() as conn:
             cur = conn.cursor()
             cur.execute("ALTER TABLE movies ADD COLUMN IF NOT EXISTS poster_url TEXT")
+            # Fon effektlari sozlamalari uchun kalit-qiymat jadvali
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS site_settings (
+                    key   TEXT PRIMARY KEY,
+                    value TEXT
+                )
+            """)
             conn.commit()
-        log.info("Kino baza tayyor (poster_url ustuni mavjud)")
+        log.info("Kino baza tayyor (poster_url + site_settings)")
     except Exception as e:
-        log.warning("init_db poster_url: %s", e)
+        log.warning("init_db: %s", e)
+
+# Fon effektlari — standart holat (admin o'zgartirmaguncha)
+FX_DEFAULTS = {
+    "fx_glow": "1",
+    "fx_bigstars": "1",
+    "fx_parallax": "1",
+    "fx_planet": "1",
+    "fx_stardust": "1",
+    "fx_aurora": "1",
+}
+
+def _read_settings():
+    out = dict(FX_DEFAULTS)
+    try:
+        with get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT key, value FROM site_settings")
+            for k, v in cur.fetchall():
+                out[k] = v
+    except Exception:
+        pass
+    return out
+
+def _save_settings(d):
+    with get_conn() as conn:
+        cur = conn.cursor()
+        for k in FX_DEFAULTS:
+            val = "1" if d.get(k) else "0"
+            cur.execute("""
+                INSERT INTO site_settings (key, value) VALUES (%s, %s)
+                ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
+            """, (k, val))
+        conn.commit()
 
 # ── Sahifa ──
 @app.route("/")
@@ -219,6 +259,25 @@ def api_genres():
         return jsonify({"genres": genres})
     except Exception:
         return jsonify({"genres": []})
+
+# ── Fon effektlari sozlamalari (ommaviy o'qish) ──
+@app.route("/api/settings")
+def api_settings():
+    return jsonify(_read_settings())
+
+# ── Fon effektlari sozlamalari (admin yozadi) ──
+@app.route("/api/admin/settings", methods=["POST"])
+def admin_settings():
+    d = request.get_json() or {}
+    if not _check(d):
+        return jsonify({"error": "ruxsat yo'q"}), 403
+    if d.get("read"):
+        return jsonify(_read_settings())
+    try:
+        _save_settings(d)
+        return jsonify({"ok": True, "settings": _read_settings()})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 # ── Botga yo'naltirish havolasi ──
 @app.route("/api/botlink")
