@@ -1,4 +1,4 @@
-const CACHE = 'astra-v1';
+const CACHE = 'astra-v3';
 const SHELL = ['/', '/static/style.css', '/static/app.js', '/static/logo.svg', '/static/favicon.svg'];
 
 self.addEventListener('install', e => {
@@ -17,19 +17,17 @@ self.addEventListener('fetch', e => {
   const req = e.request;
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
+  if (url.origin !== self.location.origin) return;
 
-  // API va kino sahifalari — har doim yangi ma'lumot (network-first)
-  if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/kino/')) {
-    e.respondWith(fetch(req).catch(() => caches.match(req)));
-    return;
-  }
-
-  // Statik fayllar — avval keshdan (cache-first), keyin tarmoqdan
+  // Hammasi uchun: avval tarmoqdan (yangi versiya), faqat internet yo'q bo'lsa keshdan
   e.respondWith(
-    caches.match(req).then(hit => hit || fetch(req).then(res => {
-      const copy = res.clone();
-      caches.open(CACHE).then(c => c.put(req, copy)).catch(()=>{});
+    fetch(req).then(res => {
+      // muvaffaqiyatli javobni keshga yozamiz (offline uchun)
+      if (res && res.status === 200 && res.type === 'basic') {
+        const copy = res.clone();
+        caches.open(CACHE).then(c => c.put(req, copy)).catch(()=>{});
+      }
       return res;
-    }).catch(() => caches.match('/')))
+    }).catch(() => caches.match(req).then(hit => hit || caches.match('/')))
   );
 });
