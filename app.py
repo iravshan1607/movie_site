@@ -83,6 +83,10 @@ FX_DEFAULTS = {
     "fx_planet": "1",
     "fx_stardust": "1",
     "fx_aurora": "1",
+    "fx_constellation": "1",
+    "fx_orbs": "1",
+    "fx_meteors": "1",
+    "fx_hueshift": "1",
 }
 
 def _read_settings():
