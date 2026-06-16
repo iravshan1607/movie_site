@@ -6,7 +6,7 @@
 <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
 <link rel="apple-touch-icon" href="/static/favicon.svg">
 <meta name="google-site-verification" content="NWyfq_vRf53C8JMiGFZ8xL666JbpZg4NJAfKzabPoik" />
-<title>CINEMAX — Onlayn Kino</title>
+<title>ASTRA — Onlayn Kino, Anime, Serial</title>
 <meta name="description" content="Eng so'nggi kinolar, seriallar, anime va multfilmlar. Tez va qulay.">
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/static/style.css">
@@ -38,7 +38,7 @@
     <li><a href="javascript:void(0)" onclick="setType('cartoon')">Multfilm</a></li>
   </ul>
   <div class="nav-right">
-    <button class="nav-search" onclick="openSearch()">🔍</button>
+    <button class="nav-search" onclick="openSearch()" aria-label="Qidirish"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg></button>
     <button class="nav-burger" onclick="toggleMenu()" aria-label="Menyu"><span></span><span></span><span></span></button>
   </div>
 </nav>
@@ -46,13 +46,13 @@
 <!-- Mobil menyu (chapdan ochiladi) -->
 <div class="mobile-menu-bg" id="mobileMenuBg" onclick="closeMenu()"></div>
 <aside class="mobile-menu" id="mobileMenu">
-  <div class="mm-logo">CINEMAX</div>
-  <a href="javascript:void(0)" onclick="setType('all');closeMenu()">🏠 Bosh sahifa</a>
-  <a href="javascript:void(0)" onclick="setType('movie');closeMenu()">🎬 Kinolar</a>
-  <a href="javascript:void(0)" onclick="setType('series');closeMenu()">📺 Seriallar</a>
-  <a href="javascript:void(0)" onclick="setType('anime');closeMenu()">🌸 Anime</a>
-  <a href="javascript:void(0)" onclick="setType('cartoon');closeMenu()">🧸 Multfilm</a>
-  <a href="javascript:void(0)" onclick="openSearch();closeMenu()">🔍 Qidirish</a>
+  <div class="mm-logo"><img src="/static/logo.svg" alt="ASTRA" style="height:36px"></div>
+  <a href="javascript:void(0)" onclick="setType('all');closeMenu()"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 11 9-8 9 8"/><path d="M5 10v10h14V10"/></svg> Bosh sahifa</a>
+  <a href="javascript:void(0)" onclick="setType('movie');closeMenu()"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M7 4v16M17 4v16M2 9h5M2 15h5M17 9h5M17 15h5"/></svg> Kinolar</a>
+  <a href="javascript:void(0)" onclick="setType('series');closeMenu()"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="13" rx="2"/><path d="m8 3 4 4 4-4"/></svg> Seriallar</a>
+  <a href="javascript:void(0)" onclick="setType('anime');closeMenu()"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 3c2 4 2 14 0 18M3 12h18"/></svg> Anime</a>
+  <a href="javascript:void(0)" onclick="setType('cartoon');closeMenu()"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="9" cy="10" r="1"/><circle cx="15" cy="10" r="1"/><path d="M9 15c1 1 5 1 6 0"/></svg> Multfilm</a>
+  <a href="javascript:void(0)" onclick="openSearch();closeMenu()"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg> Qidirish</a>
 </aside>
 
 
@@ -63,7 +63,7 @@
   <div class="hero-bg"></div>
   <div class="hero-content" id="heroContent">
     <div class="hero-badge">Yuklanmoqda...</div>
-    <div class="hero-title">CINEMAX</div>
+    <div class="hero-title">ASTRA</div>
     <div class="hero-subtitle">ONLAYN KINO</div>
     <p class="hero-desc">Eng so'nggi kinolar, seriallar va anime — barchasi bir joyda.</p>
   </div>
@@ -84,7 +84,7 @@
 <!-- Footer -->
 <footer>
   <div class="footer-bottom">
-    <div class="footer-logo">CINEMAX</div>
+    <div class="footer-logo">🌌 ASTRA</div>
     <div class="footer-copy">© 2026 Cinemax. Barcha kinolar Telegram bot orqali.</div>
   </div>
 </footer>
