@@ -203,8 +203,19 @@ def api_genres():
     try:
         with get_conn() as conn:
             cur = conn.cursor()
-            cur.execute("SELECT DISTINCT genre FROM movies WHERE genre IS NOT NULL AND genre <> '' ORDER BY genre LIMIT 40")
-            genres = [row[0] for row in cur.fetchall()]
+            cur.execute("SELECT genre FROM movies WHERE genre IS NOT NULL AND genre <> ''")
+            rows = cur.fetchall()
+        # Har bir kinoning janr satrini vergul bo'yicha ajratamiz va noyob janrlar ro'yxatini tuzamiz
+        seen = {}
+        for row in rows:
+            for part in (row[0] or "").split(","):
+                name = part.strip()
+                if not name:
+                    continue
+                key = name.lower()
+                if key not in seen:
+                    seen[key] = name
+        genres = sorted(seen.values(), key=lambda s: s.lower())
         return jsonify({"genres": genres})
     except Exception:
         return jsonify({"genres": []})
