@@ -297,6 +297,18 @@ def robots():
     txt = f"User-agent: *\nAllow: /\nSitemap: {base}/sitemap.xml\n"
     return Response(txt, mimetype="text/plain")
 
+# ── PWA (telefonga o'rnatish uchun) ──
+@app.route("/manifest.json")
+def manifest():
+    return send_from_directory("static", "manifest.json", mimetype="application/manifest+json")
+
+@app.route("/sw.js")
+def service_worker():
+    resp = send_from_directory("static", "sw.js", mimetype="application/javascript")
+    resp.headers["Service-Worker-Allowed"] = "/"
+    resp.headers["Cache-Control"] = "no-cache"
+    return resp
+
 @app.route("/sitemap.xml")
 def sitemap():
     base = request.url_root.rstrip("/")
@@ -339,7 +351,26 @@ def movie_page(mid):
     bot_link = f"https://t.me/{BOT_USERNAME}?start=movie_{mid}" if BOT_USERNAME else "#"
     e = _html.escape
     type_uz = {"movie":"Kino","series":"Serial","anime":"Anime","cartoon":"Multfilm"}.get(ctype,"Kino")
-    page_title = f"{title} ({year}) — o'zbek tilida | CINEMAX" if year else f"{title} — o'zbek tilida | CINEMAX"
+    page_title = f"{title} ({year}) — o'zbek tilida | ASTRA" if year else f"{title} — o'zbek tilida | ASTRA"
+    canonical = f"{request.url_root.rstrip('/')}/kino/{mid}"
+    abs_poster = poster if poster.startswith("http") else (f"{request.url_root.rstrip('/')}{poster}" if poster else "")
+    # JSON-LD — Google "boyitilgan natija" uchun struktura ma'lumoti
+    import json as _json
+    schema_type = {"series":"TVSeries","anime":"TVSeries","cartoon":"TVSeries"}.get(ctype, "Movie")
+    ld = {
+        "@context": "https://schema.org",
+        "@type": schema_type,
+        "name": title,
+        "description": desc,
+        "inLanguage": "uz",
+        "url": canonical,
+    }
+    if abs_poster: ld["image"] = abs_poster
+    if genre: ld["genre"] = [g.strip() for g in genre.split(",") if g.strip()]
+    if year:
+        try: ld["dateCreated"] = str(int(year))
+        except Exception: pass
+    jsonld = _json.dumps(ld, ensure_ascii=False)
     page = f"""<!DOCTYPE html>
 <html lang="uz">
 <head>
@@ -354,8 +385,15 @@ def movie_page(mid):
 <meta property="og:type" content="video.movie">
 <meta property="og:title" content="{e(title)}">
 <meta property="og:description" content="{e(desc)}">
-{f'<meta property="og:image" content="{e(poster)}">' if poster else ''}
+<meta property="og:url" content="{e(canonical)}">
+<meta property="og:site_name" content="ASTRA">
+{f'<meta property="og:image" content="{e(abs_poster)}">' if abs_poster else ''}
 <meta property="og:locale" content="uz_UZ">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="{e(title)}">
+<meta name="twitter:description" content="{e(desc)}">
+{f'<meta name="twitter:image" content="{e(abs_poster)}">' if abs_poster else ''}
+<script type="application/ld+json">{jsonld}</script>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/static/style.css">
 </head>
