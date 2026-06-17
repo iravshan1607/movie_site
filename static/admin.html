@@ -208,9 +208,10 @@ textarea { resize:vertical; min-height:80px; }
   display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
 .mcard-meta { font-size:11px; color:var(--dim); display:flex; flex-wrap:wrap; gap:4px; align-items:center; }
 .mcard-side {
-  position:absolute; top:0; bottom:0; left:100%; margin-left:8px; width:48px; z-index:4;
+  position:absolute; top:0; bottom:0; left:100%; width:58px; z-index:4;
   display:flex; flex-direction:column; gap:8px; align-items:center; justify-content:center;
-  opacity:0; transform:translateX(-12px); transition:opacity 0.24s, transform 0.24s; pointer-events:none;
+  padding-left:10px; box-sizing:border-box;
+  opacity:0; transform:translateX(-10px); transition:opacity 0.2s, transform 0.2s; pointer-events:none;
 }
 .mcard-wrap:hover .mcard-side { opacity:1; transform:translateX(0); pointer-events:auto; }
 .mcard-side button {
@@ -221,9 +222,9 @@ textarea { resize:vertical; min-height:80px; }
 .mcard-side button:hover { transform:scale(1.12); }
 .mcard-side svg { width:18px; height:18px; }
 @media (hover:none) {
-  .mcard-wrap:hover { margin-right:0; }
+  .mcard-wrap:hover ~ .mcard-wrap { transform:none; }
   .mcard-wrap:hover .mcard { transform:none; }
-  .mcard-side { position:absolute; inset:auto 6px auto auto; top:6px; left:auto; margin-left:0; width:auto; flex-direction:row;
+  .mcard-side { position:absolute; inset:auto 6px auto auto; top:6px; left:auto; width:auto; padding-left:0; flex-direction:row;
     opacity:1; transform:none; pointer-events:auto; }
   .mcard-side button { background:rgba(10,8,24,0.7); }
 }
