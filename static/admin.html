@@ -778,12 +778,13 @@ async function tmdbSearch() {
 }
 function tmdbPick(i) {
   var m = tmdbData[i]; if (!m) return;
-  if (m.title) document.getElementById('eTitle').value = m.title;
-  if (m.year) document.getElementById('eYear').value = m.year;
-  if (m.genre) document.getElementById('eGenre').value = m.genre;
+  // Nomni O'ZGARTIRMAYMIZ — siz yozgan nom (masalan "Naruto 83-qism") saqlanadi.
+  // Faqat poster har doim qo'yiladi; qolganlari faqat bo'sh bo'lsa to'ldiriladi.
+  function fillIfEmpty(id, val){ var el=document.getElementById(id); if(el && val && !el.value.trim()) el.value=val; }
   if (m.poster_url) document.getElementById('ePoster').value = m.poster_url;
-  if (m.description) document.getElementById('eDesc').value = m.description;
-  if (m.type) document.getElementById('eType').value = m.type;
+  fillIfEmpty('eYear', m.year);
+  fillIfEmpty('eGenre', m.genre);
+  fillIfEmpty('eDesc', m.description);
   document.getElementById('tmdbResults').style.display = 'none';
   updatePosterPreview();
 }

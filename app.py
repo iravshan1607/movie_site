@@ -564,7 +564,7 @@ def admin_tmdb():
                 "title": title,
                 "year": date[:4] if date else "",
                 "type": "series" if mt == "tv" else "movie",
-                "poster_url": f"https://image.tmdb.org/t/p/w500{poster}" if poster else "",
+                "poster_url": f"/api/timg/w500{poster}" if poster else "",
                 "genre": ", ".join([g for g in genres if g]),
                 "description": (it.get("overview") or "")[:500],
                 "rating": round(it.get("vote_average") or 0, 1),
@@ -588,6 +588,23 @@ def admin_tmdb():
         return jsonify({"error": f"TMDB xatosi: {code}"}), 502
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+# ── TMDB rasm proksi (image.tmdb.org bloklangan bo'lsa, server orqali uzatadi) ──
+@app.route("/api/timg/<size>/<path:fname>")
+def tmdb_img(size, fname):
+    if size not in ("w200", "w300", "w500", "w780", "original"):
+        size = "w500"
+    if not re.match(r"^[A-Za-z0-9._/-]+\.(jpg|jpeg|png|webp)$", fname):
+        return Response("bad request", status=400)
+    try:
+        r = requests.get(f"https://image.tmdb.org/t/p/{size}/{fname}", timeout=15)
+        if r.status_code != 200:
+            return Response("not found", status=404)
+        resp = Response(r.content, mimetype=r.headers.get("Content-Type", "image/jpeg"))
+        resp.headers["Cache-Control"] = "public, max-age=2592000"
+        return resp
+    except Exception:
+        return Response("error", status=502)
 
 @app.route("/api/admin/list", methods=["POST"])
 def admin_list():
