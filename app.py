@@ -7,6 +7,7 @@ Poster: bot orqali Telegram file_id'dan proxy qilinadi.
 import os
 import logging
 import io
+import re
 from urllib.parse import urlparse, unquote
 import pg8000.dbapi
 import requests
@@ -534,34 +535,57 @@ def admin_tmdb():
         return jsonify({"error": "ruxsat yo'q"}), 403
     if not (TMDB_TOKEN or TMDB_KEY):
         return jsonify({"error": "TMDB kaliti sozlanmagan (Railway Variables: TMDB_TOKEN)"}), 400
-    query = (d.get("q") or "").strip()
-    if not query:
+    raw = (d.get("q") or "").strip()
+    if not raw:
         return jsonify({"results": []})
-    try:
-        _tmdb_load_genres()
-        data = _tmdb_get("/search/multi", {"query": query, "language": "ru-RU", "include_adult": "false"})
-        results = []
+
+    # Qidiruvni tozalash: "83-qism", "2-fasl", "(2017)", "o'zbek tilida", "tarjima", "HD" va h.k. olib tashlanadi
+    q = raw.lower()
+    q = re.sub(r"\(?\b(19|20)\d{2}\b\)?", " ", q)                       # yil
+    q = re.sub(r"\d+\s*[-–]?\s*(qism|qism|fasl|seriya|sezon|episode|ep|part)\b", " ", q)
+    q = re.sub(r"\b(qism|fasl|seriya|sezon|barcha qismlar|to'liq|to liq|premyera|treyler|trailer)\b", " ", q)
+    q = re.sub(r"\b(o'?zbek(cha)?|uzbek(cha)?|tilida|tarjima|tarjimasi|hd|full\s*hd|720p?|1080p?|4k|kino|serial|anime|multfilm)\b", " ", q)
+    q = re.sub(r"[._]+", " ", q)
+    q = re.sub(r"\s+", " ", q).strip()
+    query = q if len(q) >= 2 else raw
+
+    def _do_search(term):
+        data = _tmdb_get("/search/multi", {"query": term, "language": "ru-RU", "include_adult": "false"})
+        out = []
         for it in data.get("results", [])[:12]:
             mt = it.get("media_type")
             if mt not in ("movie", "tv"):
                 continue
             title = it.get("title") or it.get("name") or ""
             date = it.get("release_date") or it.get("first_air_date") or ""
-            year = date[:4] if date else ""
             poster = it.get("poster_path")
-            poster_url = f"https://image.tmdb.org/t/p/w500{poster}" if poster else ""
             genres = [_TMDB_GENRES.get(g, "") for g in it.get("genre_ids", [])]
-            genres = [g for g in genres if g]
-            results.append({
+            out.append({
                 "title": title,
-                "year": year,
+                "year": date[:4] if date else "",
                 "type": "series" if mt == "tv" else "movie",
-                "poster_url": poster_url,
-                "genre": ", ".join(genres),
+                "poster_url": f"https://image.tmdb.org/t/p/w500{poster}" if poster else "",
+                "genre": ", ".join([g for g in genres if g]),
                 "description": (it.get("overview") or "")[:500],
                 "rating": round(it.get("vote_average") or 0, 1),
             })
-        return jsonify({"results": results})
+        return out
+
+    try:
+        _tmdb_load_genres()
+        results = _do_search(query)
+        # tozalangan so'rov natija bermasa, asl so'rov bilan ham urinib ko'ramiz
+        if not results and query != raw:
+            results = _do_search(raw)
+        # birinchi so'z bilan ham urinib ko'ramiz (masalan ko'p so'zli nomda)
+        if not results and " " in query:
+            results = _do_search(query.split()[0])
+        return jsonify({"results": results, "searched": query})
+    except requests.HTTPError as he:
+        code = getattr(he.response, "status_code", 0)
+        if code in (401, 403):
+            return jsonify({"error": "TMDB token noto'g'ri yoki eskirgan (Railway Variables: TMDB_TOKEN)"}), 400
+        return jsonify({"error": f"TMDB xatosi: {code}"}), 502
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
