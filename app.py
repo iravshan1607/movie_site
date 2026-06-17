@@ -457,7 +457,10 @@ def movie_page(mid):
       <h1 style="font-family:Bebas Neue,sans-serif; font-size:40px; letter-spacing:1px;">{e(title)}</h1>
       <p style="color:#a3a3a3; margin:8px 0;">{type_uz}{f' · {year}' if year else ''}{f' · {e(genre)}' if genre else ''}</p>
       <p style="line-height:1.7; color:#c8c8c8; margin:16px 0;">{e(desc)}</p>
-      <a href="{e(bot_link)}" style="display:inline-block; background:#e50914; color:#fff; padding:14px 28px; border-radius:6px; text-decoration:none; font-weight:600;">▶ Botda ko'rish / yuklab olish</a>
+      <div style="background:rgba(42,171,238,0.12); border:1px solid rgba(42,171,238,0.45); border-radius:10px; padding:14px 16px; margin:18px 0; color:#d6ecff; font-size:14.5px; line-height:1.65;">
+        <b>ℹ️ Eslatma:</b> Ushbu {type_uz.lower()} <b>Telegram bot</b> orqali ko'riladi. Quyidagi tugmani bossangiz, Telegram botimizga o'tasiz va u yerda bemalol tomosha qilasiz yoki yuklab olasiz — tez, bepul va ro'yxatdan o'tmasdan.
+      </div>
+      <a href="{e(bot_link)}" style="display:inline-block; background:#229ed9; color:#fff; padding:14px 28px; border-radius:8px; text-decoration:none; font-weight:600;">▶ Telegram botda ko'rish</a>
       <p style="margin-top:24px;"><a href="/" style="color:#a3a3a3;">← Barcha kinolar</a></p>
     </div>
   </article>

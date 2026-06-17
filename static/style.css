@@ -1027,3 +1027,20 @@
     background: rgba(157,123,255,0.15);
     border-radius: 8px;
   }
+
+  /* ============ TELEGRAM OGOHLANTIRISHI ============ */
+  .tg-notice {
+    display: flex; align-items: center; gap: 12px;
+    max-width: 1100px; margin: 18px auto 6px; padding: 13px 16px;
+    background: linear-gradient(135deg, rgba(34,158,217,0.16), rgba(124,92,255,0.12));
+    border: 1px solid rgba(34,158,217,0.4); border-radius: 12px;
+    color: #d6ecff; font-size: 14px; line-height: 1.5;
+  }
+  .tg-notice svg { color: #38b6ff; }
+  .tg-notice b { color: #fff; }
+  .tg-notice button {
+    margin-left: auto; flex-shrink: 0; background: none; border: none;
+    color: #9bb8d4; font-size: 16px; cursor: pointer; padding: 4px 8px; border-radius: 6px;
+  }
+  .tg-notice button:hover { background: rgba(255,255,255,0.1); color: #fff; }
+  @media (max-width: 600px) { .tg-notice { font-size: 13px; padding: 11px 13px; } }

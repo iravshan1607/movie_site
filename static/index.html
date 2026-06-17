@@ -105,6 +105,13 @@
 
 <!-- Main content -->
 <main>
+  <!-- Telegram ogohlantirishi (Google'dan kelganlar uchun) -->
+  <div id="tgNotice" class="tg-notice">
+    <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" style="flex-shrink:0;"><path d="M21.9 4.3l-3.3 15.6c-.25 1.1-.9 1.37-1.82.85l-5.03-3.7-2.43 2.34c-.27.27-.5.5-1 .5l.36-5.1L17 5.6c.4-.36-.08-.56-.62-.2L6.3 11.7l-5-1.56C.2 9.8.18 9.05 1.53 8.53L20.48 3.2c.9-.33 1.7.22 1.42 1.1z"/></svg>
+    <span>Kinolar <b>Telegram bot</b> orqali ko'riladi. Kinoni tanlab "Ko'rish" tugmasini bossangiz, botda tomosha qilasiz — tez, bepul, ro'yxatdan o'tmasdan.</span>
+    <button onclick="document.getElementById('tgNotice').style.display='none'" aria-label="Yopish">✕</button>
+  </div>
+
   <!-- Genre filters -->
   <div class="genres" id="genres">
     <div class="genre-pill active" onclick="setGenre('all', this)">Barchasi</div>
