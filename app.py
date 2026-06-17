@@ -25,6 +25,7 @@ ADMIN_PASSWORD = os.getenv("KINO_ADMIN_PASSWORD", "admin123")
 TMDB_TOKEN     = os.getenv("TMDB_TOKEN", "")   # TMDB v4 "Read Access Token" (Bearer)
 TMDB_KEY       = os.getenv("TMDB_KEY", "")     # TMDB v3 API key (zaxira)
 PORT           = int(os.getenv("PORT", "8080"))
+BASE_URL       = os.getenv("BASE_URL", "https://astramovie.com").rstrip("/")
 
 app = Flask(__name__, static_folder="static")
 
@@ -344,7 +345,7 @@ import html as _html
 
 @app.route("/robots.txt")
 def robots():
-    base = request.url_root.rstrip("/")
+    base = BASE_URL
     txt = f"User-agent: *\nAllow: /\nSitemap: {base}/sitemap.xml\n"
     return Response(txt, mimetype="text/plain")
 
@@ -362,17 +363,29 @@ def service_worker():
 
 @app.route("/sitemap.xml")
 def sitemap():
-    base = request.url_root.rstrip("/")
-    urls = [f"{base}/"]
+    base = BASE_URL
+    urls = [{"loc": f"{base}/", "priority": "1.0", "changefreq": "daily"}]
     try:
         with get_conn() as conn:
             cur = conn.cursor()
-            cur.execute("SELECT id FROM movies ORDER BY created_at DESC LIMIT 2000")
+            cur.execute("SELECT id, created_at FROM movies ORDER BY created_at DESC LIMIT 2000")
             for row in cur.fetchall():
-                urls.append(f"{base}/kino/{row[0]}")
+                mid, created = row[0], row[1]
+                entry = {"loc": f"{base}/kino/{mid}", "priority": "0.8", "changefreq": "weekly"}
+                if created:
+                    entry["lastmod"] = created.strftime("%Y-%m-%d")
+                urls.append(entry)
     except Exception as e:
         log.warning("sitemap: %s", e)
-    items = "".join(f"<url><loc>{u}</loc></url>" for u in urls)
+    parts = []
+    for u in urls:
+        bits = [f"<loc>{u['loc']}</loc>"]
+        if "lastmod" in u:
+            bits.append(f"<lastmod>{u['lastmod']}</lastmod>")
+        bits.append(f"<changefreq>{u['changefreq']}</changefreq>")
+        bits.append(f"<priority>{u['priority']}</priority>")
+        parts.append("<url>" + "".join(bits) + "</url>")
+    items = "".join(parts)
     xml = f'<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">{items}</urlset>'
     return Response(xml, mimetype="application/xml")
 
@@ -403,8 +416,8 @@ def movie_page(mid):
     e = _html.escape
     type_uz = {"movie":"Kino","series":"Serial","anime":"Anime","cartoon":"Multfilm"}.get(ctype,"Kino")
     page_title = f"{title} ({year}) — o'zbek tilida | ASTRA" if year else f"{title} — o'zbek tilida | ASTRA"
-    canonical = f"{request.url_root.rstrip('/')}/kino/{mid}"
-    abs_poster = poster if poster.startswith("http") else (f"{request.url_root.rstrip('/')}{poster}" if poster else "")
+    canonical = f"{BASE_URL}/kino/{mid}"
+    abs_poster = poster if poster.startswith("http") else (f"{BASE_URL}{poster}" if poster else "")
     # JSON-LD — Google "boyitilgan natija" uchun struktura ma'lumoti
     import json as _json
     schema_type = {"series":"TVSeries","anime":"TVSeries","cartoon":"TVSeries"}.get(ctype, "Movie")
@@ -432,7 +445,7 @@ def movie_page(mid):
 <title>{e(page_title)}</title>
 <meta name="description" content="{e(desc)}">
 <meta name="keywords" content="{e(title)}, {e(genre)}, o'zbek tilida, uzbek tilida, {year}, onlayn kino, tarjima">
-<link rel="canonical" href="{e(request.url_root.rstrip('/'))}/kino/{mid}">
+<link rel="canonical" href="{e(BASE_URL)}/kino/{mid}">
 <meta property="og:type" content="video.movie">
 <meta property="og:title" content="{e(title)}">
 <meta property="og:description" content="{e(desc)}">
