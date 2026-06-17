@@ -138,14 +138,19 @@ textarea { resize:vertical; min-height:80px; }
   display:grid !important;
   grid-template-columns:repeat(5, 1fr) !important;
   gap:14px;
-  align-items:stretch;
+  align-items:start;
+  padding-right:60px;
+  overflow-x:clip;
 }
 @media (max-width:800px){ #listContainer { grid-template-columns:repeat(3,1fr) !important; } }
 @media (max-width:520px){ #listContainer { grid-template-columns:repeat(2,1fr) !important; } }
 .mcard-wrap {
   position:relative; border-radius:14px;
+  transition:transform 0.26s ease;
 }
-.mcard-wrap:hover { z-index:5; }
+.mcard-wrap:hover { z-index:6; }
+/* hover qilingan kartadan keyingilari surilib joy ochadi (qator buzilmaydi) */
+.mcard-wrap:hover ~ .mcard-wrap { transform:translateX(58px); }
 .mcard {
   background:var(--bg2); border:1px solid var(--line); border-radius:14px; overflow:hidden;
   position:relative; z-index:1;
@@ -203,12 +208,11 @@ textarea { resize:vertical; min-height:80px; }
   display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
 .mcard-meta { font-size:11px; color:var(--dim); display:flex; flex-wrap:wrap; gap:4px; align-items:center; }
 .mcard-side {
-  position:absolute; left:0; right:0; bottom:0; z-index:3;
-  display:flex; gap:10px; justify-content:center; padding:10px;
-  background:linear-gradient(to top, rgba(8,6,20,0.94), rgba(8,6,20,0.55) 75%, transparent);
-  transform:translateY(100%); transition:transform 0.26s ease;
+  position:absolute; top:0; bottom:0; left:100%; margin-left:8px; width:48px; z-index:4;
+  display:flex; flex-direction:column; gap:8px; align-items:center; justify-content:center;
+  opacity:0; transform:translateX(-12px); transition:opacity 0.24s, transform 0.24s; pointer-events:none;
 }
-.mcard-wrap:hover .mcard-side { transform:translateY(0); }
+.mcard-wrap:hover .mcard-side { opacity:1; transform:translateX(0); pointer-events:auto; }
 .mcard-side button {
   width:40px; height:40px; border-radius:10px; border:none; cursor:pointer;
   display:flex; align-items:center; justify-content:center;
@@ -217,8 +221,11 @@ textarea { resize:vertical; min-height:80px; }
 .mcard-side button:hover { transform:scale(1.12); }
 .mcard-side svg { width:18px; height:18px; }
 @media (hover:none) {
+  .mcard-wrap:hover { margin-right:0; }
   .mcard-wrap:hover .mcard { transform:none; }
-  .mcard-side { transform:translateY(0); background:linear-gradient(to top, rgba(8,6,20,0.9), transparent); }
+  .mcard-side { position:absolute; inset:auto 6px auto auto; top:6px; left:auto; margin-left:0; width:auto; flex-direction:row;
+    opacity:1; transform:none; pointer-events:auto; }
+  .mcard-side button { background:rgba(10,8,24,0.7); }
 }
 
 .row {
@@ -565,10 +572,10 @@ function renderPage() {
             <span>👁 ${m.views}</span>
           </div>
         </div>
-        <div class="mcard-side">
-          <button class="btn-edit" onclick="openEdit(${m.id})" title="Tahrirlash"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></button>
-          <button class="btn-del"  onclick="del(${m.id}, '${esc(m.title).replace(/'/g,'')}')" title="O'chirish"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M6 6l1 14h10l1-14"/></svg></button>
-        </div>
+      </div>
+      <div class="mcard-side">
+        <button class="btn-edit" onclick="openEdit(${m.id})" title="Tahrirlash"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></button>
+        <button class="btn-del"  onclick="del(${m.id}, '${esc(m.title).replace(/'/g,'')}')" title="O'chirish"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M6 6l1 14h10l1-14"/></svg></button>
       </div>
     </div>`;
   }).join('');
@@ -751,7 +758,7 @@ async function tmdbSearch() {
     var d = await r.json();
     if (d.error) { box.innerHTML = '<div style="padding:14px;color:#f87171;font-size:13px;">'+esc(d.error)+'</div>'; btn.disabled=false; return; }
     tmdbData = d.results || [];
-    if (!tmdbData.length) { box.innerHTML = '<div style="padding:14px;color:var(--dim);font-size:13px;">Hech narsa topilmadi</div>'; btn.disabled=false; return; }
+    if (!tmdbData.length) { box.innerHTML = '<div style="padding:14px;color:var(--dim);font-size:13px;">Hech narsa topilmadi. TMDB o\'zbekcha nomlarni bilmaydi — asl yoki inglizcha nomini yozib ko\'ring (masalan: <b style="color:#5ad1ff;">King Arthur</b>, <b style="color:#5ad1ff;">Naruto</b>).</div>'; btn.disabled=false; return; }
     box.innerHTML = tmdbData.map(function(m, i){
       var thumb = m.poster_url
         ? '<img src="'+esc(m.poster_url)+'" style="width:46px;height:68px;object-fit:cover;border-radius:6px;flex-shrink:0;">'

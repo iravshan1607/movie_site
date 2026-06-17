@@ -230,6 +230,7 @@ function setHero(m, animate){
 function setType(t){
   curType = t; curGenre = 'all';
   document.querySelectorAll('.genre-pill').forEach((p,i)=>p.classList.toggle('active', i===0));
+  document.querySelectorAll('[data-nav]').forEach(a=>a.classList.toggle('nav-active', a.getAttribute('data-nav')===t));
   window.scrollTo({top:0,behavior:'smooth'});
   loadHome();
 }
@@ -347,4 +348,5 @@ document.addEventListener('click', e => {
 })();
 
 // Boshlash
+document.querySelectorAll('[data-nav]').forEach(a=>a.classList.toggle('nav-active', a.getAttribute('data-nav')==='all'));
 loadHome();

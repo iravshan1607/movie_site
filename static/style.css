@@ -1011,3 +1011,19 @@
   .fav-btn.faved svg { fill: #ff4d6d; stroke: #ff4d6d; }
   .fav-btn:hover { background: rgba(255,77,109,0.25); }
   @media (hover:none) { .fav-btn { opacity: 1; transform: scale(1); } }
+  /* ============ AKTIV NAVIGATSIYA (qaysi bo'limdaligini ko'rsatadi) ============ */
+  .nav-links a.nav-active {
+    color: #fff;
+    position: relative;
+  }
+  .nav-links a.nav-active::after {
+    content: '';
+    position: absolute; left: 0; right: 0; bottom: -6px;
+    height: 2px; border-radius: 2px;
+    background: linear-gradient(90deg, #7c5cff, #5ad1ff);
+  }
+  .mobile-menu a.nav-active {
+    color: #fff;
+    background: rgba(157,123,255,0.15);
+    border-radius: 8px;
+  }
