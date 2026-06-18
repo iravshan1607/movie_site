@@ -8,14 +8,33 @@ const palettes = ['c1','c2','c3','c4','c5','c6','c7','c8','c9','c10'];
 function esc(s){ return String(s==null?'':s).replace(/[<>&"]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c])); }
 function pal(id){ return palettes[id % palettes.length]; }
 
-// Sevimlilar (qurilmada saqlanadi)
-function getFavs(){ try { return JSON.parse(localStorage.getItem('astra_favs')||'[]'); } catch(e){ return []; } }
+// Sevimlilar — kirgan bo'lsa serverda (bot bilan umumiy), aks holda qurilmada
+let ME = { logged_in: false };
+let SERVER_FAVS = null; // kirgan foydalanuvchi sevimlilari (id massivi)
+
+function getFavs(){
+  if (ME.logged_in && SERVER_FAVS) return SERVER_FAVS.slice();
+  try { return JSON.parse(localStorage.getItem('astra_favs')||'[]'); } catch(e){ return []; }
+}
 function isFav(id){ return getFavs().indexOf(id) >= 0; }
 function toggleFav(id, el){
-  var f = getFavs(); var i = f.indexOf(id);
-  if (i>=0) f.splice(i,1); else f.push(id);
-  try { localStorage.setItem('astra_favs', JSON.stringify(f)); } catch(e){}
-  if (el) el.classList.toggle('faved', i<0);
+  const adding = !isFav(id);
+  if (ME.logged_in){
+    if (!SERVER_FAVS) SERVER_FAVS = [];
+    const i = SERVER_FAVS.indexOf(id);
+    if (adding && i<0) SERVER_FAVS.push(id);
+    if (!adding && i>=0) SERVER_FAVS.splice(i,1);
+    fetch('/api/favorites', {
+      method: adding ? 'POST' : 'DELETE',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ id: id })
+    }).catch(()=>{});
+  } else {
+    var f = getFavs(); var j = f.indexOf(id);
+    if (j>=0) f.splice(j,1); else f.push(id);
+    try { localStorage.setItem('astra_favs', JSON.stringify(f)); } catch(e){}
+  }
+  if (el) el.classList.toggle('faved', adding);
   if (curType === 'fav') loadHome();
 }
 
@@ -33,6 +52,95 @@ window.addEventListener('scroll', () => {
 
 // Bot username
 fetch('/api/botlink').then(r=>r.json()).then(d=>{ BOT = d.bot || ''; var tg=document.getElementById('tgLink'); if(tg && BOT) tg.href='https://t.me/'+BOT; }).catch(()=>{});
+
+// ── Telegram orqali kirish / profil ───────────────────────────────────────────
+function openLogin(){
+  document.getElementById('loginModalBg').classList.add('show');
+  document.getElementById('loginModal').classList.add('show');
+}
+function closeLogin(){
+  document.getElementById('loginModalBg').classList.remove('show');
+  document.getElementById('loginModal').classList.remove('show');
+}
+function toggleUserMenu(){ document.getElementById('userMenu').classList.toggle('show'); }
+function closeUserMenu(){ document.getElementById('userMenu').classList.remove('show'); }
+
+window.onTelegramAuth = function(user){
+  fetch('/api/tg-login', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify(user)
+  }).then(r=>r.json()).then(d=>{
+    if (d.ok){ closeLogin(); applyMe({logged_in:true, id:d.id, name:d.name, photo:d.photo}); loadServerFavs(true); }
+    else { var n=document.getElementById('loginNote'); if(n) n.textContent='Kirishda xato. Qayta urinib ko\'ring.'; }
+  }).catch(()=>{ var n=document.getElementById('loginNote'); if(n) n.textContent='Server bilan aloqa yo\'q.'; });
+};
+
+function applyMe(me){
+  ME = me || {logged_in:false};
+  var login = document.getElementById('navLogin');
+  var av = document.getElementById('navAvatar');
+  if (ME.logged_in){
+    login.style.display='none';
+    av.style.display='';
+    var ph = ME.photo || '';
+    var img = document.getElementById('navAvatarImg');
+    var umImg = document.getElementById('userMenuImg');
+    if (ph){ img.src=ph; umImg.src=ph; }
+    else { img.src='/static/logo.svg'; umImg.src='/static/logo.svg'; }
+    document.getElementById('userMenuName').textContent = ME.name || 'Foydalanuvchi';
+  } else {
+    login.style.display = BOT ? '' : 'none';
+    av.style.display='none';
+    closeUserMenu();
+  }
+}
+
+function loadServerFavs(refresh){
+  if (!ME.logged_in) return;
+  fetch('/api/favorites').then(r=>r.json()).then(d=>{
+    SERVER_FAVS = (d.ids||[]);
+    if (refresh) loadHome();
+  }).catch(()=>{ SERVER_FAVS = []; });
+}
+
+function doLogout(){
+  fetch('/api/logout', {method:'POST'}).then(()=>{
+    applyMe({logged_in:false}); SERVER_FAVS=null; closeUserMenu();
+    if (curType==='fav') loadHome();
+  }).catch(()=>{});
+}
+
+function initTelegramLogin(botUser){
+  if (!botUser) return;
+  var holder = document.getElementById('tgLoginBtn');
+  if (!holder || holder.dataset.loaded) return;
+  holder.dataset.loaded='1';
+  var s = document.createElement('script');
+  s.async = true;
+  s.src = 'https://telegram.org/js/telegram-widget.js?22';
+  s.setAttribute('data-telegram-login', botUser);
+  s.setAttribute('data-size', 'large');
+  s.setAttribute('data-userpic', 'true');
+  s.setAttribute('data-request-access', 'write');
+  s.setAttribute('data-onauth', 'onTelegramAuth(user)');
+  holder.appendChild(s);
+}
+
+// Boshlang'ich holat
+fetch('/api/me').then(r=>r.json()).then(d=>{
+  if (d.bot){ BOT = d.bot; initTelegramLogin(d.bot); }
+  applyMe(d);
+  if (d.logged_in) loadServerFavs(false);
+}).catch(()=>{});
+
+// Profil menyusi tashqariga bosilsa yopilsin
+document.addEventListener('click', function(e){
+  var um = document.getElementById('userMenu');
+  var av = document.getElementById('navAvatar');
+  if (um && um.classList.contains('show') && !um.contains(e.target) && av && !av.contains(e.target)) {
+    um.classList.remove('show');
+  }
+});
 
 // Janrlar
 fetch('/api/genres').then(r=>r.json()).then(d=>{
