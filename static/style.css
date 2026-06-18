@@ -813,6 +813,28 @@
   /* Empty/error state */
   .state-msg { text-align:center; padding:50px 20px; color:var(--text-muted); }
 
+  /* Sevimlilar — bo'sh holat va son */
+  .row-count {
+    display: inline-block; margin-left: 8px;
+    background: var(--bg3); color: var(--gold);
+    font-size: 0.62em; font-weight: 700; vertical-align: middle;
+    padding: 2px 9px; border-radius: 999px;
+  }
+  .fav-empty {
+    text-align: center; padding: 70px 24px;
+    max-width: 420px; margin: 0 auto;
+  }
+  .fav-empty-ic { font-size: 56px; margin-bottom: 14px; }
+  .fav-empty-t { font-size: 20px; font-weight: 700; margin-bottom: 8px; }
+  .fav-empty-s { color: var(--text-muted); font-size: 14px; line-height: 1.6; margin-bottom: 22px; }
+  .fav-empty-btn {
+    background: var(--accent2); color: #0a0820; border: none;
+    padding: 11px 24px; border-radius: 10px;
+    font-size: 14px; font-weight: 700; cursor: pointer;
+    transition: filter 0.2s;
+  }
+  .fav-empty-btn:hover { filter: brightness(1.1); }
+
   /* === Hamburger + mobil menyu === */
   .nav-burger { display:none; flex-direction:column; gap:4px; background:none; border:none; cursor:pointer; padding:6px; }
   .nav-burger span { display:block; width:22px; height:2px; background:#fff; border-radius:2px; transition:all 0.3s; }
