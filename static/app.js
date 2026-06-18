@@ -218,7 +218,17 @@ async function loadHome(){
     if (curType === 'fav') {
       const favs = getFavs();
       if (!favs.length) {
-        rows.innerHTML = '<div class="state-msg">Sevimlilar ro\'yxati bo\'sh. Kino kartasidagi yurakcha ❤ tugmasini bosing.</div>';
+        const hint = ME.logged_in
+          ? 'Kino kartasidagi yurakcha ❤ tugmasini bosing — botda saqlaganlaringiz ham shu yerda ko\'rinadi.'
+          : (BOT ? 'Kino kartasidagi yurakcha ❤ tugmasini bosing. Telegram orqali kirsangiz, botdagi saqlanganlar ham shu yerga qo\'shiladi.'
+                 : 'Kino kartasidagi yurakcha ❤ tugmasini bosing.');
+        rows.innerHTML =
+          '<div class="fav-empty">' +
+            '<div class="fav-empty-ic">💛</div>' +
+            '<div class="fav-empty-t">Sevimlilar ro\'yxati bo\'sh</div>' +
+            '<div class="fav-empty-s">' + hint + '</div>' +
+            '<button class="fav-empty-btn" onclick="setType(\'all\')">Kinolarni ko\'rish</button>' +
+          '</div>';
         if (typeof setHero==='function') setHero(null);
         return;
       }
@@ -226,7 +236,8 @@ async function loadHome(){
       const movies = (res.movies||[]);
       allMovies = movies;
       if (typeof setHero==='function') setHero(null);
-      rows.innerHTML = rowHtml('❤ Sevimlilar', movies.map(cardHtml).join(''));
+      const title = '❤ Sevimlilar <span class="row-count">' + movies.length + '</span>';
+      rows.innerHTML = rowHtml(title, movies.map(cardHtml).join(''));
       return;
     }
     const typeFilter = curType !== 'all' ? { type: curType } : {};
