@@ -414,6 +414,7 @@ textarea { resize:vertical; min-height:80px; }
 let PASS = '';
 const TYPE = { movie:'Kino', series:'Serial', anime:'Anime', cartoon:'Multfilm' };
 let allMovies = [];
+let posterV = Date.now();   // poster kesh-buzg'uvchi (ro'yxat yangilanganda o'zgaradi)
 let curPage = 1;
 const PER_PAGE = 24;
 
@@ -546,6 +547,7 @@ async function search(keepView) {
   }
 
   allMovies = d.movies;
+  posterV = Date.now();   // har yuklanishda yangi — yangilangan posterlar ko'rinadi
   const totalPages = Math.ceil(d.movies.length / PER_PAGE) || 1;
   curPage = keepView ? Math.min(prevPage, totalPages) : 1;
   cnt.textContent = d.movies.length + ' ta natija';
@@ -560,7 +562,7 @@ function renderPage() {
   box.innerHTML = pageItems.map(m => {
     const hasPoster = m.poster_url || m.has_poster;
     const poster = hasPoster
-      ? `<img class="mcard-poster" src="/api/poster/${m.id}" loading="lazy" onerror="this.classList.add('img-failed');this.src='/static/no-poster.svg'">`
+      ? `<img class="mcard-poster" src="/api/poster/${m.id}?v=${posterV}" loading="lazy" onerror="this.classList.add('img-failed');this.src='/static/no-poster.svg'">`
       : `<div class="mcard-poster-ph"><span>🎬</span><b>${esc(m.title)}</b></div>`;
     return `<div class="mcard-wrap">
       <div class="mcard">
