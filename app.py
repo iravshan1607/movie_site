@@ -8,10 +8,14 @@ import os
 import logging
 import io
 import re
+import hmac
+import hashlib
+import time
+import json
 from urllib.parse import urlparse, unquote
 import pg8000.dbapi
 import requests
-from flask import Flask, request, jsonify, send_from_directory, Response, redirect
+from flask import Flask, request, jsonify, send_from_directory, Response, redirect, session
 
 logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
@@ -20,7 +24,7 @@ log = logging.getLogger("kino")
 
 DATABASE_URL   = os.getenv("DATABASE_URL", "")
 BOT_TOKEN      = os.getenv("BOT_TOKEN", "")
-BOT_USERNAME   = os.getenv("BOT_USERNAME", "")          # botga yo'naltirish uchun
+BOT_USERNAME   = os.getenv("BOT_USERNAME", "")          # botga yo'naltirish + Telegram login uchun
 ADMIN_PASSWORD = os.getenv("KINO_ADMIN_PASSWORD", "admin123")
 TMDB_TOKEN     = os.getenv("TMDB_TOKEN", "")   # TMDB v4 "Read Access Token" (Bearer)
 TMDB_KEY       = os.getenv("TMDB_KEY", "")     # TMDB v3 API key (zaxira)
@@ -28,6 +32,9 @@ PORT           = int(os.getenv("PORT", "8080"))
 BASE_URL       = os.getenv("BASE_URL", "https://astramovie.com").rstrip("/")
 
 app = Flask(__name__, static_folder="static")
+# Sessiya imzosi uchun maxfiy kalit (SECRET_KEY bo'lmasa BOT_TOKEN'dan barqaror hosil qilinadi)
+app.secret_key = os.getenv("SECRET_KEY") or hashlib.sha256(
+    (BOT_TOKEN or "astra-fallback-secret").encode()).hexdigest()
 
 # ── Baza (pg8000 — sof Python, libpq kerak emas) ──────────────────────────────
 def _parse_db_url(url):
@@ -74,8 +81,20 @@ def init_db():
                     value TEXT
                 )
             """)
+            # Sevimlilar — bot bilan umumiy jadval (telegram user_id bo'yicha)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS favorites (
+                    user_id BIGINT NOT NULL,
+                    item_type TEXT NOT NULL,
+                    item_id TEXT NOT NULL,
+                    title TEXT,
+                    extra TEXT,
+                    added_at TIMESTAMP DEFAULT NOW(),
+                    PRIMARY KEY (user_id, item_type, item_id)
+                )
+            """)
             conn.commit()
-        log.info("Kino baza tayyor (poster_url + site_settings)")
+        log.info("Kino baza tayyor (poster_url + site_settings + favorites)")
     except Exception as e:
         log.warning("init_db: %s", e)
 
@@ -339,6 +358,103 @@ def admin_settings():
 @app.route("/api/botlink")
 def api_botlink():
     return jsonify({"bot": BOT_USERNAME})
+
+# ── Telegram orqali kirish (login) ────────────────────────────────────────────
+def _verify_telegram_auth(data):
+    """Telegram Login Widget ma'lumotlarini hash orqali tekshiradi."""
+    if not BOT_TOKEN:
+        return False
+    recv_hash = data.get("hash", "")
+    if not recv_hash:
+        return False
+    pairs = [f"{k}={data[k]}" for k in sorted(data.keys()) if k != "hash"]
+    data_check_string = "\n".join(pairs)
+    secret_key = hashlib.sha256(BOT_TOKEN.encode()).digest()
+    computed = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(computed, recv_hash):
+        return False
+    try:
+        if time.time() - int(data.get("auth_date", "0")) > 86400:
+            return False
+    except Exception:
+        return False
+    return True
+
+@app.route("/api/tg-login", methods=["POST"])
+def tg_login():
+    data = request.get_json(silent=True) or {}
+    clean = {k: str(v) for k, v in data.items() if v is not None}
+    if not _verify_telegram_auth(clean):
+        return jsonify({"ok": False, "error": "Tekshiruvdan o'tmadi"}), 403
+    name = (clean.get("first_name", "") + " " + clean.get("last_name", "")).strip() \
+        or clean.get("username", "Foydalanuvchi")
+    session.permanent = True
+    session["tg_id"] = int(clean["id"])
+    session["tg_name"] = name
+    session["tg_photo"] = clean.get("photo_url", "")
+    session["tg_username"] = clean.get("username", "")
+    return jsonify({"ok": True, "id": session["tg_id"], "name": name, "photo": session["tg_photo"]})
+
+@app.route("/api/me")
+def api_me():
+    if session.get("tg_id"):
+        return jsonify({"logged_in": True, "id": session["tg_id"],
+                        "name": session.get("tg_name", ""),
+                        "photo": session.get("tg_photo", ""),
+                        "username": session.get("tg_username", ""),
+                        "bot": BOT_USERNAME})
+    return jsonify({"logged_in": False, "bot": BOT_USERNAME})
+
+@app.route("/api/logout", methods=["POST"])
+def api_logout():
+    session.clear()
+    return jsonify({"ok": True})
+
+# ── Sevimlilar (bot bilan umumiy baza, telegram ID bo'yicha) ──────────────────
+@app.route("/api/favorites", methods=["GET", "POST", "DELETE"])
+def api_favorites():
+    uid = session.get("tg_id")
+    if not uid:
+        return jsonify({"error": "login kerak", "logged_in": False}), 401
+    if request.method == "GET":
+        try:
+            with get_conn() as conn:
+                cur = conn.cursor()
+                cur.execute("SELECT item_id FROM favorites WHERE user_id=%s AND item_type='movie' "
+                            "ORDER BY added_at DESC", (uid,))
+                ids = [int(r[0]) for r in cur.fetchall() if str(r[0]).isdigit()]
+            return jsonify({"ids": ids})
+        except Exception as e:
+            log.warning("favorites get: %s", e)
+            return jsonify({"ids": []})
+    data = request.get_json(silent=True) or {}
+    mid = data.get("id")
+    if mid is None:
+        return jsonify({"error": "id kerak"}), 400
+    try:
+        with get_conn() as conn:
+            cur = conn.cursor()
+            if request.method == "POST":
+                title = str(mid)
+                try:
+                    cur.execute("SELECT title FROM movies WHERE id=%s", (mid,))
+                    r = cur.fetchone()
+                    if r and r[0]:
+                        title = r[0]
+                except Exception:
+                    pass
+                cur.execute("INSERT INTO favorites (user_id, item_type, item_id, title, extra) "
+                            "VALUES (%s, 'movie', %s, %s, '') "
+                            "ON CONFLICT (user_id, item_type, item_id) DO NOTHING",
+                            (uid, str(mid), title))
+            else:  # DELETE
+                cur.execute("DELETE FROM favorites WHERE user_id=%s AND item_type='movie' AND item_id=%s",
+                            (uid, str(mid)))
+            conn.commit()
+        return jsonify({"ok": True})
+    except Exception as e:
+        log.warning("favorites mod: %s", e)
+        return jsonify({"error": "xato"}), 500
 
 # ══════════════════ SEO (Google uchun) ══════════════════
 import html as _html
