@@ -75,6 +75,29 @@ window.onTelegramAuth = function(user){
   }).catch(()=>{ var n=document.getElementById('loginNote'); if(n) n.textContent='Server bilan aloqa yo\'q.'; });
 };
 
+function setAvatar(photo, name){
+  var btn = document.getElementById('navAvatar');
+  var um = document.getElementById('userMenuImg');
+  var initial = ((name || '?').trim().charAt(0) || '?').toUpperCase();
+  btn.classList.remove('av-initial');
+  btn.innerHTML = '';
+  if (photo){
+    var im = document.createElement('img');
+    im.id = 'navAvatarImg';
+    im.alt = '';
+    im.onerror = function(){ btn.classList.add('av-initial'); btn.textContent = initial; };
+    im.src = photo;
+    btn.appendChild(im);
+  } else {
+    btn.classList.add('av-initial');
+    btn.textContent = initial;
+  }
+  if (um){
+    if (photo){ um.src = photo; um.style.display=''; um.onerror=function(){ um.style.display='none'; }; }
+    else { um.src = '/static/logo.svg'; }
+  }
+}
+
 function applyMe(me){
   ME = me || {logged_in:false};
   var login = document.getElementById('navLogin');
@@ -82,11 +105,7 @@ function applyMe(me){
   if (ME.logged_in){
     login.style.display='none';
     av.style.display='';
-    var ph = ME.photo || '';
-    var img = document.getElementById('navAvatarImg');
-    var umImg = document.getElementById('userMenuImg');
-    if (ph){ img.src=ph; umImg.src=ph; }
-    else { img.src='/static/logo.svg'; umImg.src='/static/logo.svg'; }
+    setAvatar(ME.photo || '', ME.name || 'Foydalanuvchi');
     document.getElementById('userMenuName').textContent = ME.name || 'Foydalanuvchi';
   } else {
     login.style.display = BOT ? '' : 'none';
