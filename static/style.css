@@ -209,14 +209,69 @@
   }
   .nav-search:hover { opacity: 1; }
 
-  .nav-avatar {
-    width: 32px; height: 32px;
-    border-radius: 4px;
-    background: var(--red);
-    display: flex; align-items: center; justify-content: center;
-    font-size: 12px; font-weight: 600;
-    cursor: pointer;
+  .nav-login {
+    display: flex; align-items: center; gap: 7px;
+    background: #229ED9; color: #fff; border: none;
+    padding: 7px 13px; border-radius: 8px;
+    font-size: 13px; font-weight: 600; cursor: pointer;
+    transition: background 0.2s;
   }
+  .nav-login:hover { background: #1d8dc2; }
+  .nav-login svg { display: block; }
+
+  .nav-avatar {
+    width: 34px; height: 34px;
+    border-radius: 50%;
+    padding: 0; border: 2px solid var(--gold);
+    overflow: hidden; cursor: pointer;
+    background: var(--bg3);
+  }
+  .nav-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+  .user-menu {
+    position: absolute; top: 64px; right: 24px;
+    background: var(--bg2); border: 1px solid var(--bg3);
+    border-radius: 12px; padding: 10px; min-width: 220px;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.5); z-index: 120;
+    opacity: 0; transform: translateY(-8px); pointer-events: none;
+    transition: opacity 0.18s, transform 0.18s;
+  }
+  .user-menu.show { opacity: 1; transform: translateY(0); pointer-events: auto; }
+  .user-menu-head { display: flex; align-items: center; gap: 10px; padding: 6px 8px 12px; border-bottom: 1px solid var(--bg3); margin-bottom: 8px; }
+  .user-menu-head img { width: 42px; height: 42px; border-radius: 50%; object-fit: cover; background: var(--bg3); }
+  .user-menu-name { font-weight: 700; font-size: 14px; }
+  .user-menu-sub { font-size: 11px; color: var(--text-dim); }
+  .user-menu-btn {
+    display: block; width: 100%; text-align: left;
+    background: none; border: none; color: var(--text);
+    padding: 10px 8px; border-radius: 8px; font-size: 14px; cursor: pointer;
+  }
+  .user-menu-btn:hover { background: var(--bg3); }
+
+  .login-modal-bg {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.7);
+    z-index: 200; opacity: 0; pointer-events: none; transition: opacity 0.2s;
+  }
+  .login-modal-bg.show { opacity: 1; pointer-events: auto; }
+  .login-modal {
+    position: fixed; top: 50%; left: 50%; transform: translate(-50%, -46%);
+    background: var(--bg2); border: 1px solid var(--bg3);
+    border-radius: 16px; padding: 30px 26px; width: 340px; max-width: 92vw;
+    text-align: center; z-index: 201;
+    opacity: 0; pointer-events: none; transition: opacity 0.2s, transform 0.2s;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+  }
+  .login-modal.show { opacity: 1; pointer-events: auto; transform: translate(-50%, -50%); }
+  .login-modal h3 { margin: 0 0 8px; font-size: 19px; }
+  .login-modal p { color: var(--text-muted); font-size: 13px; margin: 0 0 18px; line-height: 1.5; }
+  .login-modal #tgLoginBtn { display: flex; justify-content: center; min-height: 46px; }
+  .login-note { color: var(--gold); font-size: 12px; margin-top: 12px !important; }
+  .login-close {
+    position: absolute; top: 10px; right: 14px;
+    background: none; border: none; color: var(--text-dim);
+    font-size: 26px; cursor: pointer; line-height: 1;
+  }
+  .login-close:hover { color: var(--text); }
 
   /* HERO */
   .hero {
