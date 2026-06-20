@@ -462,7 +462,7 @@ import html as _html
 @app.route("/robots.txt")
 def robots():
     base = BASE_URL
-    txt = f"User-agent: *\nAllow: /\nSitemap: {base}/sitemap.xml\n"
+    txt = f"User-agent: *\nAllow: /\nSitemap: {base}/sitemap.xml\nSitemap: {base}/sitemap_video.xml\n"
     return Response(txt, mimetype="text/plain")
 
 # ── PWA (telefonga o'rnatish uchun) ──
@@ -503,6 +503,58 @@ def sitemap():
         parts.append("<url>" + "".join(bits) + "</url>")
     items = "".join(parts)
     xml = f'<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">{items}</urlset>'
+    return Response(xml, mimetype="application/xml")
+
+@app.route("/sitemap_video.xml")
+def sitemap_video():
+    """Video sitemap — Google Search Console 'Video' hisoboti uchun."""
+    base = BASE_URL
+    bot_username = BOT_USERNAME or ""
+    parts = []
+    try:
+        with get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT id, title, description, content_type, poster_url, poster_id, year, created_at
+                FROM movies ORDER BY created_at DESC LIMIT 1000
+            """)
+            rows = cur.fetchall()
+    except Exception as e:
+        log.warning("sitemap_video: %s", e)
+        rows = []
+
+    import xml.etree.ElementTree as ET
+    import html as _html_mod
+
+    for row in rows:
+        mid, title, desc, ctype, poster_url, poster_id, year, created = row
+        title = title or "Kino"
+        desc = (desc or f"{title} — o'zbek tilida onlayn ko'rish.")[:300]
+        page_url = f"{base}/kino/{mid}"
+        bot_link = f"https://t.me/{bot_username}?start=movie_{mid}" if bot_username else page_url
+        abs_poster = poster_url if poster_url and poster_url.startswith("http") else (f"{base}/api/poster/{mid}" if poster_id else f"{base}/static/icon-512.png")
+        upload_date = created.strftime("%Y-%m-%d") if created else (f"{year}-01-01" if year else "2024-01-01")
+
+        e = _html_mod.escape
+        video_xml = (
+            f"<video:video>"
+            f"<video:thumbnail_loc>{e(abs_poster)}</video:thumbnail_loc>"
+            f"<video:title>{e(title)}</video:title>"
+            f"<video:description>{e(desc)}</video:description>"
+            f"<video:player_loc>{e(bot_link)}</video:player_loc>"
+            f"<video:publication_date>{e(upload_date)}</video:publication_date>"
+            f"<video:family_friendly>yes</video:family_friendly>"
+            f"</video:video>"
+        )
+        parts.append(f"<url><loc>{e(page_url)}</loc>{video_xml}</url>")
+
+    items = "".join(parts)
+    xml = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" '
+        'xmlns:video="http://www.google.com/schemas/sitemap-video/1.1">'
+        f'{items}</urlset>'
+    )
     return Response(xml, mimetype="application/xml")
 
 @app.route("/kino/<int:mid>")
@@ -550,7 +602,30 @@ def movie_page(mid):
     if year:
         try: ld["dateCreated"] = str(int(year))
         except Exception: pass
+
+    # VideoObject — Google Search Console "Video" hisoboti uchun ZARUR
+    # Bu bo'lmasа, sahifadagi video Google tomonidan aniqlanmaydi
+    video_ld = {
+        "@context": "https://schema.org",
+        "@type": "VideoObject",
+        "name": title,
+        "description": desc,
+        "thumbnailUrl": abs_poster if abs_poster else f"{BASE_URL}/static/icon-512.png",
+        "uploadDate": (str(int(year)) + "-01-01") if year else "2024-01-01",
+        "embedUrl": bot_link,
+        "url": canonical,
+        "inLanguage": "uz",
+        "potentialAction": {
+            "@type": "WatchAction",
+            "target": bot_link
+        }
+    }
+    if abs_poster:
+        video_ld["thumbnailUrl"] = abs_poster
+
+    # Ikkalasini bitta sahifaga joylashtiramiz
     jsonld = _json.dumps(ld, ensure_ascii=False)
+    video_jsonld = _json.dumps(video_ld, ensure_ascii=False)
     page = f"""<!DOCTYPE html>
 <html lang="uz">
 <head>
@@ -574,6 +649,7 @@ def movie_page(mid):
 <meta name="twitter:description" content="{e(desc)}">
 {f'<meta name="twitter:image" content="{e(abs_poster)}">' if abs_poster else ''}
 <script type="application/ld+json">{jsonld}</script>
+<script type="application/ld+json">{video_jsonld}</script>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/static/style.css">
 </head>
