@@ -395,6 +395,18 @@ async function doSearch(){
 }
 
 // Modal
+function ytId(s){
+  if(!s) return '';
+  s=String(s).trim();
+  if(/^[A-Za-z0-9_-]{11}$/.test(s)) return s;
+  var m=s.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|v\/|shorts\/))([A-Za-z0-9_-]{11})/);
+  return m?m[1]:'';
+}
+function playTrailer(el){
+  var id=el.getAttribute('data-yt'); if(!id) return;
+  el.innerHTML='<iframe src="https://www.youtube-nocookie.com/embed/'+id+'?autoplay=1&rel=0" title="Treyler" frameborder="0" allow="autoplay; encrypted-media; fullscreen" allowfullscreen></iframe>';
+  el.onclick=null;
+}
 async function openMovie(id){
   const modal = document.getElementById('movieModal');
   const box = document.getElementById('movieBox');
@@ -427,9 +439,15 @@ async function openMovie(id){
       </div>
       <div class="mm-body">
         ${m.genre?`<div style="color:var(--text-muted);font-size:13px;margin-bottom:14px;">${esc(m.genre)}</div>`:''}
+        ${(m.trailer && ytId(m.trailer))?`
+        <div class="mm-trailer" data-yt="${ytId(m.trailer)}" onclick="playTrailer(this)">
+          <img src="https://img.youtube.com/vi/${ytId(m.trailer)}/hqdefault.jpg" alt="Treyler" loading="lazy">
+          <div class="mm-play">▶</div>
+          <span class="mm-trailer-lbl">🎬 Treyler</span>
+        </div>`:''}
         ${m.description?`<p class="mm-desc">${esc(m.description)}</p>`:'<p class="mm-desc" style="opacity:0.5">Tavsif yo\'q.</p>'}
         <a href="${botLink}" target="_blank" class="mm-watch">
-          ${isSeries?'📺 Botda qismlarni ko\'rish':'▶ Botda ko\'rish / yuklab olish'}
+          ${isSeries?'📺 To\'liq qismlarni botda ko\'rish':'🎬 To\'liqini botda ko\'rish / yuklab olish'}
         </a>
         <p class="mm-note">👁 ${m.views} marta ko'rilgan · Telegram bot orqali ochiladi</p>
         ${similarHtml(m)}
