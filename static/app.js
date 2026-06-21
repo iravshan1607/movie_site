@@ -488,3 +488,16 @@ document.addEventListener('click', e => {
 // Boshlash
 document.querySelectorAll('[data-nav]').forEach(a=>a.classList.toggle('nav-active', a.getAttribute('data-nav')==='all'));
 loadHome();
+
+// Google qidiruv qutisi / ulashilgan havola: astramovie.com/?q=...
+(function(){
+  try {
+    var qp = new URLSearchParams(window.location.search).get('q');
+    if (qp) {
+      openSearch();
+      var inp = document.getElementById('searchInput');
+      if (inp) inp.value = qp;
+      doSearch();
+    }
+  } catch(e){}
+})();
