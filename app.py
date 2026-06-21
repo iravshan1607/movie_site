@@ -258,7 +258,7 @@ def api_movie(mid):
             cur.execute("""
                 SELECT id, title, genre, year, language, quality, description,
                        COALESCE(content_type,'movie'), poster_id,
-                       COALESCE(views,0), rating, poster_url
+                       COALESCE(views,0), rating, poster_url, trailer
                 FROM movies WHERE id=%s
             """, (mid,))
             r = cur.fetchone()
@@ -272,6 +272,7 @@ def api_movie(mid):
             "language": r[4] or "", "quality": r[5] or "", "description": r[6] or "",
             "type": r[7], "has_poster": bool(r[8]), "poster_url": r[11] or "",
             "views": r[9], "rating": float(r[10]) if r[10] else None,
+            "trailer": (r[12] or "") if len(r) > 12 else "",
         }})
     except Exception as e:
         return jsonify({"found": False, "error": str(e)}), 500
@@ -730,7 +731,11 @@ def movie_page(mid):
             '<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;">'
             '<div style="width:68px;height:68px;border-radius:50%;background:rgba(229,9,20,0.92);display:flex;'
             'align-items:center;justify-content:center;color:#fff;font-size:26px;padding-left:5px;">▶</div></div>'
-            '</div></section>'
+            '</div>'
+            f'<a href="{e(bot_link)}" style="display:inline-flex;align-items:center;gap:8px;margin-top:16px;'
+            'background:#e50914;color:#fff;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:700;font-size:15px;">'
+            f'🎬 To\'liqini botda ko\'rish / yuklab olish</a>'
+            '</section>'
         )
     else:
         trailer_html = ''
