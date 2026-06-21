@@ -402,6 +402,8 @@ textarea { resize:vertical; min-height:80px; }
     </select>
     <span class="lbl">Poster URL</span>
     <input id="ePoster" placeholder="https://...jpg (ixtiyoriy)" oninput="updatePosterPreview()">
+    <span class="lbl">🎬 Treyler (YouTube havola yoki ID)</span>
+    <input id="eTrailer" placeholder="https://youtu.be/... (TMDB'dan avtomatik to'ladi)">
     <span class="lbl">Tavsif</span>
     <textarea id="eDesc"></textarea>
 
@@ -636,6 +638,7 @@ async function openEdit(id) {
   document.getElementById('eQuality').value = m.quality;
   document.getElementById('eType').value    = m.type;
   document.getElementById('ePoster').value  = m.poster_url || '';
+  document.getElementById('eTrailer').value  = m.trailer || '';
   document.getElementById('eDesc').value    = m.description;
 
   updatePosterPreview();
@@ -717,6 +720,7 @@ async function saveEdit() {
       quality:      document.getElementById('eQuality').value.trim(),
       content_type: document.getElementById('eType').value,
       poster_url:   document.getElementById('ePoster').value.trim(),
+      trailer:      document.getElementById('eTrailer').value.trim(),
       description:  document.getElementById('eDesc').value.trim()
     })
   });
@@ -790,6 +794,18 @@ function tmdbPick(i) {
   fillIfEmpty('eDesc', m.description);
   document.getElementById('tmdbResults').style.display = 'none';
   updatePosterPreview();
+  // Treylerni TMDB'dan avtomatik olamiz (faqat bo'sh bo'lsa)
+  var trEl = document.getElementById('eTrailer');
+  if (m.tmdb_id && trEl && !trEl.value.trim()) {
+    trEl.placeholder = 'TMDB treyler qidirilmoqda...';
+    fetch('/api/admin/tmdb-trailer', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ password: PASS, tmdb_id: m.tmdb_id, media_type: m.media_type })
+    }).then(function(r){return r.json();}).then(function(d){
+      if (d.trailer && !trEl.value.trim()) trEl.value = 'https://youtu.be/' + d.trailer;
+      trEl.placeholder = 'https://youtu.be/... (TMDB\'dan avtomatik to\'ladi)';
+    }).catch(function(){ trEl.placeholder = 'https://youtu.be/...'; });
+  }
 }
 function esc(s) { return String(s==null?'':s).replace(/[<>&"]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c])); }
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
