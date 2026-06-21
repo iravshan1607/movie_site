@@ -503,29 +503,42 @@ def service_worker():
 @app.route("/sitemap.xml")
 def sitemap():
     base = BASE_URL
-    urls = [{"loc": f"{base}/", "priority": "1.0", "changefreq": "daily"}]
+    rows = []
     try:
         with get_conn() as conn:
             cur = conn.cursor()
-            cur.execute("SELECT id, created_at FROM movies ORDER BY created_at DESC LIMIT 2000")
-            for row in cur.fetchall():
-                mid, created = row[0], row[1]
-                entry = {"loc": f"{base}/kino/{mid}", "priority": "0.8", "changefreq": "weekly"}
-                if created:
-                    entry["lastmod"] = created.strftime("%Y-%m-%d")
-                urls.append(entry)
+            cur.execute("SELECT id, title, description, created_at FROM movies "
+                        "ORDER BY created_at DESC LIMIT 2000")
+            rows = cur.fetchall()
     except Exception as e:
         log.warning("sitemap: %s", e)
-    parts = []
-    for u in urls:
-        bits = [f"<loc>{u['loc']}</loc>"]
-        if "lastmod" in u:
-            bits.append(f"<lastmod>{u['lastmod']}</lastmod>")
-        bits.append(f"<changefreq>{u['changefreq']}</changefreq>")
-        bits.append(f"<priority>{u['priority']}</priority>")
-        parts.append("<url>" + "".join(bits) + "</url>")
+
+    def esc(s):
+        s = str(s or "")
+        return (s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                 .replace('"', "&quot;").replace("'", "&apos;"))
+
+    parts = ["<url><loc>" + base + "/</loc><changefreq>daily</changefreq><priority>1.0</priority></url>"]
+    for row in rows:
+        mid, title, desc, created = row[0], row[1], row[2], row[3]
+        loc = f"{base}/kino/{mid}"
+        lastmod = f"<lastmod>{created.strftime('%Y-%m-%d')}</lastmod>" if created else ""
+        ttl = esc(title)[:100] if title else f"Film #{mid}"
+        dsc = esc(desc)[:1900] if desc else f"{ttl} — ASTRA'da onlayn tomosha qiling."
+        thumb = f"{base}/api/poster/{mid}"
+        video = ("<video:video>"
+                 f"<video:thumbnail_loc>{thumb}</video:thumbnail_loc>"
+                 f"<video:title>{ttl}</video:title>"
+                 f"<video:description>{dsc}</video:description>"
+                 f"<video:player_loc>{loc}</video:player_loc>"
+                 "</video:video>")
+        parts.append(f"<url><loc>{loc}</loc>{lastmod}"
+                     f"<changefreq>weekly</changefreq><priority>0.8</priority>{video}</url>")
     items = "".join(parts)
-    xml = f'<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">{items}</urlset>'
+    xml = ('<?xml version="1.0" encoding="UTF-8"?>'
+           '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" '
+           'xmlns:video="http://www.google.com/schemas/sitemap-video/1.1">'
+           f'{items}</urlset>')
     return Response(xml, mimetype="application/xml")
 
 @app.route("/sitemap_video.xml")
