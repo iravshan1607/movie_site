@@ -547,7 +547,7 @@ async function search(keepView) {
   }
 
   allMovies = d.movies;
-  posterV = Date.now();   // har yuklanishda yangi — yangilangan posterlar ko'rinadi
+  // posterV faqat tahrirdan keyin yangilanadi (oddiy ko'rishda brauzer keshi tez ishlasin)
   const totalPages = Math.ceil(d.movies.length / PER_PAGE) || 1;
   curPage = keepView ? Math.min(prevPage, totalPages) : 1;
   cnt.textContent = d.movies.length + ' ta natija';
@@ -723,6 +723,7 @@ async function saveEdit() {
   const d = await r.json();
   if (d.ok) {
     msg.innerHTML = '<div class="alert alert-ok">✅ Saqlandi!</div>';
+    posterV = Date.now();   // tahrirlangan poster yangilansin
     setTimeout(() => { closeModal(); search(true); }, 700);
   } else {
     msg.innerHTML = `<div class="alert alert-err">❌ ${d.error||'Xato'}</div>`;
