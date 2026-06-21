@@ -43,6 +43,16 @@ _poster_lock = threading.Lock()
 _POSTER_TTL = 6 * 3600          # 6 soat
 _POSTER_MAX = 300               # eng ko'pi bilan 300 ta poster xotirada
 
+def _yt_id(url):
+    """YouTube havola yoki ID'dan 11 belgili video ID ajratadi. Topilmasa ''."""
+    if not url:
+        return ""
+    url = str(url).strip()
+    if re.fullmatch(r"[A-Za-z0-9_-]{11}", url):
+        return url
+    m = re.search(r"(?:youtu\.be/|youtube\.com/(?:watch\?v=|embed/|v/|shorts/))([A-Za-z0-9_-]{11})", url)
+    return m.group(1) if m else ""
+
 # ── Baza (pg8000 — sof Python, libpq kerak emas) ──────────────────────────────
 def _parse_db_url(url):
     """postgresql://user:pass@host:port/dbname → pg8000 parametrlari."""
@@ -81,6 +91,7 @@ def init_db():
         with get_conn() as conn:
             cur = conn.cursor()
             cur.execute("ALTER TABLE movies ADD COLUMN IF NOT EXISTS poster_url TEXT")
+            cur.execute("ALTER TABLE movies ADD COLUMN IF NOT EXISTS trailer TEXT")
             # Fon effektlari sozlamalari uchun kalit-qiymat jadvali
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS site_settings (
@@ -503,29 +514,47 @@ def service_worker():
 @app.route("/sitemap.xml")
 def sitemap():
     base = BASE_URL
-    urls = [{"loc": f"{base}/", "priority": "1.0", "changefreq": "daily"}]
+    rows = []
     try:
         with get_conn() as conn:
             cur = conn.cursor()
-            cur.execute("SELECT id, created_at FROM movies ORDER BY created_at DESC LIMIT 2000")
-            for row in cur.fetchall():
-                mid, created = row[0], row[1]
-                entry = {"loc": f"{base}/kino/{mid}", "priority": "0.8", "changefreq": "weekly"}
-                if created:
-                    entry["lastmod"] = created.strftime("%Y-%m-%d")
-                urls.append(entry)
+            cur.execute("SELECT id, created_at, title, description, trailer "
+                        "FROM movies ORDER BY created_at DESC LIMIT 2000")
+            rows = cur.fetchall()
     except Exception as e:
         log.warning("sitemap: %s", e)
-    parts = []
-    for u in urls:
-        bits = [f"<loc>{u['loc']}</loc>"]
-        if "lastmod" in u:
-            bits.append(f"<lastmod>{u['lastmod']}</lastmod>")
-        bits.append(f"<changefreq>{u['changefreq']}</changefreq>")
-        bits.append(f"<priority>{u['priority']}</priority>")
-        parts.append("<url>" + "".join(bits) + "</url>")
+
+    def esc(s):
+        s = str(s or "")
+        return (s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                 .replace('"', "&quot;").replace("'", "&apos;"))
+
+    parts = ["<url><loc>" + base + "/</loc><changefreq>daily</changefreq><priority>1.0</priority></url>"]
+    has_video = False
+    for row in rows:
+        mid, created = row[0], row[1]
+        title, desc, trailer = row[2], row[3], (row[4] if len(row) > 4 else "")
+        loc = f"{base}/kino/{mid}"
+        lastmod = f"<lastmod>{created.strftime('%Y-%m-%d')}</lastmod>" if created else ""
+        yid = _yt_id(trailer)
+        video = ""
+        if yid:  # FAQAT haqiqiy treyler bo'lsa — video belgisi (xatosiz)
+            has_video = True
+            ttl = esc(title)[:100] if title else f"Film #{mid}"
+            dsc = esc(desc)[:1900] if desc else f"{ttl} treyler."
+            video = ("<video:video>"
+                     f"<video:thumbnail_loc>https://img.youtube.com/vi/{yid}/hqdefault.jpg</video:thumbnail_loc>"
+                     f"<video:title>{ttl}</video:title>"
+                     f"<video:description>{dsc}</video:description>"
+                     f"<video:player_loc>https://www.youtube.com/embed/{yid}</video:player_loc>"
+                     "</video:video>")
+        parts.append(f"<url><loc>{loc}</loc>{lastmod}"
+                     f"<changefreq>weekly</changefreq><priority>0.8</priority>{video}</url>")
     items = "".join(parts)
-    xml = f'<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">{items}</urlset>'
+    ns_video = ' xmlns:video="http://www.google.com/schemas/sitemap-video/1.1"' if has_video else ''
+    xml = ('<?xml version="1.0" encoding="UTF-8"?>'
+           f'<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"{ns_video}>'
+           f'{items}</urlset>')
     return Response(xml, mimetype="application/xml")
 
 @app.route("/sitemap_video.xml")
@@ -589,7 +618,7 @@ def movie_page(mid):
             cur = conn.cursor()
             cur.execute("""
                 SELECT id, title, genre, year, language, quality, description,
-                       COALESCE(content_type,'movie'), poster_id, poster_url
+                       COALESCE(content_type,'movie'), poster_id, poster_url, trailer
                 FROM movies WHERE id=%s
             """, (mid,))
             r = cur.fetchone()
@@ -609,6 +638,9 @@ def movie_page(mid):
     page_title = f"{title} ({year}) — o'zbek tilida | ASTRA" if year else f"{title} — o'zbek tilida | ASTRA"
     canonical = f"{BASE_URL}/kino/{mid}"
     abs_poster = poster if poster.startswith("http") else (f"{BASE_URL}{poster}" if poster else "")
+    trailer_id = _yt_id(r[10] if len(r) > 10 else "")
+    yt_embed = f"https://www.youtube.com/embed/{trailer_id}" if trailer_id else ""
+    yt_thumb = f"https://img.youtube.com/vi/{trailer_id}/hqdefault.jpg" if trailer_id else ""
 
     # Boshqa kinolar (foydalanuvchi saytni kashf qilishi + ichki havolalar SEO uchun)
     more = []
@@ -664,28 +696,44 @@ def movie_page(mid):
         except Exception: pass
 
     # VideoObject — Google Search Console "Video" hisoboti uchun ZARUR
-    # Bu bo'lmasа, sahifadagi video Google tomonidan aniqlanmaydi
-    video_ld = {
-        "@context": "https://schema.org",
-        "@type": "VideoObject",
-        "name": title,
-        "description": desc,
-        "thumbnailUrl": abs_poster if abs_poster else f"{BASE_URL}/static/icon-512.png",
-        "uploadDate": (str(int(year)) + "-01-01") if year else "2024-01-01",
-        "embedUrl": bot_link,
-        "url": canonical,
-        "inLanguage": "uz",
-        "potentialAction": {
-            "@type": "WatchAction",
-            "target": bot_link
+    # VideoObject — FAQAT haqiqiy treyler (YouTube) bo'lganda. Aks holda Google xato beradi.
+    video_jsonld = ""
+    if trailer_id:
+        video_ld = {
+            "@context": "https://schema.org",
+            "@type": "VideoObject",
+            "name": f"{title} — treyler",
+            "description": desc or f"{title} treyler",
+            "thumbnailUrl": yt_thumb,
+            "uploadDate": (str(int(year)) + "-01-01") if year else "2024-01-01",
+            "embedUrl": yt_embed,
+            "contentUrl": f"https://www.youtube.com/watch?v={trailer_id}",
+            "url": canonical,
+            "inLanguage": "uz",
         }
-    }
-    if abs_poster:
-        video_ld["thumbnailUrl"] = abs_poster
+        video_jsonld = _json.dumps(video_ld, ensure_ascii=False)
 
-    # Ikkalasini bitta sahifaga joylashtiramiz
+    # Sahifa struktura ma'lumoti
     jsonld = _json.dumps(ld, ensure_ascii=False)
-    video_jsonld = _json.dumps(video_ld, ensure_ascii=False)
+    video_script = f'<script type="application/ld+json">{video_jsonld}</script>' if video_jsonld else ''
+
+    # Treyler bloki — bosilganda yuklanadi (sahifa tez ochilishi uchun iframe darrov yuklanmaydi)
+    if trailer_id:
+        poster_bg = abs_poster or yt_thumb
+        trailer_html = (
+            '<section style="padding:8px 20px 4px;">'
+            '<h2 style="font-family:Bebas Neue,sans-serif;font-size:24px;letter-spacing:1px;margin:0 0 12px;">🎬 Treyler</h2>'
+            f'<div class="trailer-box" data-yt="{trailer_id}" onclick="loadTrailer(this)" '
+            'style="position:relative;max-width:760px;aspect-ratio:16/9;border-radius:12px;overflow:hidden;cursor:pointer;'
+            f'background:#000 center/cover no-repeat url(&quot;{e(poster_bg)}&quot;);">'
+            '<div style="position:absolute;inset:0;background:rgba(0,0,0,0.35);"></div>'
+            '<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;">'
+            '<div style="width:68px;height:68px;border-radius:50%;background:rgba(229,9,20,0.92);display:flex;'
+            'align-items:center;justify-content:center;color:#fff;font-size:26px;padding-left:5px;">▶</div></div>'
+            '</div></section>'
+        )
+    else:
+        trailer_html = ''
     page = f"""<!DOCTYPE html>
 <html lang="uz">
 <head>
@@ -713,7 +761,7 @@ def movie_page(mid):
 <meta name="twitter:description" content="{e(desc)}">
 {f'<meta name="twitter:image" content="{e(abs_poster)}">' if abs_poster else ''}
 <script type="application/ld+json">{jsonld}</script>
-<script type="application/ld+json">{video_jsonld}</script>
+{video_script}
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/static/style.css">
 </head>
@@ -733,8 +781,16 @@ def movie_page(mid):
       <p style="margin-top:24px;"><a href="/" style="color:#a3a3a3;">← Barcha kinolar</a></p>
     </div>
   </article>
+  {trailer_html}
   {more_html}
 </main>
+<script>
+function loadTrailer(el){{
+  var id = el.getAttribute('data-yt');
+  if(!id) return;
+  el.innerHTML = '<iframe width="100%" height="100%" src="https://www.youtube-nocookie.com/embed/'+id+'?autoplay=1&rel=0" title="Treyler" frameborder="0" allow="autoplay; encrypted-media; fullscreen" allowfullscreen style="position:absolute;inset:0;width:100%;height:100%;border:0;"></iframe>';
+}}
+</script>
 </body>
 </html>"""
     return Response(page, mimetype="text/html")
@@ -841,6 +897,8 @@ def admin_tmdb():
                 "genre": ", ".join([g for g in genres if g]),
                 "description": (it.get("overview") or "")[:500],
                 "rating": round(it.get("vote_average") or 0, 1),
+                "tmdb_id": it.get("id"),
+                "media_type": mt,
             })
         return out
 
@@ -861,6 +919,43 @@ def admin_tmdb():
         return jsonify({"error": f"TMDB xatosi: {code}"}), 502
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+# ── TMDB treyler (YouTube) — TMDB id bo'yicha ──
+@app.route("/api/admin/tmdb-trailer", methods=["POST"])
+def admin_tmdb_trailer():
+    d = request.get_json() or {}
+    if not _check(d):
+        return jsonify({"error": "ruxsat yo'q"}), 403
+    if not (TMDB_TOKEN or TMDB_KEY):
+        return jsonify({"trailer": ""})
+    tmdb_id = d.get("tmdb_id")
+    media = "tv" if d.get("media_type") == "tv" else "movie"
+    if not tmdb_id:
+        return jsonify({"trailer": ""})
+    try:
+        # avval asl tilda (treylerlar ko'pincha en), keyin umumiy
+        key = ""
+        for lang in ("en-US", None):
+            params = {} if lang is None else {"language": lang}
+            data = _tmdb_get(f"/{media}/{int(tmdb_id)}/videos", params)
+            vids = data.get("results", [])
+            # YouTube + Trailer ustuvor
+            best = None
+            for v in vids:
+                if v.get("site") != "YouTube":
+                    continue
+                if v.get("type") == "Trailer":
+                    best = v
+                    break
+                if best is None and v.get("type") in ("Teaser", "Clip"):
+                    best = v
+            if best:
+                key = best.get("key", "")
+                break
+        return jsonify({"trailer": key})
+    except Exception as e:
+        log.warning("tmdb-trailer: %s", e)
+        return jsonify({"trailer": ""})
 
 # ── TMDB rasm proksi (image.tmdb.org bloklangan bo'lsa, server orqali uzatadi) ──
 @app.route("/api/timg/<size>/<path:fname>")
@@ -930,18 +1025,20 @@ def admin_edit():
         year = int(d.get("year")) if d.get("year") else None
     except Exception:
         year = None
+    # Treyler: YouTube havola yoki ID → faqat ID saqlaymiz (toza)
+    trailer_id = _yt_id(d.get("trailer") or "")
     try:
         with get_conn() as conn:
             cur = conn.cursor()
             cur.execute("""
                 UPDATE movies SET title=%s, genre=%s, year=%s, language=%s,
-                       quality=%s, content_type=%s, description=%s, poster_url=%s
+                       quality=%s, content_type=%s, description=%s, poster_url=%s, trailer=%s
                 WHERE id=%s
             """, (title, (d.get("genre") or "").strip(), year,
                   (d.get("language") or "").strip(), (d.get("quality") or "").strip(),
                   (d.get("content_type") or "movie").strip(),
                   (d.get("description") or "").strip(),
-                  (d.get("poster_url") or "").strip(), int(mid)))
+                  (d.get("poster_url") or "").strip(), trailer_id, int(mid)))
             conn.commit()
         return jsonify({"ok": True})
     except Exception as e:
@@ -958,7 +1055,7 @@ def admin_get():
             cur = conn.cursor()
             cur.execute("""
                 SELECT id, title, genre, year, language, quality,
-                       COALESCE(content_type,'movie'), description, poster_url
+                       COALESCE(content_type,'movie'), description, poster_url, trailer
                 FROM movies WHERE id=%s
             """, (int(d.get("id")),))
             r = cur.fetchone()
@@ -967,7 +1064,7 @@ def admin_get():
         return jsonify({"movie": {
             "id": r[0], "title": r[1], "genre": r[2] or "", "year": r[3] or "",
             "language": r[4] or "", "quality": r[5] or "", "type": r[6],
-            "description": r[7] or "", "poster_url": r[8] or "",
+            "description": r[7] or "", "poster_url": r[8] or "", "trailer": r[9] or "",
         }})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
