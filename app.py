@@ -622,6 +622,43 @@ def movie_page(mid):
     page_title = f"{title} ({year}) — o'zbek tilida | ASTRA" if year else f"{title} — o'zbek tilida | ASTRA"
     canonical = f"{BASE_URL}/kino/{mid}"
     abs_poster = poster if poster.startswith("http") else (f"{BASE_URL}{poster}" if poster else "")
+
+    # Boshqa kinolar (foydalanuvchi saytni kashf qilishi + ichki havolalar SEO uchun)
+    more = []
+    try:
+        with get_conn() as conn:
+            cur = conn.cursor()
+            g1 = genre.split(",")[0].strip() if genre else ""
+            if g1:
+                cur.execute("SELECT id, title, poster_id, poster_url FROM movies "
+                            "WHERE id<>%s AND genre ILIKE %s "
+                            "ORDER BY views DESC NULLS LAST, created_at DESC LIMIT 12",
+                            (mid, f"%{g1}%"))
+                more = cur.fetchall()
+            if len(more) < 6:
+                cur.execute("SELECT id, title, poster_id, poster_url FROM movies "
+                            "WHERE id<>%s ORDER BY created_at DESC LIMIT 12", (mid,))
+                more = cur.fetchall()
+    except Exception:
+        more = []
+    more_cards = []
+    for mm in more[:12]:
+        m_id, m_title, m_pid, m_purl = mm[0], mm[1], mm[2], mm[3]
+        mp = m_purl if m_purl else (f"/api/poster/{m_id}" if m_pid else "/static/no-poster.svg")
+        more_cards.append(
+            f'<a href="/kino/{m_id}" style="text-decoration:none;color:inherit;width:130px;flex:0 0 auto;">'
+            f'<img src="{e(mp)}" alt="{e(m_title or "")}" loading="lazy" '
+            f'style="width:130px;height:195px;object-fit:cover;border-radius:10px;background:#1a1a1a;display:block;">'
+            f'<div style="font-size:12.5px;margin-top:7px;line-height:1.35;color:#cfcfcf;">{e((m_title or "")[:42])}</div>'
+            f'</a>'
+        )
+    more_html = (
+        '<section style="padding:10px 20px 48px;">'
+        '<h2 style="font-family:Bebas Neue,sans-serif;font-size:26px;letter-spacing:1px;margin:0 0 16px;">Boshqa kinolar</h2>'
+        '<div style="display:flex;gap:14px;overflow-x:auto;padding-bottom:10px;scrollbar-width:thin;">'
+        + "".join(more_cards) + '</div></section>'
+    ) if more_cards else ''
+
     # JSON-LD — Google "boyitilgan natija" uchun struktura ma'lumoti
     import json as _json
     schema_type = {"series":"TVSeries","anime":"TVSeries","cartoon":"TVSeries"}.get(ctype, "Movie")
@@ -668,6 +705,10 @@ def movie_page(mid):
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+<link rel="icon" type="image/png" sizes="192x192" href="/static/icon-192.png">
+<link rel="icon" type="image/png" sizes="512x512" href="/static/icon-512.png">
+<link rel="shortcut icon" href="/static/icon-192.png">
+<link rel="apple-touch-icon" href="/static/icon-192.png">
 <meta name="google-site-verification" content="NWyfq_vRf53C8JMiGFZ8xL666JbpZg4NJAfKzabPoik" />
 <title>{e(page_title)}</title>
 <meta name="description" content="{e(desc)}">
@@ -705,6 +746,7 @@ def movie_page(mid):
       <p style="margin-top:24px;"><a href="/" style="color:#a3a3a3;">← Barcha kinolar</a></p>
     </div>
   </article>
+  {more_html}
 </main>
 </body>
 </html>"""
