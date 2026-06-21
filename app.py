@@ -12,6 +12,7 @@ import hmac
 import hashlib
 import time
 import json
+import threading
 from urllib.parse import urlparse, unquote
 import pg8000.dbapi
 import requests
@@ -35,6 +36,12 @@ app = Flask(__name__, static_folder="static")
 # Sessiya imzosi uchun maxfiy kalit (SECRET_KEY bo'lmasa BOT_TOKEN'dan barqaror hosil qilinadi)
 app.secret_key = os.getenv("SECRET_KEY") or hashlib.sha256(
     (BOT_TOKEN or "astra-fallback-secret").encode()).hexdigest()
+
+# ── Poster server keshi (xotirada) — Telegram'ga takror bormaslik uchun ────────
+_poster_cache = {}              # poster_id -> (bytes, content_type, timestamp)
+_poster_lock = threading.Lock()
+_POSTER_TTL = 6 * 3600          # 6 soat
+_POSTER_MAX = 300               # eng ko'pi bilan 300 ta poster xotirada
 
 # ── Baza (pg8000 — sof Python, libpq kerak emas) ──────────────────────────────
 def _parse_db_url(url):
@@ -261,7 +268,7 @@ def api_movie(mid):
 # ── Poster proxy (Telegram file_id → rasm) ────────────────────────────────────
 @app.route("/api/poster/<int:mid>")
 def api_poster(mid):
-    """Telegram'dagi poster_id rasmni web uchun proxy qiladi."""
+    """Telegram'dagi poster_id rasmni web uchun proxy qiladi (server keshi bilan)."""
     if not BOT_TOKEN:
         log.warning("Poster: BOT_TOKEN yo'q! Railway Variables'ga BOT_TOKEN qo'shing.")
         return redirect("/static/no-poster.svg")
@@ -277,9 +284,16 @@ def api_poster(mid):
             return redirect(r[1])
         if not r[0]:
             return redirect("/static/no-poster.svg")
+        pid = r[0]
+        now = time.time()
+        # Server keshidan (xotirada) — Telegram'ga qaytadan bormaymiz
+        hit = _poster_cache.get(pid)
+        if hit and (now - hit[2] < _POSTER_TTL):
+            return Response(hit[0], mimetype=hit[1],
+                            headers={"Cache-Control": "public, max-age=604800"})
         # Telegram'dan file path olamiz
         fr = requests.get(f"https://api.telegram.org/bot{BOT_TOKEN}/getFile",
-                          params={"file_id": r[0]}, timeout=10).json()
+                          params={"file_id": pid}, timeout=10).json()
         if not fr.get("ok"):
             log.warning("Poster getFile xato (id=%s): %s", mid, fr.get("description", fr))
             return redirect("/static/no-poster.svg")
@@ -289,8 +303,17 @@ def api_poster(mid):
             log.warning("Poster yuklab bo'lmadi (id=%s): status %s", mid, img.status_code)
             return redirect("/static/no-poster.svg")
         ct = img.headers.get("Content-Type", "image/jpeg")
+        # Keshga saqlaymiz (hajmni cheklab)
+        try:
+            with _poster_lock:
+                if len(_poster_cache) >= _POSTER_MAX:
+                    oldest = min(_poster_cache, key=lambda k: _poster_cache[k][2])
+                    _poster_cache.pop(oldest, None)
+                _poster_cache[pid] = (img.content, ct, now)
+        except Exception:
+            pass
         return Response(img.content, mimetype=ct,
-                        headers={"Cache-Control": "public, max-age=86400"})
+                        headers={"Cache-Control": "public, max-age=604800"})
     except Exception as e:
         log.warning("Poster xato (id=%s): %s", mid, e)
         return redirect("/static/no-poster.svg")
