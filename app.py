@@ -111,8 +111,22 @@ def init_db():
                     PRIMARY KEY (user_id, item_type, item_id)
                 )
             """)
+            # Kino izohlari (fikr bildirish) — telegram foydalanuvchi bo'yicha
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS reviews (
+                    id SERIAL PRIMARY KEY,
+                    movie_id BIGINT NOT NULL,
+                    user_id BIGINT NOT NULL,
+                    user_name TEXT,
+                    user_photo TEXT,
+                    rating SMALLINT,
+                    text TEXT NOT NULL,
+                    created_at TIMESTAMP DEFAULT NOW()
+                )
+            """)
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_reviews_movie ON reviews(movie_id)")
             conn.commit()
-        log.info("Kino baza tayyor (poster_url + site_settings + favorites)")
+        log.info("Kino baza tayyor (poster_url + site_settings + favorites + reviews)")
     except Exception as e:
         log.warning("init_db: %s", e)
 
@@ -489,6 +503,80 @@ def api_favorites():
         return jsonify({"ok": True})
     except Exception as e:
         log.warning("favorites mod: %s", e)
+        return jsonify({"error": "xato"}), 500
+
+# ── Kino izohlari (fikr bildirish) ────────────────────────────────────────────
+@app.route("/api/reviews/<int:mid>", methods=["GET"])
+def api_reviews_get(mid):
+    """Kino izohlari (hammaga ochiq). Kirgan foydalanuvchi o'z izohini ko'radi (mine)."""
+    me = session.get("tg_id")
+    try:
+        with get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT id, user_id, user_name, user_photo, rating, text, created_at "
+                        "FROM reviews WHERE movie_id=%s ORDER BY created_at DESC LIMIT 200", (mid,))
+            rows = cur.fetchall()
+        out = []
+        for r in rows:
+            out.append({
+                "id": r[0],
+                "name": r[2] or "Foydalanuvchi",
+                "photo": r[3] or "",
+                "rating": r[4] or 0,
+                "text": r[5] or "",
+                "date": r[6].strftime("%Y-%m-%d") if r[6] else "",
+                "mine": bool(me and int(r[1]) == int(me)),
+            })
+        return jsonify({"reviews": out, "count": len(out), "logged_in": bool(me)})
+    except Exception as e:
+        log.warning("reviews get: %s", e)
+        return jsonify({"reviews": [], "count": 0, "logged_in": bool(me)})
+
+
+@app.route("/api/reviews", methods=["POST"])
+def api_reviews_add():
+    uid = session.get("tg_id")
+    if not uid:
+        return jsonify({"error": "login kerak", "logged_in": False}), 401
+    data = request.get_json(silent=True) or {}
+    mid = data.get("movie_id")
+    text = (data.get("text") or "").strip()
+    try:
+        rating = int(data.get("rating") or 0)
+    except Exception:
+        rating = 0
+    rating = max(0, min(5, rating))
+    if not mid or not text:
+        return jsonify({"error": "matn kerak"}), 400
+    text = text[:1000]
+    try:
+        with get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("INSERT INTO reviews (movie_id, user_id, user_name, user_photo, rating, text) "
+                        "VALUES (%s, %s, %s, %s, %s, %s) RETURNING id",
+                        (int(mid), uid, session.get("tg_name", ""), session.get("tg_photo", ""),
+                         rating, text))
+            rid = cur.fetchone()[0]
+            conn.commit()
+        return jsonify({"ok": True, "id": rid})
+    except Exception as e:
+        log.warning("reviews add: %s", e)
+        return jsonify({"error": "xato"}), 500
+
+
+@app.route("/api/reviews/<int:rid>", methods=["DELETE"])
+def api_reviews_del(rid):
+    uid = session.get("tg_id")
+    if not uid:
+        return jsonify({"error": "login kerak"}), 401
+    try:
+        with get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("DELETE FROM reviews WHERE id=%s AND user_id=%s", (rid, uid))
+            conn.commit()
+        return jsonify({"ok": True})
+    except Exception as e:
+        log.warning("reviews del: %s", e)
         return jsonify({"error": "xato"}), 500
 
 # ══════════════════ SEO (Google uchun) ══════════════════
