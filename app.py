@@ -231,12 +231,12 @@ def api_movies():
                 where.append(f"id IN ({ph})")
                 params += id_list
         order = {
-            "new": "created_at DESC",
-            "old": "created_at ASC",
-            "popular": "COALESCE(views,0) DESC",
-            "rating": "rating DESC NULLS LAST",
+            "new": "created_at DESC NULLS LAST, id DESC",
+            "old": "created_at ASC NULLS LAST, id ASC",
+            "popular": "COALESCE(views,0) DESC, id DESC",
+            "rating": "rating DESC NULLS LAST, id DESC",
             "title": "title ASC",
-        }.get(sort, "created_at DESC")
+        }.get(sort, "created_at DESC NULLS LAST, id DESC")
         wsql = (" WHERE " + " AND ".join(where)) if where else ""
         with get_conn() as conn:
             cur = conn.cursor()
