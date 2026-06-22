@@ -407,6 +407,72 @@ function playTrailer(el){
   el.innerHTML='<iframe src="https://www.youtube-nocookie.com/embed/'+id+'?autoplay=1&rel=0" title="Treyler" frameborder="0" allow="autoplay; encrypted-media; fullscreen" allowfullscreen></iframe>';
   el.onclick=null;
 }
+// ── Izohlar (fikr bildirish) ──
+var _revStars = 0;
+function loadReviews(mid){
+  var box = document.getElementById('mmReviews');
+  if(!box) return;
+  box.innerHTML = '<div style="color:#777;font-size:13px;padding:10px 0;">Izohlar yuklanmoqda...</div>';
+  fetch('/api/reviews/'+mid).then(function(r){return r.json();}).then(function(d){
+    renderReviews(box, mid, d);
+  }).catch(function(){ box.innerHTML=''; });
+}
+function renderReviews(box, mid, d){
+  _revStars = 0;
+  var html = '<div class="rev-head">💬 Izohlar ('+(d.count||0)+')</div>';
+  if (d.logged_in){
+    html += '<div class="rev-form">'
+      + '<div class="rev-stars" id="revStars">'
+      + [1,2,3,4,5].map(function(n){return '<span data-n="'+n+'" onclick="setRevStar('+n+')">☆</span>';}).join('')
+      + '</div>'
+      + '<textarea id="revText" maxlength="1000" placeholder="Bu kino haqida fikringiz..."></textarea>'
+      + '<button class="rev-send" onclick="submitReview('+mid+')">Yuborish</button>'
+      + '</div>';
+  } else {
+    html += '<div class="rev-login">Izoh qoldirish uchun <a href="#" onclick="openLogin();return false;">Telegram orqali kiring</a>.</div>';
+  }
+  if (d.reviews && d.reviews.length){
+    html += '<div class="rev-list">';
+    d.reviews.forEach(function(rv){
+      var stars = rv.rating ? '<span class="rev-rate">'+'★'.repeat(rv.rating)+'☆'.repeat(5-rv.rating)+'</span>' : '';
+      var av = rv.photo ? '<img src="'+esc(rv.photo)+'" onerror="this.style.display=\'none\'">' : '<div class="rev-av-ph">'+esc((rv.name||'?').charAt(0).toUpperCase())+'</div>';
+      var del = rv.mine ? '<button class="rev-del" onclick="delReview('+rv.id+','+mid+')">🗑</button>' : '';
+      html += '<div class="rev-item"><div class="rev-av">'+av+'</div>'
+        + '<div class="rev-main"><div class="rev-top"><b>'+esc(rv.name)+'</b> '+stars+'<span class="rev-date">'+esc(rv.date)+'</span>'+del+'</div>'
+        + '<div class="rev-text">'+esc(rv.text)+'</div></div></div>';
+    });
+    html += '</div>';
+  } else {
+    html += '<div class="rev-empty">Hali izoh yo\'q. Birinchi bo\'lib fikr bildiring!</div>';
+  }
+  box.innerHTML = html;
+}
+function setRevStar(n){
+  _revStars = n;
+  var el = document.getElementById('revStars');
+  if(!el) return;
+  el.querySelectorAll('span').forEach(function(s){
+    s.textContent = parseInt(s.getAttribute('data-n')) <= n ? '★' : '☆';
+  });
+}
+function submitReview(mid){
+  var t = (document.getElementById('revText')||{}).value || '';
+  t = t.trim();
+  if(!t) return;
+  fetch('/api/reviews', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ movie_id: mid, text: t, rating: _revStars })
+  }).then(function(r){return r.json();}).then(function(d){
+    if(d.ok){ loadReviews(mid); }
+    else if(d.logged_in===false){ openLogin(); }
+  }).catch(function(){});
+}
+function delReview(rid, mid){
+  fetch('/api/reviews/'+rid, {method:'DELETE'}).then(function(r){return r.json();}).then(function(){
+    loadReviews(mid);
+  }).catch(function(){});
+}
+
 async function openMovie(id){
   const modal = document.getElementById('movieModal');
   const box = document.getElementById('movieBox');
@@ -450,8 +516,10 @@ async function openMovie(id){
           ${isSeries?'📺 To\'liq qismlarni botda ko\'rish':'🎬 To\'liqini botda ko\'rish / yuklab olish'}
         </a>
         <p class="mm-note">👁 ${m.views} marta ko'rilgan · Telegram bot orqali ochiladi</p>
+        <div id="mmReviews" class="mm-reviews"></div>
         ${similarHtml(m)}
       </div>`;
+    loadReviews(m.id);
   } catch(e){ box.innerHTML = '<div class="state-msg">❌ Xatolik</div>'; }
 }
 
