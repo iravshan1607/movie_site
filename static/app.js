@@ -178,8 +178,9 @@ function cardHtml(m){
   const p = posterUrl(m);
   const bg = p ? `<img src="${p}" loading="lazy" onerror="this.remove()">` : '';
   const fav = isFav(m.id) ? ' faved' : '';
+  const rate = m.rating ? `<span class="card-rate">⭐ ${(+m.rating).toFixed(1)}</span>` : '';
   return `<a href="/kino/${m.id}" class="card ${pal(m.id)}" onclick="event.preventDefault();openMovie(${m.id})">
-    <div class="card-img">${bg}<span class="card-name">${esc(m.title)}</span></div>
+    <div class="card-img">${bg}${rate}<span class="card-name">${esc(m.title)}</span></div>
     <button class="fav-btn${fav}" onclick="event.stopPropagation();event.preventDefault();toggleFav(${m.id},this)" aria-label="Sevimlilarga qo'shish"><svg viewBox="0 0 24 24"><path d="M12 21s-8-5.3-8-11a4.5 4.5 0 0 1 8-2.8A4.5 4.5 0 0 1 20 10c0 5.7-8 11-8 11z"/></svg></button>
     <div class="card-overlay"><div class="card-play"><svg viewBox="0 0 24 24" fill="#000"><path d="M8 5v14l11-7z"/></svg></div></div>
   </a>`;
@@ -277,7 +278,7 @@ async function loadHome(){
     const listTitle = (curType==='all' && curGenre==='all')
       ? {new:'🆕 Yangi qo\'shildi', views:'🔥 Eng ko\'p ko\'rilgan', year:'📅 Yil bo\'yicha'}[curSort]
       : 'Natijalar';
-    html += rowHtml(listTitle, sorted.slice(0, 18).map(cardHtml).join(''));
+    html += rowHtml(listTitle, sorted.slice(0, 10).map(cardHtml).join(''));
 
     // Qo'shimcha qatorlar — faqat "Yangi" saralash + Barchasi rejimida
     if (curSort === 'new' && curType === 'all' && curGenre === 'all') {
@@ -574,6 +575,19 @@ document.addEventListener('click', e => {
 // Boshlash
 document.querySelectorAll('[data-nav]').forEach(a=>a.classList.toggle('nav-active', a.getAttribute('data-nav')==='all'));
 loadHome();
+
+// "Yuqoriga" tugmasi
+(function(){
+  var b = document.createElement('button');
+  b.className = 'to-top';
+  b.setAttribute('aria-label', 'Yuqoriga');
+  b.innerHTML = '↑';
+  b.onclick = function(){ window.scrollTo({top:0, behavior:'smooth'}); };
+  document.body.appendChild(b);
+  window.addEventListener('scroll', function(){
+    if (window.scrollY > 500) b.classList.add('show'); else b.classList.remove('show');
+  }, {passive:true});
+})();
 
 // Google qidiruv qutisi / ulashilgan havola: astramovie.com/?q=...
 (function(){
