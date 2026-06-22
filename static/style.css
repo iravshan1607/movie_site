@@ -1155,3 +1155,25 @@
   }
   .tg-notice button:hover { background: rgba(255,255,255,0.1); color: #fff; }
   @media (max-width: 600px) { .tg-notice { font-size: 13px; padding: 11px 13px; } }
+
+/* Karta reyting belgisi */
+.card-rate {
+  position: absolute; top: 8px; left: 8px; z-index: 3;
+  background: rgba(0,0,0,0.72); color: #ffc107;
+  font-size: 12px; font-weight: 700;
+  padding: 3px 8px; border-radius: 20px;
+  backdrop-filter: blur(2px);
+}
+
+/* "Yuqoriga" tugmasi */
+.to-top {
+  position: fixed; right: 20px; bottom: 22px; z-index: 90;
+  width: 46px; height: 46px; border-radius: 50%;
+  background: var(--red, #e50914); color: #fff;
+  border: none; font-size: 22px; cursor: pointer;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.45);
+  opacity: 0; pointer-events: none; transform: translateY(12px);
+  transition: opacity 0.25s, transform 0.25s;
+}
+.to-top.show { opacity: 1; pointer-events: auto; transform: translateY(0); }
+.to-top:hover { filter: brightness(1.12); }
