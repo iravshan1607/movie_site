@@ -14,7 +14,7 @@ import time
 import json
 import html
 import threading
-from urllib.parse import urlparse, unquote
+from urllib.parse import urlparse, unquote, quote
 import pg8000.dbapi
 import requests
 from flask import Flask, request, jsonify, send_from_directory, Response, redirect, session
@@ -1109,6 +1109,29 @@ def sitemap():
                      "</video:video>")
         parts.append(f"<url><loc>{loc}</loc>{lastmod}"
                      f"<changefreq>weekly</changefreq><priority>0.8</priority>{video}</url>")
+    # Kategoriya / Top / Janr sahifalari (crawlable SEO sahifalari)
+    for ct in ("movie", "series", "anime", "cartoon"):
+        parts.append(f"<url><loc>{base}/kategoriya/{ct}</loc>"
+                     "<changefreq>daily</changefreq><priority>0.7</priority></url>")
+    parts.append(f"<url><loc>{base}/top</loc><changefreq>daily</changefreq><priority>0.7</priority></url>")
+    try:
+        with get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT genre FROM movies WHERE genre IS NOT NULL AND genre <> ''")
+            seen = set()
+            for (g,) in cur.fetchall():
+                for part in str(g).split(","):
+                    name = part.strip()
+                    if name and name.lower() not in seen:
+                        seen.add(name.lower())
+                        parts.append(f"<url><loc>{base}/janr/{quote(name)}</loc>"
+                                     "<changefreq>weekly</changefreq><priority>0.6</priority></url>")
+                        if len(seen) >= 40:
+                            break
+                if len(seen) >= 40:
+                    break
+    except Exception as ex:
+        log.warning("sitemap genres: %s", ex)
     items = "".join(parts)
     ns_video = ' xmlns:video="http://www.google.com/schemas/sitemap-video/1.1"' if has_video else ''
     xml = ('<?xml version="1.0" encoding="UTF-8"?>'
@@ -1419,8 +1442,179 @@ function astraShare(){{
 </html>"""
     return Response(page, mimetype="text/html")
 
-# ══════════════════ ADMIN ══════════════════
-def _check(d):
+# ══════════════════ SEO LISTING (kategoriya / janr / top) ══════════════════
+_TYPE_UZ = {"movie": "Kinolar", "series": "Seriallar", "anime": "Anime", "cartoon": "Multfilmlar"}
+_TYPE_UZ_ONE = {"movie": "Kino", "series": "Serial", "anime": "Anime", "cartoon": "Multfilm"}
+
+def _page_window(cur, total):
+    s = sorted({p for p in [1, total, cur, cur-1, cur-2, cur+1, cur+2] if 1 <= p <= total})
+    out, prev = [], 0
+    for p in s:
+        if prev and p - prev > 1:
+            out.append("...")
+        out.append(p); prev = p
+    return out
+
+def _list_movies_seo(ctype=None, genre=None, rated=False, sort="new", page=1, per=24):
+    where, params = [], []
+    if ctype:
+        where.append("COALESCE(content_type,'movie') = %s"); params.append(ctype)
+    if genre:
+        where.append("genre ILIKE %s"); params.append(f"%{genre}%")
+    if rated:
+        where.append("rating IS NOT NULL AND rating > 0")
+    wsql = ("WHERE " + " AND ".join(where)) if where else ""
+    order = {"new": "created_at DESC", "rating": "rating DESC NULLS LAST",
+             "popular": "views DESC NULLS LAST"}.get(sort, "created_at DESC")
+    offset = (page - 1) * per
+    rows, total = [], 0
+    try:
+        with get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute(f"SELECT COUNT(*) FROM movies {wsql}", params)
+            total = cur.fetchone()[0] or 0
+            cur.execute(f"SELECT id, title, year, poster_url, poster_id, rating, content_type "
+                        f"FROM movies {wsql} ORDER BY {order} LIMIT %s OFFSET %s",
+                        params + [per, offset])
+            rows = cur.fetchall()
+    except Exception as ex:
+        log.warning("list seo: %s", ex)
+    return rows, total
+
+def _render_listing(h1, intro, rows, total, page, per, base_path, crumb_label):
+    e = html.escape
+    base = BASE_URL
+    pages = max(1, (total + per - 1) // per)
+    page = max(1, min(page, pages))
+    canon_base = f"{base}{base_path}"
+    canonical = canon_base + (f"?page={page}" if page > 1 else "")
+
+    cards, item_list = [], []
+    for i, r in enumerate(rows):
+        mid, mtitle, year, purl, pid, rating, ctype = r
+        poster = purl or (f"/api/poster/{mid}" if pid else "/static/no-poster.svg")
+        rate = f'<span class="lc-rate">⭐ {float(rating):.1f}</span>' if rating else ''
+        meta = " · ".join([x for x in [str(year) if year else "",
+                                       _TYPE_UZ_ONE.get(ctype or "movie", "Kino")] if x])
+        cards.append(
+            f'<a class="lc" href="/kino/{mid}">'
+            f'<span class="lc-img"><img src="{e(poster)}" alt="{e(mtitle or "")}" loading="lazy">{rate}</span>'
+            f'<span class="lc-t">{e(mtitle or "")}</span><span class="lc-m">{e(meta)}</span></a>'
+        )
+        item_list.append({"@type": "ListItem", "position": (page-1)*per + i + 1,
+                          "url": f"{base}/kino/{mid}", "name": mtitle or f"Film #{mid}"})
+    grid = "".join(cards) or '<p style="color:#888;padding:20px 0;">Bu bo\'limda hozircha kino yo\'q.</p>'
+
+    pag = ""
+    if pages > 1:
+        def lk(p): return base_path + (f"?page={p}" if p > 1 else "")
+        parts = []
+        if page > 1: parts.append(f'<a class="pg" href="{lk(page-1)}" rel="prev">‹</a>')
+        for p in _page_window(page, pages):
+            if p == "...": parts.append('<span class="pg gap">…</span>')
+            elif p == page: parts.append(f'<span class="pg cur">{p}</span>')
+            else: parts.append(f'<a class="pg" href="{lk(p)}">{p}</a>')
+        if page < pages: parts.append(f'<a class="pg" href="{lk(page+1)}" rel="next">›</a>')
+        pag = '<nav class="pglist">' + "".join(parts) + '</nav>'
+
+    prev_link = (f'<link rel="prev" href="{canon_base}'
+                 + (f'?page={page-1}' if page-1 > 1 else '') + '">') if page > 1 else ""
+    next_link = f'<link rel="next" href="{canon_base}?page={page+1}">' if page < pages else ""
+
+    import json as _json
+    breadcrumb = {"@context": "https://schema.org", "@type": "BreadcrumbList",
+                  "itemListElement": [
+                      {"@type": "ListItem", "position": 1, "name": "Bosh sahifa", "item": base + "/"},
+                      {"@type": "ListItem", "position": 2, "name": crumb_label, "item": canon_base}]}
+    itemlist = {"@context": "https://schema.org", "@type": "ItemList",
+                "name": h1, "numberOfItems": total, "itemListElement": item_list}
+    desc = (f"{h1} — ASTRA. {total} ta. Eng so'nggi kinolar, seriallar, anime va "
+            "multfilmlar o'zbek tilida, bepul.")
+
+    page_html = f"""<!DOCTYPE html>
+<html lang="uz"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{e(h1)}{(' — sahifa ' + str(page)) if page>1 else ''} | ASTRA</title>
+<meta name="description" content="{e(desc)}">
+<link rel="canonical" href="{canonical}">
+{prev_link}{next_link}
+<meta property="og:title" content="{e(h1)} | ASTRA">
+<meta property="og:description" content="{e(desc)}">
+<meta property="og:type" content="website"><meta property="og:url" content="{canonical}">
+<link rel="stylesheet" href="/static/style.css">
+<link rel="icon" href="/static/favicon.svg">
+<script type="application/ld+json">{_json.dumps(breadcrumb, ensure_ascii=False)}</script>
+<script type="application/ld+json">{_json.dumps(itemlist, ensure_ascii=False)}</script>
+<style>
+  .seo-wrap{{max-width:1200px;margin:0 auto;padding:18px 16px 60px;}}
+  .seo-top{{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;}}
+  .seo-top .logo img{{height:30px;display:block;}}
+  .seo-crumb{{font-size:13px;color:#8c87b8;margin-bottom:6px;}}
+  .seo-crumb a{{color:#5ad1ff;text-decoration:none;}}
+  .seo-wrap h1{{font-size:26px;margin:0 0 6px;color:#fff;}}
+  .seo-intro{{color:#b8b4d8;font-size:14px;margin:0 0 22px;}}
+  .lc-grid{{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:14px;}}
+  .lc{{text-decoration:none;color:inherit;display:block;}}
+  .lc-img{{position:relative;display:block;aspect-ratio:2/3;border-radius:10px;overflow:hidden;background:#252154;}}
+  .lc-img img{{width:100%;height:100%;object-fit:cover;display:block;transition:transform .25s;}}
+  .lc:hover .lc-img img{{transform:scale(1.05);}}
+  .lc-rate{{position:absolute;top:6px;left:6px;background:rgba(0,0,0,.7);color:#ffd166;font-size:11px;font-weight:700;padding:2px 7px;border-radius:999px;}}
+  .lc-t{{display:block;font-size:14px;color:#fff;margin-top:8px;font-weight:500;line-height:1.3;}}
+  .lc-m{{display:block;font-size:12px;color:#8c87b8;margin-top:2px;}}
+  .pglist{{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin:34px 0 0;}}
+  .pglist .pg{{min-width:38px;height:38px;display:inline-flex;align-items:center;justify-content:center;padding:0 11px;border-radius:9px;background:#1b1840;border:1px solid #252154;color:#b8b4d8;text-decoration:none;font-size:14px;}}
+  .pglist .pg:hover{{border-color:#7c5cff;color:#fff;}}
+  .pglist .pg.cur{{background:#7c5cff;border-color:#7c5cff;color:#fff;font-weight:700;}}
+  .pglist .pg.gap{{background:none;border:none;}}
+  .seo-back{{display:inline-block;margin-top:30px;color:#5ad1ff;text-decoration:none;font-size:14px;}}
+</style>
+</head><body>
+<div class="seo-wrap">
+  <div class="seo-top">
+    <a class="logo" href="/"><img src="/static/logo.svg" alt="ASTRA"></a>
+    <a href="/" style="color:#8c87b8;text-decoration:none;font-size:14px;">Bosh sahifa ↗</a>
+  </div>
+  <div class="seo-crumb"><a href="/">Bosh sahifa</a> › {e(crumb_label)}</div>
+  <h1>{e(h1)}{(' — sahifa ' + str(page)) if page>1 else ''}</h1>
+  <p class="seo-intro">{e(intro)} <b>{total}</b> ta.</p>
+  <div class="lc-grid">{grid}</div>
+  {pag}
+  <a class="seo-back" href="/">← Bosh sahifaga qaytish</a>
+</div>
+</body></html>"""
+    return Response(page_html, mimetype="text/html")
+
+@app.route("/kategoriya/<ctype>")
+def seo_category(ctype):
+    if ctype not in _TYPE_UZ:
+        return redirect("/")
+    try: page = max(1, int(request.args.get("page", 1)))
+    except Exception: page = 1
+    rows, total = _list_movies_seo(ctype=ctype, sort="new", page=page)
+    label = _TYPE_UZ[ctype]
+    return _render_listing(label, f"Eng so'nggi {label.lower()} o'zbek tilida —",
+                           rows, total, page, 24, f"/kategoriya/{ctype}", label)
+
+@app.route("/janr/<path:genre>")
+def seo_genre(genre):
+    genre = (genre or "").strip()[:60]
+    if not genre:
+        return redirect("/")
+    try: page = max(1, int(request.args.get("page", 1)))
+    except Exception: page = 1
+    rows, total = _list_movies_seo(genre=genre, sort="new", page=page)
+    return _render_listing(f"{genre} — kinolar", f"«{genre}» janridagi eng yaxshi kinolar —",
+                           rows, total, page, 24, f"/janr/{quote(genre)}", genre)
+
+@app.route("/top")
+def seo_top():
+    try: page = max(1, int(request.args.get("page", 1)))
+    except Exception: page = 1
+    rows, total = _list_movies_seo(rated=True, sort="rating", page=page)
+    return _render_listing("Eng yaxshilar", "Reyting bo'yicha eng zo'r kinolar —",
+                           rows, total, page, 24, "/top", "Eng yaxshilar")
+
+
     # Sessiyada admin bo'lsa — parol shart emas; aks holda parol orqali (zaxira)
     if session.get("is_admin"):
         return True

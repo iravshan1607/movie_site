@@ -552,9 +552,11 @@ async function loadHome(){
 
     // Qo'shimcha qatorlar — faqat "Yangi" saralash + Barchasi rejimida
     if (curSort === 'new' && curType === 'all' && curGenre === 'all') {
-      const top = [...movies].sort((a,b)=>(b.views||0)-(a.views||0)).slice(0,10);
-      if (top.some(m=>m.views>0)) {
-        html += rowHtml('🔥 Eng ko\'p ko\'rilgan', top.map((m,i)=>top10Html(m,i+1)).join(''), true);
+      // 🔥 Trend — butun katalogdan eng ko'p ko'rilganlar (faqat yuklangan sahifadan emas)
+      const trendData = await fetchMovies({ sort: 'popular', page: 1 });
+      const trend = (trendData.movies || []).filter(m => (m.views||0) > 0).slice(0, 10);
+      if (trend.length) {
+        html += rowHtml('🔥 Trend — eng ko\'p ko\'rilgan', trend.map((m,i)=>top10Html(m,i+1)).join(''), true);
       }
       for (const [t, label] of [['movie','🎬 Kinolar'],['series','📺 Seriallar'],['anime','🌸 Anime'],['cartoon','🧸 Multfilmlar']]) {
         const sub = movies.filter(m=>m.type===t);
