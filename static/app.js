@@ -26,6 +26,25 @@ const palettes = ['c1','c2','c3','c4','c5','c6','c7','c8','c9','c10'];
 function esc(s){ return String(s==null?'':s).replace(/[<>&"]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c])); }
 function pal(id){ return palettes[id % palettes.length]; }
 
+// Qisqa suzuvchi xabar (toast) — masalan spam himoyasi ogohlantirishi
+function toast(msg, isErr){
+  var t = document.getElementById('astraToast');
+  if (!t){
+    t = document.createElement('div');
+    t.id = 'astraToast';
+    t.style.cssText = 'position:fixed;left:50%;bottom:28px;transform:translateX(-50%) translateY(20px);'
+      + 'background:#1b1840;color:#fff;border:1px solid #2a2750;padding:13px 20px;border-radius:12px;'
+      + 'font-size:14px;z-index:9000;box-shadow:0 10px 40px rgba(0,0,0,.5);opacity:0;'
+      + 'transition:opacity .2s,transform .2s;max-width:90vw;text-align:center;pointer-events:none;';
+    document.body.appendChild(t);
+  }
+  t.style.borderColor = isErr ? 'rgba(255,128,136,.55)' : '#2a2750';
+  t.textContent = msg;
+  requestAnimationFrame(function(){ t.style.opacity='1'; t.style.transform='translateX(-50%) translateY(0)'; });
+  clearTimeout(t._timer);
+  t._timer = setTimeout(function(){ t.style.opacity='0'; t.style.transform='translateX(-50%) translateY(20px)'; }, 3200);
+}
+
 // Sevimlilar — kirgan bo'lsa serverda (bot bilan umumiy), aks holda qurilmada
 let ME = { logged_in: false };
 let SERVER_FAVS = null; // kirgan foydalanuvchi sevimlilari (id massivi)
@@ -282,7 +301,8 @@ async function loadGrid(){
   if (typeof setHero === 'function') setHero(null);
   rows.innerHTML = skeletonGrid(18);
   var params = { page: gridPage, sort: gridSort };
-  if (curType !== 'all') params.type = curType;
+  if (curType === 'top'){ params.rated = 1; }            // Eng yaxshilar — faqat reytingli kinolar
+  else if (curType !== 'all'){ params.type = curType; }
   if (curGenre !== 'all') params.genre = curGenre;
   try {
     const d = await fetchMovies(params);
@@ -290,9 +310,10 @@ async function loadGrid(){
     const movies = d.movies || [];
     allMovies = movies;
     if (!movies.length){ rows.innerHTML = '<div class="state-msg">😕 Hech narsa topilmadi.</div>'; return; }
-    var title = curGenre !== 'all'
-      ? ('🎭 ' + esc(curGenre))
-      : ({movie:'🎬 Kinolar', series:'📺 Seriallar', anime:'🌸 Anime', cartoon:'🧸 Multfilmlar'}[curType] || 'Natijalar');
+    var title;
+    if (curType === 'top') title = '⭐ Eng yaxshilar' + (curGenre !== 'all' ? (' · ' + esc(curGenre)) : '');
+    else if (curGenre !== 'all') title = '🎭 ' + esc(curGenre);
+    else title = ({movie:'🎬 Kinolar', series:'📺 Seriallar', anime:'🌸 Anime', cartoon:'🧸 Multfilmlar'}[curType] || 'Natijalar');
     var html = '<div class="sort-bar">'
       + '<span class="sort-label">Saralash:</span>'
       + '<button class="sort-btn '+(gridSort==='new'?'active':'')+'" onclick="setGridSort(\'new\')">🆕 Yangi</button>'
@@ -324,6 +345,9 @@ async function loadHome(){
   // Janr panelini "Tez orada" rejimida yashiramiz
   var gbar = document.getElementById('genres');
   if (gbar) gbar.style.display = (curType === 'soon') ? 'none' : '';
+  // Hero bannerni faqat bosh sahifada ko'rsatamiz (kategoriya/janr/top/soon/fav'da yashiramiz)
+  var heroEl = document.querySelector('.hero');
+  if (heroEl) heroEl.style.display = (curType === 'all' && curGenre === 'all') ? '' : 'none';
   // "Tez orada" rejimi — alohida ko'rinish
   if (curType === 'soon'){
     if (heroTimer){ clearInterval(heroTimer); heroTimer = null; }
@@ -611,7 +635,7 @@ function setHero(m, animate){
 
 function setType(t){
   curType = t; curGenre = 'all';
-  gridPage = 1; gridSort = 'new';
+  gridPage = 1; gridSort = (t === 'top') ? 'rating' : 'new';
   document.querySelectorAll('.genre-pill').forEach((p,i)=>p.classList.toggle('active', i===0));
   document.querySelectorAll('[data-nav]').forEach(a=>a.classList.toggle('nav-active', a.getAttribute('data-nav')===t));
   window.scrollTo({top:0,behavior:'smooth'});
@@ -748,6 +772,7 @@ function submitReply(parentId, mid){
   }).then(function(r){return r.json();}).then(function(d){
     if(d.ok){ loadReviews(mid); }
     else if(d.logged_in===false){ openLogin(); }
+    else if(d.error){ toast(d.error, true); }
   }).catch(function(){});
 }
 function setRevStar(n){
@@ -768,6 +793,7 @@ function submitReview(mid){
   }).then(function(r){return r.json();}).then(function(d){
     if(d.ok){ loadReviews(mid); }
     else if(d.logged_in===false){ openLogin(); }
+    else if(d.error){ toast(d.error, true); }
   }).catch(function(){});
 }
 function delReview(rid, mid){

@@ -304,6 +304,7 @@ textarea { resize:vertical; min-height:80px; }
   <div class="topbar">
     <h1 style="display:flex;align-items:center;gap:12px;"><img src="/static/logo.svg" alt="ASTRA" style="height:38px;"> <span>Boshqaruv</span></h1>
     <a href="/" target="_blank">Saytni ochish ↗</a>
+    <button onclick="adminLogout()" style="margin-left:12px;padding:8px 16px;background:rgba(248,113,113,0.12);border:1px solid rgba(248,113,113,0.4);color:#f87171;border-radius:9px;font-family:inherit;font-size:13px;cursor:pointer;">🚪 Chiqish</button>
   </div>
 
   <!-- STATISTIKA -->
@@ -463,16 +464,34 @@ async function login() {
   });
   const d = await r.json();
   if (d.ok) {
-    PASS = p;
-    document.getElementById('loginPage').classList.add('hidden');
-    document.getElementById('mainPage').classList.remove('hidden');
-    search();
-    loadFx();
-    loadStats();
-    loadSoon();
+    PASS = '';                 // Parol endi sessiya (cookie) orqali — tanada saqlamaymiz/yubormaymiz
+    document.getElementById('passInput').value = '';
+    enterPanel();
   } else {
     document.getElementById('loginErr').classList.remove('hidden');
   }
+}
+function enterPanel(){
+  document.getElementById('loginPage').classList.add('hidden');
+  document.getElementById('mainPage').classList.remove('hidden');
+  search();
+  loadFx();
+  loadStats();
+  loadSoon();
+}
+// Sahifa ochilganda — sessiya hali kuchda bo'lsa, qayta login so'ramaymiz
+async function checkSession(){
+  try {
+    const r = await fetch('/api/admin/check');
+    const d = await r.json();
+    if (d.admin){ PASS = ''; enterPanel(); }
+  } catch(e) {}
+}
+async function adminLogout(){
+  try { await fetch('/api/admin/logout', { method:'POST' }); } catch(e) {}
+  PASS = '';
+  document.getElementById('mainPage').classList.add('hidden');
+  document.getElementById('loginPage').classList.remove('hidden');
 }
 
 // ── STATISTIKA ──
@@ -1033,6 +1052,9 @@ const sparkStyle = document.createElement('style');
 sparkStyle.textContent = '@keyframes spark-burst{0%{transform:translate(-50%,-50%) scale(1);opacity:1}'
   + '100%{transform:translate(calc(-50% + var(--dx)),calc(-50% + var(--dy))) scale(0);opacity:0}}';
 document.head.appendChild(sparkStyle);
+
+// Sahifa ochilganda — sessiya bo'lsa to'g'ridan-to'g'ri panelга kiramiz
+checkSession();
 </script>
 </body>
 </html>

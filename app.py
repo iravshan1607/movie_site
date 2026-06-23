@@ -28,6 +28,12 @@ DATABASE_URL   = os.getenv("DATABASE_URL", "")
 BOT_TOKEN      = os.getenv("BOT_TOKEN", "")
 BOT_USERNAME   = os.getenv("BOT_USERNAME", "")          # botga yo'naltirish + Telegram login uchun
 ADMIN_PASSWORD = os.getenv("KINO_ADMIN_PASSWORD", "admin123")
+ADMIN_CHAT_ID  = os.getenv("ADMIN_CHAT_ID", "")    # admin Telegram ID(lar), vergul bilan — yangi so'rov xabari uchun
+REVIEW_COOLDOWN  = int(os.getenv("REVIEW_COOLDOWN", "15"))    # izohlar orasidagi minimal vaqt (sekund)
+REQUEST_COOLDOWN = int(os.getenv("REQUEST_COOLDOWN", "30"))   # kino so'rovlari orasidagi minimal vaqt (sekund)
+ADMIN_CHAT_ID  = os.getenv("ADMIN_CHAT_ID", "")   # admin(lar) telegram ID — yangi so'rov xabari uchun (vergul bilan bir nechta)
+REVIEW_COOLDOWN  = int(os.getenv("REVIEW_COOLDOWN", "15"))    # soniya — izoh/javob orasidagi minimal vaqt
+REQUEST_COOLDOWN = int(os.getenv("REQUEST_COOLDOWN", "60"))   # soniya — yangi kino so'rovi orasidagi minimal vaqt
 TMDB_TOKEN     = os.getenv("TMDB_TOKEN", "")   # TMDB v4 "Read Access Token" (Bearer)
 TMDB_KEY       = os.getenv("TMDB_KEY", "")     # TMDB v3 API key (zaxira)
 PORT           = int(os.getenv("PORT", "8080"))
@@ -115,6 +121,40 @@ def _notify_release(user_ids, title, movie_id):
                 ok += 1
             time.sleep(0.05)   # Telegram limitiga ehtiyot (~20-30 xabar/sek)
         log.info("Release bildirishnoma: %s/%s yuborildi (movie=%s)", ok, len(user_ids), movie_id)
+    threading.Thread(target=worker, daemon=True).start()
+
+# ── Spam himoyasi: oxirgi amaldan beri yetarlicha vaqt o'tdimi? ────────────────
+def _cooldown_left(table, user_col, uid, seconds):
+    """Foydalanuvchining oxirgi yozuvidan beri 'seconds' o'tmagan bo'lsa,
+    qolgan kutish vaqtini (sekund) qaytaradi; aks holda 0. (table/user_col — kod ichidagi sobit qiymatlar)"""
+    try:
+        with get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                f"SELECT EXTRACT(EPOCH FROM (NOW() - MAX(created_at))) FROM {table} WHERE {user_col}=%s",
+                (uid,))
+            r = cur.fetchone()
+            if r and r[0] is not None and float(r[0]) < seconds:
+                return int(seconds - float(r[0])) + 1
+    except Exception:
+        pass
+    return 0
+
+# ── Admin(lar)ga yangi kino so'rovi haqida bot xabari ─────────────────────────
+def _admin_chat_ids():
+    return [x.strip() for x in (ADMIN_CHAT_ID or "").replace(";", ",").split(",") if x.strip()]
+
+def _notify_admins_request(title, who, uid):
+    ids = _admin_chat_ids()
+    if not ids:
+        return
+    msg = ("🆕 <b>Yangi kino so'rovi</b>\n\n"
+           f"🎬 {html.escape(title)}\n"
+           f"👤 {html.escape(who or 'Foydalanuvchi')} (id: {uid})\n\n"
+           "Admin panel → «Tez orada» bo'limida ko'rishingiz mumkin.")
+    def worker():
+        for cid in ids:
+            _tg_send(cid, msg)
     threading.Thread(target=worker, daemon=True).start()
 
 # ── Baza (pg8000 — sof Python, libpq kerak emas) ──────────────────────────────
@@ -316,6 +356,8 @@ def api_movies():
         if language and language != "all":
             where.append("language ILIKE %s")
             params.append(f"%{language}%")
+        if (request.args.get("rated") or "") == "1":
+            where.append("rating IS NOT NULL AND rating > 0")
         if ids:
             id_list = [int(x) for x in ids.split(",") if x.strip().isdigit()][:60]
             if id_list:
@@ -672,6 +714,11 @@ def api_reviews_add():
     if not mid or not text:
         return jsonify({"error": "matn kerak"}), 400
     text = text[:1000]
+    # Spam himoyasi — izohlar orasida minimal vaqt
+    wait = _cooldown_left("reviews", "user_id", uid, REVIEW_COOLDOWN)
+    if wait:
+        return jsonify({"error": f"Biroz sekinroq — {wait}s dan keyin yana yozishingiz mumkin",
+                        "cooldown": wait}), 429
     my_name = session.get("tg_name", "") or "Foydalanuvchi"
     notify_uid = None
     movie_title = ""
@@ -793,6 +840,11 @@ def api_upcoming_request():
     if not title:
         return jsonify({"error": "nom kerak"}), 400
     note = (data.get("note") or "").strip()[:300]
+    # Spam himoyasi — so'rovlar orasida minimal vaqt
+    wait = _cooldown_left("upcoming", "created_by", uid, REQUEST_COOLDOWN)
+    if wait:
+        return jsonify({"error": f"Biroz sekinroq — {wait}s dan keyin yana so'rashingiz mumkin",
+                        "cooldown": wait}), 429
     try:
         with get_conn() as conn:
             cur = conn.cursor()
@@ -811,6 +863,9 @@ def api_upcoming_request():
                         "VALUES (%s, %s, %s) ON CONFLICT (upcoming_id, user_id) DO NOTHING",
                         (target_id, uid, session.get("tg_name", "")))
             conn.commit()
+        # Yangi (takror bo'lmagan) so'rov bo'lsa — adminga xabar beramiz
+        if not row:
+            _notify_admins_request(title, session.get("tg_name", ""), uid)
         return jsonify({"ok": True, "merged": bool(row)})
     except Exception as e:
         log.warning("upcoming request: %s", e)
@@ -1295,11 +1350,27 @@ function astraShare(){{
 
 # ══════════════════ ADMIN ══════════════════
 def _check(d):
-    return (d.get("password") or "") == ADMIN_PASSWORD
+    # Sessiyada admin bo'lsa — parol shart emas; aks holda parol orqali (zaxira)
+    if session.get("is_admin"):
+        return True
+    return ((d or {}).get("password") or "") == ADMIN_PASSWORD
 
 @app.route("/api/admin/login", methods=["POST"])
 def admin_login():
-    return jsonify({"ok": _check(request.get_json() or {})})
+    ok = ((request.get_json() or {}).get("password") or "") == ADMIN_PASSWORD
+    if ok:
+        session.permanent = True
+        session["is_admin"] = True
+    return jsonify({"ok": ok})
+
+@app.route("/api/admin/logout", methods=["POST"])
+def admin_logout():
+    session.pop("is_admin", None)
+    return jsonify({"ok": True})
+
+@app.route("/api/admin/check")
+def admin_check():
+    return jsonify({"admin": bool(session.get("is_admin"))})
 
 # ── Admin statistika ──
 @app.route("/api/admin/stats", methods=["POST"])
