@@ -704,6 +704,10 @@ async function openMovie(id){
         <a href="${botLink}" target="_blank" class="mm-watch">
           ${isSeries?'📺 To\'liq qismlarni botda ko\'rish':'🎬 To\'liqini botda ko\'rish / yuklab olish'}
         </a>
+        <button class="mm-share" onclick="shareMovie(${m.id})">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></svg>
+          Do'stga yuborish
+        </button>
         <p class="mm-note">👁 ${m.views} marta ko'rilgan · Telegram bot orqali ochiladi</p>
         <div id="mmReviews" class="mm-reviews"></div>
         ${similarHtml(m)}
@@ -733,7 +737,75 @@ function similarHtml(m){
   return `<div class="similar-row"><h4>🎯 O'xshash kinolar</h4><div class="similar-cards">${cards}</div></div>`;
 }
 function closeMovie(){ document.getElementById('movieModal').classList.remove('open'); document.body.style.overflow=''; }
-document.addEventListener('keydown', e=>{ if(e.key==='Escape'){ closeMovie(); closeSearch(); closeMenu(); } });
+document.addEventListener('keydown', e=>{ if(e.key==='Escape'){ closeShareSheet(); closeMovie(); closeSearch(); closeMenu(); } });
+
+// ── Ulashish — "Do'stga yuborish" (Telegram / nusxa) ─────────────────────────
+function shareMovie(id, title){
+  if (!title){
+    var h = document.querySelector('#movieBox .mm-info h2');
+    title = h ? h.textContent.trim() : 'ASTRA';
+  }
+  var url = location.origin + '/kino/' + id;
+  showShareSheet(url, title);
+}
+function showShareSheet(url, title){
+  closeShareSheet();
+  var enc = encodeURIComponent(url);
+  var tg = 'https://t.me/share/url?url=' + enc + '&text=' + encodeURIComponent(title + ' — ASTRA da ko\'ring 🎬');
+  var safeUrl = url.replace(/'/g, '');
+  var nativeBtn = navigator.share
+    ? '<button class="share-opt" onclick="nativeShare(this)" data-url="'+esc(safeUrl)+'" data-title="'+esc(title)+'"><span class="share-ic">📲</span> Boshqa ilovalar</button>'
+    : '';
+  var bg = document.createElement('div');
+  bg.className = 'share-sheet-bg';
+  bg.id = 'shareSheetBg';
+  bg.onclick = function(e){ if (e.target === bg) closeShareSheet(); };
+  bg.innerHTML =
+    '<div class="share-sheet">'
+    + '<div class="share-title">📤 Do\'stga yuborish</div>'
+    + '<div class="share-name">' + esc(title) + '</div>'
+    + '<div class="share-url" id="shareUrlText">' + esc(url) + '</div>'
+    + '<div class="share-opts">'
+    +   '<a class="share-opt tg" href="' + tg + '" target="_blank" rel="noopener" onclick="closeShareSheet()"><span class="share-ic">✈️</span> Telegram</a>'
+    +   '<button class="share-opt copy" onclick="copyShareLink(\'' + safeUrl + '\', this)"><span class="share-ic">🔗</span> Havoladan nusxa</button>'
+    +   nativeBtn
+    + '</div>'
+    + '<button class="share-cancel" onclick="closeShareSheet()">Yopish</button>'
+    + '</div>';
+  document.body.appendChild(bg);
+  requestAnimationFrame(function(){ bg.classList.add('show'); });
+}
+function closeShareSheet(){
+  var s = document.getElementById('shareSheetBg');
+  if (!s) return;
+  s.classList.remove('show');
+  setTimeout(function(){ if (s.parentNode) s.parentNode.removeChild(s); }, 220);
+}
+function copyShareLink(url, btn){
+  function done(){
+    if (!btn) return;
+    var old = btn.innerHTML;
+    btn.innerHTML = '<span class="share-ic">✅</span> Nusxa olindi!';
+    btn.classList.add('done');
+    setTimeout(function(){ btn.innerHTML = old; btn.classList.remove('done'); }, 1600);
+  }
+  if (navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(url).then(done).catch(function(){ _fallbackCopy(url); done(); });
+  } else { _fallbackCopy(url); done(); }
+}
+function _fallbackCopy(text){
+  try {
+    var t = document.createElement('textarea');
+    t.value = text; t.style.position = 'fixed'; t.style.opacity = '0';
+    document.body.appendChild(t); t.focus(); t.select();
+    document.execCommand('copy'); document.body.removeChild(t);
+  } catch(e){}
+}
+function nativeShare(btn){
+  var url = btn.getAttribute('data-url'), title = btn.getAttribute('data-title');
+  if (navigator.share){ navigator.share({ title: title, text: title, url: url }).catch(function(){}); }
+  closeShareSheet();
+}
 
 // ── Galaxy click effekti — bosilganda yulduzchalar sachraydi ──
 document.addEventListener('click', e => {
