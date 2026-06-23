@@ -1177,3 +1177,104 @@
 }
 .to-top.show { opacity: 1; pointer-events: auto; transform: translateY(0); }
 .to-top:hover { filter: brightness(1.12); }
+
+/* ═══════════ IZOHGA JAVOB (reply / thread) ═══════════ */
+.rev-replyto { color: var(--accent2); font-size: 12px; }
+.rev-actions { margin-top: 6px; }
+.rev-reply-btn {
+  background: none; border: none; color: var(--accent2);
+  font-size: 12.5px; cursor: pointer; padding: 2px 0; font-family: inherit;
+}
+.rev-reply-btn:hover { text-decoration: underline; }
+.rev-reply-form { margin-top: 9px; }
+.rev-reply-form textarea {
+  width: 100%; min-height: 48px; background: #111; border: 1px solid #333;
+  border-radius: 8px; color: #fff; padding: 9px; font-size: 13.5px;
+  resize: vertical; font-family: inherit;
+}
+.rev-reply-row { display: flex; gap: 8px; margin-top: 8px; align-items: center; }
+.rev-send.sm { margin-top: 0; padding: 7px 16px; font-size: 13px; }
+.rev-cancel {
+  background: none; border: 1px solid #3a3a52; color: var(--text-dim);
+  padding: 7px 14px; border-radius: 8px; cursor: pointer; font-size: 13px; font-family: inherit;
+}
+.rev-cancel:hover { color: #fff; border-color: #555; }
+.rev-replies {
+  margin-top: 12px; padding-left: 14px;
+  border-left: 2px solid rgba(124,92,255,0.35); display: flex;
+  flex-direction: column; gap: 12px;
+}
+.rev-reply .rev-av img, .rev-reply .rev-av-ph { width: 30px; height: 30px; }
+.rev-reply .rev-text { font-size: 13.5px; }
+
+/* ═══════════ TEZ ORADA (coming soon) ═══════════ */
+.soon-head { margin: 4px 0 18px; }
+.soon-title {
+  font-family: 'Bebas Neue', sans-serif; font-size: 32px; letter-spacing: 1px;
+  margin: 0 0 6px; color: #fff;
+}
+.soon-sub { color: var(--text-muted); font-size: 14px; line-height: 1.6; max-width: 720px; margin: 0; }
+.soon-sub b { color: var(--gold); }
+
+.soon-request { display: flex; gap: 10px; margin: 0 0 6px; max-width: 560px; flex-wrap: wrap; }
+.soon-req-input {
+  flex: 1; min-width: 200px; background: var(--bg2); border: 1px solid var(--bg3);
+  border-radius: 10px; color: #fff; padding: 12px 14px; font-size: 14px; font-family: inherit;
+}
+.soon-req-input:focus { outline: none; border-color: var(--red); }
+.soon-req-btn {
+  background: var(--red); color: #fff; border: none; border-radius: 10px;
+  padding: 12px 24px; font-weight: 600; cursor: pointer; font-size: 14px; font-family: inherit;
+}
+.soon-req-btn:hover { filter: brightness(1.1); }
+.soon-req-msg { font-size: 13px; margin: 0 0 18px; min-height: 18px; }
+.soon-req-msg.ok { color: #67e08a; }
+.soon-req-msg.err { color: #ff8088; }
+
+.soon-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 16px;
+}
+.soon-card {
+  background: var(--bg2); border: 1px solid var(--bg3); border-radius: 14px;
+  overflow: hidden; display: flex; flex-direction: column; transition: transform .2s, border-color .2s;
+}
+.soon-card:hover { transform: translateY(-3px); border-color: rgba(124,92,255,0.5); }
+.soon-poster {
+  position: relative; aspect-ratio: 2/3; background: var(--bg3);
+  display: flex; align-items: center; justify-content: center; overflow: hidden;
+}
+.soon-poster img { width: 100%; height: 100%; object-fit: cover; }
+.soon-ph { font-size: 42px; opacity: 0.5; }
+.soon-badge {
+  position: absolute; top: 8px; left: 8px; background: rgba(124,92,255,0.92);
+  color: #fff; font-size: 10.5px; font-weight: 700; padding: 4px 9px; border-radius: 999px;
+  letter-spacing: 0.4px; text-transform: uppercase;
+}
+.soon-body { padding: 12px 13px 14px; display: flex; flex-direction: column; gap: 8px; flex: 1; }
+.soon-name { font-weight: 600; font-size: 14.5px; color: #fff; line-height: 1.35; }
+.soon-note { font-size: 12.5px; color: var(--text-dim); line-height: 1.5; }
+.soon-foot { margin-top: auto; display: flex; flex-direction: column; gap: 9px; }
+.soon-cnt { font-size: 11.5px; color: var(--text-muted); }
+.soon-cnt-0 { color: var(--text-dim); }
+.soon-bell {
+  width: 100%; background: rgba(124,92,255,0.14); border: 1px solid rgba(124,92,255,0.5);
+  color: #c7b6ff; padding: 10px; border-radius: 9px; font-weight: 600; cursor: pointer;
+  font-size: 13px; font-family: inherit; transition: all .15s;
+}
+.soon-bell:hover { background: rgba(124,92,255,0.25); }
+.soon-bell.on { background: rgba(103,224,138,0.16); border-color: rgba(103,224,138,0.55); color: #87e8a4; }
+.soon-bell:disabled { opacity: 0.6; cursor: default; }
+
+/* Bosh sahifadagi "Tez orada" mini-qator */
+.row-more {
+  font-size: 12.5px; color: var(--accent2); text-decoration: none; white-space: nowrap;
+}
+.row-more:hover { text-decoration: underline; }
+.card.soon-mini { cursor: pointer; }
+.card.soon-mini .card-img { position: relative; }
+
+@media (max-width: 560px){
+  .soon-grid { grid-template-columns: repeat(2, 1fr); gap: 11px; }
+  .soon-title { font-size: 27px; }
+}

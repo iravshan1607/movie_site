@@ -337,6 +337,33 @@ textarea { resize:vertical; min-height:80px; }
     </div>
   </div>
 
+  <!-- TEZ ORADA (kutilayotgan kinolar) -->
+  <div class="box" id="soonPanel" style="padding:0;margin-bottom:18px;border:1px solid rgba(124,92,255,0.28);border-radius:14px;overflow:hidden;">
+    <div onclick="toggleSoon()" style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:15px 20px;cursor:pointer;user-select:none;">
+      <div style="font-size:17px;font-weight:600;display:flex;align-items:center;gap:9px;">
+        <span style="font-size:20px;">🔜</span>
+        <span>Tez orada <span id="soonCount" style="font-size:13px;color:var(--dim);font-weight:400;"></span></span>
+      </div>
+      <span id="soonChevron" style="font-size:18px;color:var(--dim);transition:transform .2s;">▸</span>
+    </div>
+    <div id="soonBody" style="display:none;padding:0 20px 20px;">
+      <div style="font-size:13px;color:var(--dim);margin:0 0 14px;line-height:1.6;">
+        Saytda "Tez orada" bo'limida chiqadigan kinolar. Foydalanuvchi <b>🔔 Xabar ber</b> bosса obuna bo'ladi.
+        Kino qo'shilgach <b>✅ Chiqdi</b> tugmasi orqali mavjud kinoga bog'lansangiz — obunachilarga botdan avtomatik xabar boradi.
+      </div>
+      <div style="display:grid;grid-template-columns:1fr;gap:8px;margin-bottom:8px;">
+        <input id="newSoonTitle" placeholder="Kino nomi (masalan: Avatar 3)" style="padding:11px 13px;">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <input id="newSoonNote" placeholder="Qisqa izoh (ixtiyoriy)" style="flex:2;min-width:160px;padding:11px 13px;">
+          <input id="newSoonPoster" placeholder="Poster URL (ixtiyoriy)" style="flex:2;min-width:160px;padding:11px 13px;">
+          <button onclick="addSoon()" style="flex:0 0 auto;padding:11px 22px;">+ Qo'shish</button>
+        </div>
+      </div>
+      <div id="soonAdminMsg" style="font-size:13px;margin:4px 0 12px;min-height:16px;"></div>
+      <div id="soonList"></div>
+    </div>
+  </div>
+
   <!-- QIDIRUV -->
   <div class="search-row">
     <input id="searchInput" placeholder="Serial yoki kino nomini yozing..." onkeydown="if(event.key==='Enter')search()">
@@ -442,6 +469,7 @@ async function login() {
     search();
     loadFx();
     loadStats();
+    loadSoon();
   } else {
     document.getElementById('loginErr').classList.remove('hidden');
   }
@@ -521,6 +549,179 @@ async function saveFx() {
   }
   btn.disabled = false; btn.textContent = 'Saqlash';
   setTimeout(function(){ msg.textContent=''; }, 4000);
+}
+
+// ── TEZ ORADA (kutilayotgan kinolar) ──
+function toggleSoon() {
+  var body = document.getElementById('soonBody');
+  var chev = document.getElementById('soonChevron');
+  var open = body.style.display !== 'none';
+  body.style.display = open ? 'none' : 'block';
+  chev.style.transform = open ? 'rotate(0deg)' : 'rotate(90deg)';
+  if (!open) loadSoon();
+}
+function soonMsg(t, ok) {
+  var m = document.getElementById('soonAdminMsg');
+  if (!m) return;
+  m.style.color = ok ? '#4ade80' : '#f87171';
+  m.textContent = t;
+  if (t) setTimeout(function(){ if(m.textContent===t) m.textContent=''; }, 4000);
+}
+async function loadSoon() {
+  var box = document.getElementById('soonList');
+  box.innerHTML = '<div style="color:var(--dim);font-size:13px;padding:8px 0;">Yuklanmoqda...</div>';
+  try {
+    const r = await fetch('/api/admin/upcoming/list', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ password: PASS })
+    });
+    const d = await r.json();
+    if (d.error) { box.innerHTML = '<div style="color:#f87171;font-size:13px;">'+esc(d.error)+'</div>'; return; }
+    var items = d.items || [];
+    var cntEl = document.getElementById('soonCount');
+    var pend = items.filter(function(x){return x.status==='pending';}).length;
+    if (cntEl) cntEl.textContent = items.length ? ('— '+items.length+' ta'+(pend?(', '+pend+' yangi so\'rov'):'')) : '';
+    if (!items.length) { box.innerHTML = '<div style="color:var(--dim);font-size:13px;padding:8px 0;">Hozircha bo\'sh. Yuqoridan qo\'shing.</div>'; return; }
+    box.innerHTML = items.map(soonRow).join('');
+  } catch(e) {
+    box.innerHTML = '<div style="color:#f87171;font-size:13px;">Tarmoq xatosi</div>';
+  }
+}
+function statusBadge(s) {
+  if (s === 'pending') return '<span style="background:rgba(255,193,7,0.18);color:#ffca3a;font-size:11px;font-weight:700;padding:2px 9px;border-radius:999px;">⏳ Yangi so\'rov</span>';
+  if (s === 'released') return '<span style="background:rgba(103,224,138,0.18);color:#67e08a;font-size:11px;font-weight:700;padding:2px 9px;border-radius:999px;">✅ Chiqdi</span>';
+  return '<span style="background:rgba(124,92,255,0.2);color:#b6a4ff;font-size:11px;font-weight:700;padding:2px 9px;border-radius:999px;">🔜 Tez orada</span>';
+}
+function soonRow(it) {
+  var poster = it.poster_url
+    ? '<img src="'+esc(it.poster_url)+'" style="width:46px;height:68px;object-fit:cover;border-radius:6px;background:var(--card);flex:0 0 auto;" onerror="this.style.display=\'none\'">'
+    : '<div style="width:46px;height:68px;border-radius:6px;background:var(--card);display:flex;align-items:center;justify-content:center;flex:0 0 auto;">🎬</div>';
+  var actions = '';
+  var bs = 'padding:7px 12px;font-size:12.5px;border-radius:8px;cursor:pointer;font-family:inherit;border:1px solid var(--line);background:var(--card);color:var(--text);';
+  if (it.status === 'pending') {
+    actions += '<button style="'+bs+'border-color:rgba(124,92,255,0.5);color:#b6a4ff;" onclick="publishSoon('+it.id+')">👁 Ko\'rsatish</button>';
+  }
+  if (it.status === 'pending' || it.status === 'soon') {
+    actions += '<button style="'+bs+'border-color:rgba(103,224,138,0.5);color:#67e08a;" onclick="openRelease('+it.id+')">✅ Chiqdi</button>';
+  }
+  if (it.status === 'released' && it.movie_id) {
+    actions += '<a href="/kino/'+it.movie_id+'" target="_blank" style="'+bs+'text-decoration:none;">↗ Kino</a>';
+  }
+  actions += '<button style="'+bs+'border-color:rgba(248,113,113,0.4);color:#f87171;" onclick="deleteSoon('+it.id+',\''+esc((it.title||'').replace(/\x27/g,"")).slice(0,40)+'\')">🗑</button>';
+
+  return '<div style="display:flex;gap:12px;padding:12px;border:1px solid var(--line);border-radius:11px;margin-bottom:10px;align-items:flex-start;background:rgba(255,255,255,0.02);">'
+    + poster
+    + '<div style="flex:1;min-width:0;">'
+    +   '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px;">'+statusBadge(it.status)
+    +     '<b style="font-size:14.5px;">'+esc(it.title)+'</b></div>'
+    +   (it.note?'<div style="font-size:12.5px;color:var(--dim);margin-bottom:5px;">'+esc(it.note)+'</div>':'')
+    +   '<div style="font-size:12px;color:var(--dim);margin-bottom:9px;">👥 '+(it.subs||0)+' obunachi · '+esc(it.date||'')+'</div>'
+    +   '<div style="display:flex;gap:7px;flex-wrap:wrap;">'+actions+'</div>'
+    +   '<div id="releaseBox'+it.id+'" style="display:none;margin-top:11px;padding:11px;border:1px solid rgba(103,224,138,0.35);border-radius:9px;background:rgba(103,224,138,0.05);">'
+    +     '<div style="font-size:12.5px;color:var(--dim);margin-bottom:7px;">Qaysi kinoga bog\'lanadi? Nomini yozib qidiring:</div>'
+    +     '<input id="releaseSearch'+it.id+'" placeholder="Kino nomi..." style="width:100%;padding:9px 11px;margin-bottom:8px;" onkeydown="if(event.key===\'Enter\')releaseSearch('+it.id+')">'
+    +     '<div id="releaseResults'+it.id+'" style="max-height:200px;overflow-y:auto;"></div>'
+    +   '</div>'
+    + '</div></div>';
+}
+async function addSoon() {
+  var title = document.getElementById('newSoonTitle').value.trim();
+  if (!title) { soonMsg('Nom kiriting', false); return; }
+  var note = document.getElementById('newSoonNote').value.trim();
+  var poster = document.getElementById('newSoonPoster').value.trim();
+  try {
+    const r = await fetch('/api/admin/upcoming/save', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ password: PASS, title: title, note: note, poster_url: poster, status: 'soon' })
+    });
+    const d = await r.json();
+    if (d.ok) {
+      document.getElementById('newSoonTitle').value = '';
+      document.getElementById('newSoonNote').value = '';
+      document.getElementById('newSoonPoster').value = '';
+      soonMsg('✅ Qo\'shildi! Saytda "Tez orada" bo\'limida ko\'rinadi.', true);
+      loadSoon();
+    } else soonMsg(d.error || 'Xato', false);
+  } catch(e) { soonMsg('Tarmoq xatosi', false); }
+}
+async function publishSoon(id) {
+  // Yangi so'rovni "Tez orada"ga chiqarish: ro'yxatdan nomni topib, status=soon bilan saqlaymiz
+  publishSoonProper(id);
+}
+async function publishSoonProper(id) {
+  try {
+    const lr = await fetch('/api/admin/upcoming/list', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ password: PASS })
+    });
+    const ld = await lr.json();
+    var it = (ld.items||[]).find(function(x){return x.id===id;});
+    if (!it) { loadSoon(); return; }
+    const r = await fetch('/api/admin/upcoming/save', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ password: PASS, id: id, title: it.title, note: it.note, poster_url: it.poster_url, status: 'soon' })
+    });
+    const d = await r.json();
+    if (d.ok) { soonMsg('✅ Saytda ko\'rsatildi.', true); loadSoon(); }
+    else soonMsg(d.error || 'Xato', false);
+  } catch(e) { soonMsg('Tarmoq xatosi', false); }
+}
+async function deleteSoon(id, title) {
+  if (!confirm('"'+title+'" o\'chirilsinmi? Obunachilari ham o\'chadi.')) return;
+  try {
+    const r = await fetch('/api/admin/upcoming/delete', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ password: PASS, id: id })
+    });
+    const d = await r.json();
+    if (d.ok) { soonMsg('O\'chirildi.', true); loadSoon(); }
+    else soonMsg(d.error || 'Xato', false);
+  } catch(e) { soonMsg('Tarmoq xatosi', false); }
+}
+function openRelease(id) {
+  var box = document.getElementById('releaseBox'+id);
+  if (!box) return;
+  var open = box.style.display !== 'none';
+  box.style.display = open ? 'none' : 'block';
+  if (!open) {
+    var inp = document.getElementById('releaseSearch'+id);
+    if (inp) { inp.focus(); }
+  }
+}
+async function releaseSearch(id) {
+  var q = (document.getElementById('releaseSearch'+id).value || '').trim();
+  var res = document.getElementById('releaseResults'+id);
+  if (!q) { res.innerHTML = ''; return; }
+  res.innerHTML = '<div style="color:var(--dim);font-size:12px;padding:6px;">Qidirilmoqda...</div>';
+  try {
+    const r = await fetch('/api/admin/list', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ password: PASS, q: q })
+    });
+    const d = await r.json();
+    var movies = (d.movies||[]).slice(0, 20);
+    if (!movies.length) { res.innerHTML = '<div style="color:var(--dim);font-size:12px;padding:6px;">Topilmadi. Avval kinoni saytga qo\'shing.</div>'; return; }
+    res.innerHTML = movies.map(function(m){
+      var pos = m.poster_url ? '<img src="'+esc(m.poster_url)+'" style="width:30px;height:44px;object-fit:cover;border-radius:4px;" onerror="this.style.display=\'none\'">'
+        : (m.has_poster ? '<img src="/api/poster/'+m.id+'" style="width:30px;height:44px;object-fit:cover;border-radius:4px;" onerror="this.style.display=\'none\'">' : '<div style="width:30px;height:44px;background:var(--card);border-radius:4px;"></div>');
+      return '<div onclick="confirmRelease('+id+','+m.id+',\''+esc((m.title||'').replace(/\x27/g,"")).slice(0,40)+'\')" '
+        + 'style="display:flex;align-items:center;gap:9px;padding:7px;border-radius:7px;cursor:pointer;" '
+        + 'onmouseover="this.style.background=\'rgba(255,255,255,0.05)\'" onmouseout="this.style.background=\'none\'">'
+        + pos + '<div style="font-size:13px;"><b>'+esc(m.title)+'</b><div style="color:var(--dim);font-size:11px;">'+(m.year||'')+' · '+esc(m.type||'')+' · ID '+m.id+'</div></div></div>';
+    }).join('');
+  } catch(e) { res.innerHTML = '<div style="color:#f87171;font-size:12px;">Xato</div>'; }
+}
+async function confirmRelease(upId, movieId, title) {
+  if (!confirm('"'+title+'" kinosiga bog\'lansinmi? Barcha obunachilarga botdan "qo\'shildi" xabari yuboriladi.')) return;
+  try {
+    const r = await fetch('/api/admin/upcoming/release', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ password: PASS, id: upId, movie_id: movieId })
+    });
+    const d = await r.json();
+    if (d.ok) { soonMsg('🎉 Chiqarildi! '+(d.notified||0)+' obunachiga xabar yuborilmoqda.', true); loadSoon(); }
+    else soonMsg(d.error || 'Xato', false);
+  } catch(e) { soonMsg('Tarmoq xatosi', false); }
 }
 
 // ── QIDIRUV ──

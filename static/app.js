@@ -229,6 +229,17 @@ async function fetchMovies(params){
 // Asosiy yuklash — bir nechta qator
 async function loadHome(){
   const rows = document.getElementById('rows');
+  // Janr panelini "Tez orada" rejimida yashiramiz
+  var gbar = document.getElementById('genres');
+  if (gbar) gbar.style.display = (curType === 'soon') ? 'none' : '';
+  // "Tez orada" rejimi — alohida ko'rinish
+  if (curType === 'soon'){
+    if (heroTimer){ clearInterval(heroTimer); heroTimer = null; }
+    if (typeof setHero === 'function') setHero(null);
+    rows.innerHTML = '<div class="loader"><div class="spin"></div>Yuklanmoqda...</div>';
+    await loadUpcoming(rows);
+    return;
+  }
   rows.innerHTML = '<div class="loader"><div class="spin"></div>Kinolar yuklanmoqda...</div>';
   try {
     // Sevimlilar rejimi
@@ -326,9 +337,110 @@ async function loadHome(){
       }
     }
     rows.innerHTML = html;
+    // Bosh sahifada "Tez orada" qatorini qo'shamiz (faqat Yangi + Barchasi rejimida)
+    if (curSort === 'new' && curType === 'all' && curGenre === 'all') {
+      injectUpcomingTeaser();
+    }
   } catch(e){
     rows.innerHTML = '<div class="state-msg">❌ Yuklashda xatolik.</div>';
   }
+}
+
+// ── "Tez orada" (kutilayotgan kinolar) ──────────────────────────────────────
+async function loadUpcoming(rows){
+  try {
+    const r = await fetch('/api/upcoming');
+    const d = await r.json();
+    const items = d.items || [];
+    var html = '<div class="soon-head">'
+      + '<h2 class="soon-title">🔜 Tez orada</h2>'
+      + '<p class="soon-sub">Hali qo\'shilmagan, lekin tez orada chiqadigan kinolar. '
+      + '<b>🔔 Xabar ber</b> tugmasini bossangiz — kino qo\'shilishi bilan Telegram botdan birinchi bo\'lib xabar olasiz.</p>'
+      + '</div>';
+    html += '<div class="soon-request">'
+      + '<input id="soonReqInput" class="soon-req-input" maxlength="200" '
+      + 'placeholder="Qaysi kinoni qo\'shishimizni xohlaysiz?" onkeydown="if(event.key===\'Enter\')requestUpcoming()">'
+      + '<button class="soon-req-btn" onclick="requestUpcoming()">So\'rash</button>'
+      + '</div><div id="soonReqMsg" class="soon-req-msg"></div>';
+    if (!items.length){
+      html += '<div class="state-msg">Hozircha kutilayotgan kino yo\'q. Birinchi bo\'lib so\'rang! 👆</div>';
+    } else {
+      html += '<div class="soon-grid">';
+      items.forEach(function(it){ html += upcomingCard(it); });
+      html += '</div>';
+    }
+    rows.innerHTML = html;
+  } catch(e){
+    rows.innerHTML = '<div class="state-msg">❌ Yuklashda xatolik.</div>';
+  }
+}
+function upcomingCard(it){
+  var p = it.poster_url ? '<img src="'+esc(it.poster_url)+'" loading="lazy" onerror="this.parentNode.innerHTML=\'<div class=\\\'soon-ph\\\'>🎬</div>\'">' : '<div class="soon-ph">🎬</div>';
+  var subbed = !!it.subscribed;
+  var btn = '<button class="soon-bell'+(subbed?' on':'')+'" onclick="toggleUpcoming('+it.id+',this)">'
+    + (subbed ? '✅ Kuzatilmoqda' : '🔔 Xabar ber') + '</button>';
+  var cnt = it.subs ? '<span class="soon-cnt">👥 '+it.subs+' kishi kutmoqda</span>' : '<span class="soon-cnt soon-cnt-0">Birinchi bo\'lib kuting</span>';
+  return '<div class="soon-card">'
+    + '<div class="soon-poster">'+p+'<span class="soon-badge">Tez orada</span></div>'
+    + '<div class="soon-body"><div class="soon-name">'+esc(it.title)+'</div>'
+    + (it.note?'<div class="soon-note">'+esc(it.note)+'</div>':'')
+    + '<div class="soon-foot">'+cnt+btn+'</div>'
+    + '</div></div>';
+}
+function toggleUpcoming(id, el){
+  if (!ME.logged_in){ openLogin(); return; }
+  var on = el.classList.contains('on');
+  el.disabled = true;
+  fetch('/api/upcoming/'+id+'/subscribe', { method: on ? 'DELETE' : 'POST' })
+    .then(function(r){return r.json();}).then(function(d){
+      el.disabled = false;
+      if (d.logged_in === false){ openLogin(); return; }
+      if (d.ok){
+        el.classList.toggle('on', d.subscribed);
+        el.textContent = d.subscribed ? '✅ Kuzatilmoqda' : '🔔 Xabar ber';
+      }
+    }).catch(function(){ el.disabled = false; });
+}
+function requestUpcoming(){
+  if (!ME.logged_in){ openLogin(); return; }
+  var inp = document.getElementById('soonReqInput');
+  var msg = document.getElementById('soonReqMsg');
+  var t = ((inp && inp.value) || '').trim();
+  if(!t){ if(inp) inp.focus(); return; }
+  fetch('/api/upcoming/request', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ title: t })
+  }).then(function(r){return r.json();}).then(function(d){
+    if (d.logged_in === false){ openLogin(); return; }
+    if (d.ok){
+      if(inp) inp.value='';
+      if(msg){ msg.textContent='✅ So\'rovingiz qabul qilindi! Kino qo\'shilganda botdan xabar beramiz.'; msg.className='soon-req-msg ok'; }
+    } else if (msg){ msg.textContent='❌ '+(d.error||'Xato'); msg.className='soon-req-msg err'; }
+  }).catch(function(){ if(msg){ msg.textContent='❌ Server bilan aloqa yo\'q.'; msg.className='soon-req-msg err'; } });
+}
+function injectUpcomingTeaser(){
+  fetch('/api/upcoming').then(function(r){return r.json();}).then(function(d){
+    var items = (d.items||[]).slice(0,12);
+    if (!items.length) return;
+    if (curType!=='all' || curGenre!=='all' || curSort!=='new') return;
+    var rowsEl = document.getElementById('rows');
+    if (!rowsEl) return;
+    var cards = items.map(function(it){
+      var p = it.poster_url ? '<img src="'+esc(it.poster_url)+'" loading="lazy" onerror="this.remove()">' : '';
+      return '<div class="card soon-mini" onclick="setType(\'soon\')">'
+        + '<div class="card-img">'+p+'<span class="soon-badge">Tez orada</span>'
+        + '<span class="card-name">'+esc(it.title)+'</span></div></div>';
+    }).join('');
+    var row = document.createElement('div');
+    row.className = 'row';
+    row.innerHTML = '<div class="row-header"><span class="row-title">🔜 Tez orada</span>'
+      + '<a class="row-more" href="javascript:void(0)" onclick="setType(\'soon\')">Barchasi →</a></div>'
+      + '<div class="cards">'+cards+'</div>';
+    var sb = rowsEl.querySelector('.sort-bar');
+    if (sb && sb.nextSibling) rowsEl.insertBefore(row, sb.nextSibling);
+    else if (sb) rowsEl.appendChild(row);
+    else rowsEl.insertBefore(row, rowsEl.firstChild);
+  }).catch(function(){});
 }
 
 function setSort(s){ curSort = s; loadHome(); }
@@ -468,19 +580,60 @@ function renderReviews(box, mid, d){
   }
   if (d.reviews && d.reviews.length){
     html += '<div class="rev-list">';
-    d.reviews.forEach(function(rv){
-      var stars = rv.rating ? '<span class="rev-rate">'+'★'.repeat(rv.rating)+'☆'.repeat(5-rv.rating)+'</span>' : '';
-      var av = rv.photo ? '<img src="'+esc(rv.photo)+'" onerror="this.style.display=\'none\'">' : '<div class="rev-av-ph">'+esc((rv.name||'?').charAt(0).toUpperCase())+'</div>';
-      var del = rv.mine ? '<button class="rev-del" onclick="delReview('+rv.id+','+mid+')">🗑</button>' : '';
-      html += '<div class="rev-item"><div class="rev-av">'+av+'</div>'
-        + '<div class="rev-main"><div class="rev-top"><b>'+esc(rv.name)+'</b> '+stars+'<span class="rev-date">'+esc(rv.date)+'</span>'+del+'</div>'
-        + '<div class="rev-text">'+esc(rv.text)+'</div></div></div>';
-    });
+    d.reviews.forEach(function(rv){ html += revItemHtml(rv, mid, false); });
     html += '</div>';
   } else {
     html += '<div class="rev-empty">Hali izoh yo\'q. Birinchi bo\'lib fikr bildiring!</div>';
   }
   box.innerHTML = html;
+}
+// Bitta izoh (yoki javob) HTML'i
+function revItemHtml(rv, mid, isReply){
+  var stars = (rv.rating && !isReply) ? '<span class="rev-rate">'+'★'.repeat(rv.rating)+'☆'.repeat(5-rv.rating)+'</span>' : '';
+  var av = rv.photo ? '<img src="'+esc(rv.photo)+'" onerror="this.style.display=\'none\'">' : '<div class="rev-av-ph">'+esc((rv.name||'?').charAt(0).toUpperCase())+'</div>';
+  var del = rv.mine ? '<button class="rev-del" onclick="delReview('+rv.id+','+mid+')">🗑</button>' : '';
+  var replyTo = (isReply && rv.reply_to) ? '<span class="rev-replyto">↪ '+esc(rv.reply_to)+'</span>' : '';
+  var h = '<div class="rev-item'+(isReply?' rev-reply':'')+'"><div class="rev-av">'+av+'</div>'
+    + '<div class="rev-main"><div class="rev-top"><b>'+esc(rv.name)+'</b> '+stars+replyTo
+    + '<span class="rev-date">'+esc(rv.date)+'</span>'+del+'</div>'
+    + '<div class="rev-text">'+esc(rv.text)+'</div>';
+  if (!isReply){
+    if (ME.logged_in){
+      h += '<div class="rev-actions"><button class="rev-reply-btn" onclick="toggleReplyForm('+rv.id+')">↩ Javob berish</button></div>'
+        + '<div class="rev-reply-form" id="replyForm'+rv.id+'" style="display:none;">'
+        + '<textarea id="replyText'+rv.id+'" maxlength="1000" placeholder="Javobingiz..."></textarea>'
+        + '<div class="rev-reply-row">'
+        + '<button class="rev-send sm" onclick="submitReply('+rv.id+','+mid+')">Yuborish</button>'
+        + '<button class="rev-cancel" onclick="toggleReplyForm('+rv.id+')">Bekor</button>'
+        + '</div></div>';
+    }
+    if (rv.replies && rv.replies.length){
+      h += '<div class="rev-replies">'
+        + rv.replies.map(function(rp){ return revItemHtml(rp, mid, true); }).join('')
+        + '</div>';
+    }
+  }
+  h += '</div></div>';
+  return h;
+}
+function toggleReplyForm(rid){
+  var f = document.getElementById('replyForm'+rid);
+  if(!f) return;
+  var open = (f.style.display === 'none' || !f.style.display);
+  f.style.display = open ? 'block' : 'none';
+  if (open){ var t = document.getElementById('replyText'+rid); if(t) t.focus(); }
+}
+function submitReply(parentId, mid){
+  var el = document.getElementById('replyText'+parentId);
+  var t = ((el && el.value) || '').trim();
+  if(!t) return;
+  fetch('/api/reviews', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ movie_id: mid, text: t, parent_id: parentId })
+  }).then(function(r){return r.json();}).then(function(d){
+    if(d.ok){ loadReviews(mid); }
+    else if(d.logged_in===false){ openLogin(); }
+  }).catch(function(){});
 }
 function setRevStar(n){
   _revStars = n;
