@@ -1,5 +1,7 @@
 let BOT = '';
 let curType = 'all', curGenre = 'all', curSort = 'new';
+let gridPage = 1, gridSort = 'new';      // kategoriya/janr to'ri uchun sahifalash
+let searchPage = 1, searchQ = '';        // qidiruv sahifalashi
 
 // Ko'rishni davom ettirish — ochilgan kinolar (localStorage)
 function getRecent(){
@@ -250,6 +252,72 @@ function skeletonModal(){
     + '</div>';
 }
 
+// ── Sahifalash (page raqamlari) ──────────────────────────────────────────────
+function pageNumbers(cur, total){
+  var set = {};
+  [1, total, cur, cur-1, cur-2, cur+1, cur+2].forEach(function(p){ if (p>=1 && p<=total) set[p]=1; });
+  var arr = Object.keys(set).map(Number).sort(function(a,b){ return a-b; });
+  var out = [], prev = 0;
+  arr.forEach(function(p){
+    if (prev && p - prev > 1) out.push('...');
+    out.push(p); prev = p;
+  });
+  return out;
+}
+function paginationHtml(page, pages, fn){
+  if (!pages || pages <= 1) return '';
+  var nums = pageNumbers(page, pages).map(function(p){
+    if (p === '...') return '<span class="pg-gap">…</span>';
+    return '<button class="pg-num'+(p===page?' active':'')+'" onclick="'+fn+'('+p+')">'+p+'</button>';
+  }).join('');
+  var prev = '<button class="pg-arrow"'+(page<=1?' disabled':'')+' onclick="'+fn+'('+(page-1)+')" aria-label="Oldingi">‹</button>';
+  var next = '<button class="pg-arrow"'+(page>=pages?' disabled':'')+' onclick="'+fn+'('+(page+1)+')" aria-label="Keyingi">›</button>';
+  return '<div class="pagination">'+prev+nums+next+'</div>';
+}
+
+// ── Kategoriya / janr ko'rinishi (sahifalangan to'r) ─────────────────────────
+async function loadGrid(){
+  const rows = document.getElementById('rows');
+  if (heroTimer){ clearInterval(heroTimer); heroTimer = null; }
+  if (typeof setHero === 'function') setHero(null);
+  rows.innerHTML = skeletonGrid(18);
+  var params = { page: gridPage, sort: gridSort };
+  if (curType !== 'all') params.type = curType;
+  if (curGenre !== 'all') params.genre = curGenre;
+  try {
+    const d = await fetchMovies(params);
+    if (d.error){ rows.innerHTML = '<div class="state-msg">⚠️ Xato: '+esc(d.error)+'</div>'; return; }
+    const movies = d.movies || [];
+    allMovies = movies;
+    if (!movies.length){ rows.innerHTML = '<div class="state-msg">😕 Hech narsa topilmadi.</div>'; return; }
+    var title = curGenre !== 'all'
+      ? ('🎭 ' + esc(curGenre))
+      : ({movie:'🎬 Kinolar', series:'📺 Seriallar', anime:'🌸 Anime', cartoon:'🧸 Multfilmlar'}[curType] || 'Natijalar');
+    var html = '<div class="sort-bar">'
+      + '<span class="sort-label">Saralash:</span>'
+      + '<button class="sort-btn '+(gridSort==='new'?'active':'')+'" onclick="setGridSort(\'new\')">🆕 Yangi</button>'
+      + '<button class="sort-btn '+(gridSort==='popular'?'active':'')+'" onclick="setGridSort(\'popular\')">🔥 Mashhur</button>'
+      + '<button class="sort-btn '+(gridSort==='rating'?'active':'')+'" onclick="setGridSort(\'rating\')">⭐ Reyting</button>'
+      + '</div>';
+    html += '<div class="row-header" style="margin-bottom:14px;"><span class="row-title">'+title
+      + ' <span class="row-count">'+(d.total||movies.length)+'</span></span></div>';
+    html += '<div class="cards">' + movies.map(cardHtml).join('') + '</div>';
+    html += paginationHtml(d.page || gridPage, d.pages || 1, 'gotoGridPage');
+    rows.innerHTML = html;
+  } catch(e){
+    rows.innerHTML = '<div class="state-msg">❌ Yuklashda xatolik.</div>';
+  }
+}
+function setGridSort(s){ gridSort = s; gridPage = 1; loadGrid(); }
+function gotoGridPage(p){
+  if (p < 1) return;
+  gridPage = p;
+  loadGrid();
+  var g = document.getElementById('genres');
+  var y = g ? (g.getBoundingClientRect().top + window.scrollY - 80) : 0;
+  window.scrollTo({ top: Math.max(0, y), behavior: 'smooth' });
+}
+
 // Asosiy yuklash — bir nechta qator
 async function loadHome(){
   const rows = document.getElementById('rows');
@@ -290,6 +358,11 @@ async function loadHome(){
       if (typeof setHero==='function') setHero(null);
       const title = '❤ Sevimlilar <span class="row-count">' + movies.length + '</span>';
       rows.innerHTML = rowHtml(title, movies.map(cardHtml).join(''));
+      return;
+    }
+    // Kategoriya yoki janr tanlangan bo'lsa — sahifalangan to'r (page raqamlari bilan)
+    if (curType !== 'all' || curGenre !== 'all'){
+      await loadGrid();
       return;
     }
     const typeFilter = curType !== 'all' ? { type: curType } : {};
@@ -537,6 +610,7 @@ function setHero(m, animate){
 
 function setType(t){
   curType = t; curGenre = 'all';
+  gridPage = 1; gridSort = 'new';
   document.querySelectorAll('.genre-pill').forEach((p,i)=>p.classList.toggle('active', i===0));
   document.querySelectorAll('[data-nav]').forEach(a=>a.classList.toggle('nav-active', a.getAttribute('data-nav')===t));
   window.scrollTo({top:0,behavior:'smooth'});
@@ -544,6 +618,7 @@ function setType(t){
 }
 function setGenre(g, el){
   curGenre = g;
+  gridPage = 1;
   document.querySelectorAll('.genre-pill').forEach(p=>p.classList.remove('active'));
   if (el) el.classList.add('active');
   loadHome();
@@ -554,13 +629,29 @@ function openSearch(){ document.getElementById('searchOverlay').classList.add('o
 function closeSearch(){ document.getElementById('searchOverlay').classList.remove('open'); document.getElementById('searchResults').innerHTML=''; document.getElementById('searchInput').value=''; }
 async function doSearch(){
   const q = document.getElementById('searchInput').value.trim();
-  const box = document.getElementById('searchResults');
   if (!q) return;
+  searchQ = q;
+  searchPage = 1;
+  renderSearch(false);
+}
+function gotoSearchPage(p){
+  if (p < 1) return;
+  searchPage = p;
+  renderSearch(true);
+}
+async function renderSearch(scroll){
+  const box = document.getElementById('searchResults');
+  if (!searchQ) return;
   box.innerHTML = skeletonGrid(12);
   try {
-    const d = await fetchMovies({ q, page: 1 });
-    if (!d.movies || !d.movies.length) { box.innerHTML = '<div class="state-msg">Topilmadi</div>'; return; }
-    box.innerHTML = `<div class="cards">${d.movies.map(cardHtml).join('')}</div>`;
+    const d = await fetchMovies({ q: searchQ, page: searchPage });
+    if (!d.movies || !d.movies.length){ box.innerHTML = '<div class="state-msg">Topilmadi</div>'; return; }
+    box.innerHTML = '<div class="cards">' + d.movies.map(cardHtml).join('') + '</div>'
+      + paginationHtml(d.page || searchPage, d.pages || 1, 'gotoSearchPage');
+    if (scroll){
+      var so = document.getElementById('searchOverlay');
+      if (so) so.scrollTo({ top: 0, behavior: 'smooth' });
+    }
   } catch(e){ box.innerHTML = '<div class="state-msg">Xato</div>'; }
 }
 
