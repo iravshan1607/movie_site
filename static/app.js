@@ -226,6 +226,30 @@ async function fetchMovies(params){
   return await r.json();
 }
 
+// ── Skeleton (yuklanish paytidagi "miltillovchi" bo'sh kartalar) ─────────────
+function skeletonHome(){
+  var cards = '<div class="cards">' + Array(6).fill('<div class="skel skel-card"></div>').join('') + '</div>';
+  var row = '<div class="skel-row"><div class="skel skel-row-title"></div>' + cards + '</div>';
+  return row + row;
+}
+function skeletonGrid(n){
+  return '<div class="cards">' + Array(n||12).fill('<div class="skel skel-card"></div>').join('') + '</div>';
+}
+function skeletonSoon(){
+  return '<div class="soon-grid">' + Array(8).fill('<div class="skel skel-card tall skel-soon"></div>').join('') + '</div>';
+}
+function skeletonModal(){
+  return '<div class="skel skel-modal-hero"></div>'
+    + '<div style="padding:22px;">'
+    + '<div class="skel skel-line" style="width:58%;height:26px;margin-bottom:14px;"></div>'
+    + '<div class="skel skel-line" style="width:38%;"></div>'
+    + '<div class="skel skel-line" style="width:92%;margin-top:18px;"></div>'
+    + '<div class="skel skel-line" style="width:86%;"></div>'
+    + '<div class="skel skel-line" style="width:74%;"></div>'
+    + '<div class="skel skel-line" style="width:100%;height:48px;margin-top:22px;border-radius:8px;"></div>'
+    + '</div>';
+}
+
 // Asosiy yuklash — bir nechta qator
 async function loadHome(){
   const rows = document.getElementById('rows');
@@ -236,11 +260,11 @@ async function loadHome(){
   if (curType === 'soon'){
     if (heroTimer){ clearInterval(heroTimer); heroTimer = null; }
     if (typeof setHero === 'function') setHero(null);
-    rows.innerHTML = '<div class="loader"><div class="spin"></div>Yuklanmoqda...</div>';
+    rows.innerHTML = skeletonSoon();
     await loadUpcoming(rows);
     return;
   }
-  rows.innerHTML = '<div class="loader"><div class="spin"></div>Kinolar yuklanmoqda...</div>';
+  rows.innerHTML = skeletonHome();
   try {
     // Sevimlilar rejimi
     if (curType === 'fav') {
@@ -349,8 +373,7 @@ async function loadHome(){
 // ── "Tez orada" (kutilayotgan kinolar) ──────────────────────────────────────
 async function loadUpcoming(rows){
   try {
-    const r = await fetch('/api/upcoming');
-    const d = await r.json();
+    const r = await fetch('/api/upcoming');    const d = await r.json();
     const items = d.items || [];
     var html = '<div class="soon-head">'
       + '<h2 class="soon-title">🔜 Tez orada</h2>'
@@ -533,7 +556,7 @@ async function doSearch(){
   const q = document.getElementById('searchInput').value.trim();
   const box = document.getElementById('searchResults');
   if (!q) return;
-  box.innerHTML = '<div class="loader"><div class="spin"></div></div>';
+  box.innerHTML = skeletonGrid(12);
   try {
     const d = await fetchMovies({ q, page: 1 });
     if (!d.movies || !d.movies.length) { box.innerHTML = '<div class="state-msg">Topilmadi</div>'; return; }
@@ -664,7 +687,7 @@ function delReview(rid, mid){
 async function openMovie(id){
   const modal = document.getElementById('movieModal');
   const box = document.getElementById('movieBox');
-  box.innerHTML = '<div class="loader"><div class="spin"></div></div>';
+  box.innerHTML = skeletonModal();
   modal.classList.add('open'); document.body.style.overflow='hidden';
   try {
     const r = await fetch('/api/movie/'+id);
