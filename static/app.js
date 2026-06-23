@@ -452,6 +452,7 @@ async function loadUpcoming(rows){
       + '<h2 class="soon-title">🔜 Tez orada</h2>'
       + '<p class="soon-sub">Hali qo\'shilmagan, lekin tez orada chiqadigan kinolar. '
       + '<b>🔔 Xabar ber</b> tugmasini bossangiz — kino qo\'shilishi bilan Telegram botdan birinchi bo\'lib xabar olasiz.</p>'
+      + (BOT ? ('<p style="font-size:12.5px;color:#9c97c8;margin:8px 0 0;">⚠️ Xabar kelishi uchun avval <a href="https://t.me/'+BOT+'" target="_blank" rel="noopener" style="color:#5ad1ff;">botni ishga tushiring</a> (Telegramда «Start» bosing).</p>') : '')
       + '</div>';
     html += '<div class="soon-request">'
       + '<input id="soonReqInput" class="soon-req-input" maxlength="200" '
