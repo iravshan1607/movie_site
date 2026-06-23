@@ -1051,6 +1051,19 @@ def movie_page(mid):
         r = None
     if not r:
         return send_from_directory("static", "index.html")
+    # Foydalanuvchi izohlari reytingi — Google AggregateRating (⭐) uchun
+    rev_avg = None
+    rev_count = 0
+    try:
+        with get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT AVG(rating), COUNT(*) FROM reviews WHERE movie_id=%s AND rating > 0", (mid,))
+            rr = cur.fetchone()
+            if rr and rr[1]:
+                rev_count = int(rr[1])
+                rev_avg = round(float(rr[0]), 1)
+    except Exception:
+        pass
     title = r[1] or "Kino"
     genre = r[2] or ""
     year = r[3] or ""
@@ -1119,6 +1132,16 @@ def movie_page(mid):
     if year:
         try: ld["dateCreated"] = str(int(year))
         except Exception: pass
+    # AggregateRating — faqat haqiqiy foydalanuvchi baholari bo'lganda (Google qoidasiga mos)
+    if rev_count and rev_avg:
+        ld["aggregateRating"] = {
+            "@type": "AggregateRating",
+            "ratingValue": rev_avg,
+            "bestRating": 5,
+            "worstRating": 1,
+            "ratingCount": rev_count,
+            "reviewCount": rev_count,
+        }
 
     # VideoObject — Google Search Console "Video" hisoboti uchun ZARUR
     # VideoObject — FAQAT haqiqiy treyler (YouTube) bo'lganda. Aks holda Google xato beradi.
@@ -1141,6 +1164,9 @@ def movie_page(mid):
     # Sahifa struktura ma'lumoti
     jsonld = _json.dumps(ld, ensure_ascii=False)
     video_script = f'<script type="application/ld+json">{video_jsonld}</script>' if video_jsonld else ''
+    # Ulashish uchun JS-xavfsiz qiymatlar (kerakli qo'shtirnoq/maxsus belgilar ekranlanadi)
+    share_url_js = _json.dumps(canonical)
+    share_title_js = _json.dumps(title)
 
     # Treyler bloki — bosilganda yuklanadi (sahifa tez ochilishi uchun iframe darrov yuklanmaydi)
     if trailer_id:
@@ -1163,6 +1189,20 @@ def movie_page(mid):
         )
     else:
         trailer_html = ''
+    # Ko'rinadigan reyting (schema'dagi qiymat bilan mos — Google talabi)
+    if rev_count and rev_avg:
+        filled = max(0, min(5, int(round(rev_avg))))
+        stars = "★" * filled + "☆" * (5 - filled)
+        baho_uz = "baho" if rev_count == 1 else "ta baho"
+        rating_html = (
+            '<div style="display:flex;align-items:center;gap:9px;margin:12px 0;flex-wrap:wrap;">'
+            f'<span style="color:#ffc107;font-size:21px;letter-spacing:2px;line-height:1;">{stars}</span>'
+            f'<b style="font-size:17px;color:#fff;">{rev_avg}</b>'
+            f'<span style="color:#a3a3a3;font-size:14px;">/ 5 · {rev_count} {baho_uz}</span>'
+            '</div>'
+        )
+    else:
+        rating_html = ''
     page = f"""<!DOCTYPE html>
 <html lang="uz">
 <head>
@@ -1202,11 +1242,17 @@ def movie_page(mid):
     <div style="flex:1; min-width:260px;">
       <h1 style="font-family:Bebas Neue,sans-serif; font-size:40px; letter-spacing:1px;">{e(title)}</h1>
       <p style="color:#a3a3a3; margin:8px 0;">{type_uz}{f' · {year}' if year else ''}{f' · {e(genre)}' if genre else ''}</p>
+      {rating_html}
       <p style="line-height:1.7; color:#c8c8c8; margin:16px 0;">{e(desc)}</p>
       <div style="background:rgba(42,171,238,0.12); border:1px solid rgba(42,171,238,0.45); border-radius:10px; padding:14px 16px; margin:18px 0; color:#d6ecff; font-size:14.5px; line-height:1.65;">
         <b>ℹ️ Eslatma:</b> Ushbu {type_uz.lower()} <b>Telegram bot</b> orqali ko'riladi. Quyidagi tugmani bossangiz, Telegram botimizga o'tasiz va u yerda bemalol tomosha qilasiz yoki yuklab olasiz — tez, bepul va ro'yxatdan o'tmasdan.
       </div>
       <a href="{e(bot_link)}" style="display:inline-block; background:#229ed9; color:#fff; padding:14px 28px; border-radius:8px; text-decoration:none; font-weight:600;">▶ Telegram botda ko'rish</a>
+      <button onclick="astraShare()" style="display:inline-flex; align-items:center; gap:8px; margin-left:10px; background:rgba(124,92,255,0.15); color:#fff; padding:14px 24px; border:1px solid rgba(124,92,255,0.5); border-radius:8px; font-weight:600; font-size:15px; font-family:inherit; cursor:pointer;">
+        <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></svg>
+        Do'stga yuborish
+      </button>
+      <span id="astraShareMsg" style="display:none; margin-left:10px; color:#67e08a; font-size:14px;">✅ Havola nusxa olindi!</span>
       <p style="margin-top:24px;"><a href="/" style="color:#a3a3a3;">← Barcha kinolar</a></p>
     </div>
   </article>
@@ -1218,6 +1264,21 @@ function loadTrailer(el){{
   var id = el.getAttribute('data-yt');
   if(!id) return;
   el.innerHTML = '<iframe width="100%" height="100%" src="https://www.youtube-nocookie.com/embed/'+id+'?autoplay=1&rel=0" title="Treyler" frameborder="0" allow="autoplay; encrypted-media; fullscreen" allowfullscreen style="position:absolute;inset:0;width:100%;height:100%;border:0;"></iframe>';
+}}
+var ASTRA_SHARE_URL = {share_url_js};
+var ASTRA_SHARE_TITLE = {share_title_js};
+function astraShare(){{
+  var txt = ASTRA_SHARE_TITLE + ' — ASTRA da ko\'ring 🎬';
+  if (navigator.share){{
+    navigator.share({{ title: ASTRA_SHARE_TITLE, text: txt, url: ASTRA_SHARE_URL }}).catch(function(){{}});
+    return;
+  }}
+  // Native ulashish yo'q — havolani nusxalaymiz va Telegram'ni ochamiz
+  function show(){{ var m=document.getElementById('astraShareMsg'); if(m){{ m.style.display='inline'; setTimeout(function(){{ m.style.display='none'; }}, 2200); }} }}
+  if (navigator.clipboard && navigator.clipboard.writeText){{
+    navigator.clipboard.writeText(ASTRA_SHARE_URL).then(show).catch(function(){{}});
+  }}
+  window.open('https://t.me/share/url?url=' + encodeURIComponent(ASTRA_SHARE_URL) + '&text=' + encodeURIComponent(ASTRA_SHARE_TITLE + ' — ASTRA da ko\'ring 🎬'), '_blank');
 }}
 </script>
 </body>
