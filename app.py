@@ -12,6 +12,7 @@ import hmac
 import hashlib
 import time
 import json
+import html
 import threading
 from urllib.parse import urlparse, unquote
 import pg8000.dbapi
@@ -52,6 +53,69 @@ def _yt_id(url):
         return url
     m = re.search(r"(?:youtu\.be/|youtube\.com/(?:watch\?v=|embed/|v/|shorts/))([A-Za-z0-9_-]{11})", url)
     return m.group(1) if m else ""
+
+# ── Telegram bot orqali bildirishnoma yuborish ────────────────────────────────
+def _tg_send(chat_id, text, buttons=None):
+    """Botdan foydalanuvchiga xabar yuboradi.
+    Eslatma: foydalanuvchi botni 'Start' qilmagan bo'lsa, Telegram ruxsat bermaydi —
+    bunday holatda jimgina o'tib ketamiz (xato chiqarmaymiz)."""
+    if not BOT_TOKEN or not chat_id:
+        return False
+    payload = {
+        "chat_id": int(chat_id),
+        "text": text,
+        "parse_mode": "HTML",
+        "disable_web_page_preview": True,
+    }
+    if buttons:
+        payload["reply_markup"] = json.dumps({"inline_keyboard": buttons})
+    try:
+        r = requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
+                          json=payload, timeout=10).json()
+        if not r.get("ok"):
+            log.info("tg_send o'tkazib yuborildi (chat=%s): %s", chat_id, r.get("description"))
+        return bool(r.get("ok"))
+    except Exception as e:
+        log.warning("tg_send: %s", e)
+        return False
+
+def _movie_links(movie_id):
+    """Kinoga ikki havola: bot deep-link (start) va sayt sahifasi."""
+    bot = f"https://t.me/{BOT_USERNAME}?start=movie_{movie_id}" if BOT_USERNAME else ""
+    web = f"{BASE_URL}/kino/{movie_id}"
+    return bot, web
+
+def _watch_button(movie_id, label="▶️ Ko'rish"):
+    bot, web = _movie_links(movie_id)
+    target = bot or web
+    return [[{"text": label, "url": target}]] if target else None
+
+def _notify_reply(to_uid, from_name, movie_title, movie_id, text):
+    """Kimdir izohga javob berganda — izoh egasiga bot orqali xabar (fon oqimida)."""
+    snippet = text if len(text) <= 140 else text[:137] + "…"
+    head = f"💬 <b>{html.escape(from_name or 'Kimdir')}</b> sizning izohingizga javob berdi"
+    if movie_title:
+        head += f" — <b>{html.escape(movie_title)}</b>"
+    msg = head + ":\n\n" + f"<i>{html.escape(snippet)}</i>"
+    btn = _watch_button(movie_id, "💬 Izohni ko'rish")
+    threading.Thread(target=_tg_send, args=(to_uid, msg, btn), daemon=True).start()
+
+def _notify_release(user_ids, title, movie_id):
+    """'Tez orada' kino qo'shilganda — obuna bo'lganlarga bot orqali xabar (fon oqimida)."""
+    user_ids = [u for u in dict.fromkeys(user_ids) if u]   # takrorlarni olib tashlash
+    if not user_ids:
+        return
+    msg = ("🎉 <b>Kutilgan kino qo'shildi!</b>\n\n"
+           f"<b>{html.escape(title or 'Kino')}</b> endi tomosha qilish uchun tayyor 👇")
+    btn = _watch_button(movie_id, "▶️ Hoziroq ko'rish")
+    def worker():
+        ok = 0
+        for u in user_ids:
+            if _tg_send(u, msg, btn):
+                ok += 1
+            time.sleep(0.05)   # Telegram limitiga ehtiyot (~20-30 xabar/sek)
+        log.info("Release bildirishnoma: %s/%s yuborildi (movie=%s)", ok, len(user_ids), movie_id)
+    threading.Thread(target=worker, daemon=True).start()
 
 # ── Baza (pg8000 — sof Python, libpq kerak emas) ──────────────────────────────
 def _parse_db_url(url):
@@ -125,8 +189,36 @@ def init_db():
                 )
             """)
             cur.execute("CREATE INDEX IF NOT EXISTS idx_reviews_movie ON reviews(movie_id)")
+            # Izohga javob (thread) uchun — parent_id (NULL bo'lsa — asosiy izoh)
+            cur.execute("ALTER TABLE reviews ADD COLUMN IF NOT EXISTS parent_id BIGINT")
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_reviews_parent ON reviews(parent_id)")
+            # "Tez orada" — hali qo'shilmagan, lekin so'ralgan/kutilayotgan kinolar
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS upcoming (
+                    id SERIAL PRIMARY KEY,
+                    title TEXT NOT NULL,
+                    note TEXT,
+                    poster_url TEXT,
+                    status TEXT NOT NULL DEFAULT 'soon',  -- pending | soon | released
+                    movie_id BIGINT,                       -- qo'shilgach bog'lanadigan kino
+                    created_by BIGINT,
+                    created_at TIMESTAMP DEFAULT NOW(),
+                    released_at TIMESTAMP
+                )
+            """)
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_upcoming_status ON upcoming(status)")
+            # "Tez orada" ga obuna — kino qo'shilganda kimga xabar berish kerakligi
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS upcoming_subs (
+                    upcoming_id INTEGER NOT NULL,
+                    user_id BIGINT NOT NULL,
+                    user_name TEXT,
+                    created_at TIMESTAMP DEFAULT NOW(),
+                    PRIMARY KEY (upcoming_id, user_id)
+                )
+            """)
             conn.commit()
-        log.info("Kino baza tayyor (poster_url + site_settings + favorites + reviews)")
+        log.info("Kino baza tayyor (poster_url + site_settings + favorites + reviews + upcoming)")
     except Exception as e:
         log.warning("init_db: %s", e)
 
@@ -508,26 +600,50 @@ def api_favorites():
 # ── Kino izohlari (fikr bildirish) ────────────────────────────────────────────
 @app.route("/api/reviews/<int:mid>", methods=["GET"])
 def api_reviews_get(mid):
-    """Kino izohlari (hammaga ochiq). Kirgan foydalanuvchi o'z izohini ko'radi (mine)."""
+    """Kino izohlari (hammaga ochiq). Javoblar asosiy izoh ostiga joylanadi (thread)."""
     me = session.get("tg_id")
     try:
         with get_conn() as conn:
             cur = conn.cursor()
-            cur.execute("SELECT id, user_id, user_name, user_photo, rating, text, created_at "
-                        "FROM reviews WHERE movie_id=%s ORDER BY created_at DESC LIMIT 200", (mid,))
+            cur.execute("SELECT id, user_id, user_name, user_photo, rating, text, created_at, parent_id "
+                        "FROM reviews WHERE movie_id=%s ORDER BY created_at ASC LIMIT 500", (mid,))
             rows = cur.fetchall()
-        out = []
+        # id -> izoh ob'ekti
+        items = {}
+        order = []
         for r in rows:
-            out.append({
-                "id": r[0],
-                "name": r[2] or "Foydalanuvchi",
-                "photo": r[3] or "",
-                "rating": r[4] or 0,
-                "text": r[5] or "",
+            items[r[0]] = {
+                "id": r[0], "_uid": int(r[1]),
+                "name": r[2] or "Foydalanuvchi", "photo": r[3] or "",
+                "rating": r[4] or 0, "text": r[5] or "",
                 "date": r[6].strftime("%Y-%m-%d") if r[6] else "",
                 "mine": bool(me and int(r[1]) == int(me)),
-            })
-        return jsonify({"reviews": out, "count": len(out), "logged_in": bool(me)})
+                "_parent": r[7], "replies": [],
+            }
+            order.append(r[0])
+        tops = []
+        for rid in order:
+            it = items[rid]
+            pid = it["_parent"]
+            if pid and pid in items:
+                # javobni eng yuqori (asosiy) izoh ostiga biriktiramiz
+                anc = items[pid]
+                it["reply_to"] = anc["name"]
+                while anc.get("_parent") and anc["_parent"] in items:
+                    anc = items[anc["_parent"]]
+                anc["replies"].append(it)
+            else:
+                tops.append(it)
+        # asosiy izohlar — yangidan eskiga; javoblar — eskidan yangiga (suhbat tartibi)
+        tops.sort(key=lambda x: x["id"], reverse=True)
+        def _clean(d):
+            d.pop("_uid", None); d.pop("_parent", None)
+            return d
+        out = []
+        for t in tops:
+            t["replies"] = [_clean(x) for x in t["replies"]]
+            out.append(_clean(t))
+        return jsonify({"reviews": out, "count": len(rows), "logged_in": bool(me)})
     except Exception as e:
         log.warning("reviews get: %s", e)
         return jsonify({"reviews": [], "count": 0, "logged_in": bool(me)})
@@ -542,22 +658,45 @@ def api_reviews_add():
     mid = data.get("movie_id")
     text = (data.get("text") or "").strip()
     try:
+        parent_id = int(data.get("parent_id")) if data.get("parent_id") else None
+    except Exception:
+        parent_id = None
+    try:
         rating = int(data.get("rating") or 0)
     except Exception:
         rating = 0
     rating = max(0, min(5, rating))
+    # Javobga reyting qo'yilmaydi (faqat asosiy izohga)
+    if parent_id:
+        rating = 0
     if not mid or not text:
         return jsonify({"error": "matn kerak"}), 400
     text = text[:1000]
+    my_name = session.get("tg_name", "") or "Foydalanuvchi"
+    notify_uid = None
+    movie_title = ""
     try:
         with get_conn() as conn:
             cur = conn.cursor()
-            cur.execute("INSERT INTO reviews (movie_id, user_id, user_name, user_photo, rating, text) "
-                        "VALUES (%s, %s, %s, %s, %s, %s) RETURNING id",
-                        (int(mid), uid, session.get("tg_name", ""), session.get("tg_photo", ""),
-                         rating, text))
+            cur.execute("INSERT INTO reviews (movie_id, user_id, user_name, user_photo, rating, text, parent_id) "
+                        "VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id",
+                        (int(mid), uid, my_name, session.get("tg_photo", ""),
+                         rating, text, parent_id))
             rid = cur.fetchone()[0]
+            # Javob bo'lsa — asosiy izoh egasini va kino nomini aniqlaymiz (bildirishnoma uchun)
+            if parent_id:
+                cur.execute("SELECT user_id FROM reviews WHERE id=%s", (parent_id,))
+                pr = cur.fetchone()
+                if pr:
+                    notify_uid = int(pr[0])
+                cur.execute("SELECT title FROM movies WHERE id=%s", (int(mid),))
+                mt = cur.fetchone()
+                if mt:
+                    movie_title = mt[0] or ""
             conn.commit()
+        # O'ziga o'zi javob yozsa — xabar bermaymiz
+        if parent_id and notify_uid and notify_uid != int(uid):
+            _notify_reply(notify_uid, my_name, movie_title, int(mid), text)
         return jsonify({"ok": True, "id": rid})
     except Exception as e:
         log.warning("reviews add: %s", e)
@@ -572,12 +711,209 @@ def api_reviews_del(rid):
     try:
         with get_conn() as conn:
             cur = conn.cursor()
+            # Faqat o'z izohini o'chira oladi
             cur.execute("DELETE FROM reviews WHERE id=%s AND user_id=%s", (rid, uid))
+            # Asosiy izoh o'chsa, unga yozilgan javoblar ham o'chadi (thread tugaydi)
+            cur.execute("DELETE FROM reviews WHERE parent_id=%s", (rid,))
             conn.commit()
         return jsonify({"ok": True})
     except Exception as e:
         log.warning("reviews del: %s", e)
         return jsonify({"error": "xato"}), 500
+
+# ── "Tez orada" (kutilayotgan kinolar) ────────────────────────────────────────
+@app.route("/api/upcoming")
+def api_upcoming():
+    """Ommaviy ro'yxat — saytda ko'rsatiladigan (status='soon') kutilayotgan kinolar."""
+    me = session.get("tg_id")
+    try:
+        with get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT u.id, u.title, u.note, u.poster_url, u.created_at,
+                       (SELECT COUNT(*) FROM upcoming_subs s WHERE s.upcoming_id = u.id) AS subs,
+                       (SELECT COUNT(*) FROM upcoming_subs s WHERE s.upcoming_id = u.id AND s.user_id = %s) AS mine
+                FROM upcoming u
+                WHERE u.status = 'soon'
+                ORDER BY u.created_at DESC
+                LIMIT 100
+            """, (me if me else 0,))
+            rows = cur.fetchall()
+        items = [{
+            "id": r[0], "title": r[1], "note": r[2] or "", "poster_url": r[3] or "",
+            "subs": int(r[5] or 0), "subscribed": bool(r[6]),
+        } for r in rows]
+        return jsonify({"items": items, "logged_in": bool(me)})
+    except Exception as e:
+        log.warning("upcoming: %s", e)
+        return jsonify({"items": [], "logged_in": bool(me)})
+
+@app.route("/api/upcoming/<int:up_id>/subscribe", methods=["POST", "DELETE"])
+def api_upcoming_sub(up_id):
+    """Foydalanuvchi 'Xabar ber' bossa — obuna bo'ladi; qaytadan bossa — bekor qiladi."""
+    uid = session.get("tg_id")
+    if not uid:
+        return jsonify({"error": "login kerak", "logged_in": False}), 401
+    try:
+        with get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT title, status FROM upcoming WHERE id=%s", (up_id,))
+            row = cur.fetchone()
+            if not row:
+                return jsonify({"error": "topilmadi"}), 404
+            if request.method == "POST":
+                cur.execute("INSERT INTO upcoming_subs (upcoming_id, user_id, user_name) "
+                            "VALUES (%s, %s, %s) ON CONFLICT (upcoming_id, user_id) DO NOTHING",
+                            (up_id, uid, session.get("tg_name", "")))
+            else:
+                cur.execute("DELETE FROM upcoming_subs WHERE upcoming_id=%s AND user_id=%s", (up_id, uid))
+            conn.commit()
+        subscribed = (request.method == "POST")
+        # Obuna bo'lganini bot orqali tasdiqlaymiz (start qilgan bo'lsa keladi)
+        if subscribed:
+            title = row[0] or "kino"
+            threading.Thread(
+                target=_tg_send,
+                args=(uid, f"🔔 <b>{html.escape(title)}</b> qo'shilganda sizga birinchi bo'lib xabar beramiz!"),
+                daemon=True).start()
+        return jsonify({"ok": True, "subscribed": subscribed})
+    except Exception as e:
+        log.warning("upcoming sub: %s", e)
+        return jsonify({"error": "xato"}), 500
+
+@app.route("/api/upcoming/request", methods=["POST"])
+def api_upcoming_request():
+    """Foydalanuvchi yangi kino so'raydi — admin tasdiqlagunча 'pending' bo'lib turadi.
+    So'ragan odam avtomatik obuna bo'ladi (qo'shilganda xabar oladi)."""
+    uid = session.get("tg_id")
+    if not uid:
+        return jsonify({"error": "login kerak", "logged_in": False}), 401
+    data = request.get_json(silent=True) or {}
+    title = (data.get("title") or "").strip()[:200]
+    if not title:
+        return jsonify({"error": "nom kerak"}), 400
+    note = (data.get("note") or "").strip()[:300]
+    try:
+        with get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("INSERT INTO upcoming (title, note, status, created_by) "
+                        "VALUES (%s, %s, 'pending', %s) RETURNING id", (title, note, uid))
+            new_id = cur.fetchone()[0]
+            cur.execute("INSERT INTO upcoming_subs (upcoming_id, user_id, user_name) "
+                        "VALUES (%s, %s, %s) ON CONFLICT (upcoming_id, user_id) DO NOTHING",
+                        (new_id, uid, session.get("tg_name", "")))
+            conn.commit()
+        return jsonify({"ok": True})
+    except Exception as e:
+        log.warning("upcoming request: %s", e)
+        return jsonify({"error": "xato"}), 500
+
+# ── "Tez orada" — admin boshqaruvi ────────────────────────────────────────────
+@app.route("/api/admin/upcoming/list", methods=["POST"])
+def admin_upcoming_list():
+    d = request.get_json() or {}
+    if not _check(d):
+        return jsonify({"error": "ruxsat yo'q"}), 403
+    try:
+        with get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT u.id, u.title, u.note, u.poster_url, u.status, u.movie_id, u.created_at,
+                       (SELECT COUNT(*) FROM upcoming_subs s WHERE s.upcoming_id = u.id) AS subs
+                FROM upcoming u
+                ORDER BY CASE u.status WHEN 'pending' THEN 0 WHEN 'soon' THEN 1 ELSE 2 END,
+                         u.created_at DESC
+                LIMIT 300
+            """)
+            rows = cur.fetchall()
+        items = [{
+            "id": r[0], "title": r[1], "note": r[2] or "", "poster_url": r[3] or "",
+            "status": r[4], "movie_id": r[5], "subs": int(r[7] or 0),
+            "date": r[6].strftime("%Y-%m-%d") if r[6] else "",
+        } for r in rows]
+        return jsonify({"items": items})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/admin/upcoming/save", methods=["POST"])
+def admin_upcoming_save():
+    """Yangi 'Tez orada' qo'shish yoki mavjudini tahrirlash (id berilsa)."""
+    d = request.get_json() or {}
+    if not _check(d):
+        return jsonify({"error": "ruxsat yo'q"}), 403
+    title = (d.get("title") or "").strip()[:200]
+    if not title:
+        return jsonify({"error": "nom kerak"}), 400
+    note = (d.get("note") or "").strip()[:300]
+    poster = (d.get("poster_url") or "").strip()
+    status = d.get("status") or "soon"
+    if status not in ("pending", "soon"):
+        status = "soon"
+    up_id = d.get("id")
+    try:
+        with get_conn() as conn:
+            cur = conn.cursor()
+            if up_id:
+                cur.execute("UPDATE upcoming SET title=%s, note=%s, poster_url=%s, status=%s "
+                            "WHERE id=%s AND status <> 'released'",
+                            (title, note, poster, status, int(up_id)))
+            else:
+                cur.execute("INSERT INTO upcoming (title, note, poster_url, status) "
+                            "VALUES (%s, %s, %s, %s)", (title, note, poster, status))
+            conn.commit()
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/admin/upcoming/delete", methods=["POST"])
+def admin_upcoming_delete():
+    d = request.get_json() or {}
+    if not _check(d):
+        return jsonify({"error": "ruxsat yo'q"}), 403
+    try:
+        with get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("DELETE FROM upcoming_subs WHERE upcoming_id=%s", (int(d.get("id")),))
+            cur.execute("DELETE FROM upcoming WHERE id=%s", (int(d.get("id")),))
+            conn.commit()
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/admin/upcoming/release", methods=["POST"])
+def admin_upcoming_release():
+    """Kutilgan kino qo'shildi → mavjud kinoga bog'laymiz va obunachilarga xabar yuboramiz."""
+    d = request.get_json() or {}
+    if not _check(d):
+        return jsonify({"error": "ruxsat yo'q"}), 403
+    up_id = d.get("id")
+    movie_id = d.get("movie_id")
+    if not up_id or not movie_id:
+        return jsonify({"error": "id va movie_id kerak"}), 400
+    try:
+        with get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT title, status FROM upcoming WHERE id=%s", (int(up_id),))
+            row = cur.fetchone()
+            if not row:
+                return jsonify({"error": "topilmadi"}), 404
+            if row[1] == "released":
+                return jsonify({"error": "allaqachon chiqarilgan"}), 400
+            title = row[0] or ""
+            # kino mavjudligini tekshiramiz + asl nomни olamiz
+            cur.execute("SELECT title FROM movies WHERE id=%s", (int(movie_id),))
+            mv = cur.fetchone()
+            if not mv:
+                return jsonify({"error": "bunday ID'li kino yo'q"}), 400
+            cur.execute("SELECT user_id FROM upcoming_subs WHERE upcoming_id=%s", (int(up_id),))
+            subs = [int(r[0]) for r in cur.fetchall()]
+            cur.execute("UPDATE upcoming SET status='released', movie_id=%s, released_at=NOW() WHERE id=%s",
+                        (int(movie_id), int(up_id)))
+            conn.commit()
+        _notify_release(subs, title, int(movie_id))
+        return jsonify({"ok": True, "notified": len(subs)})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 # ══════════════════ SEO (Google uchun) ══════════════════
 import html as _html
