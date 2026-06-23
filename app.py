@@ -796,14 +796,22 @@ def api_upcoming_request():
     try:
         with get_conn() as conn:
             cur = conn.cursor()
-            cur.execute("INSERT INTO upcoming (title, note, status, created_by) "
-                        "VALUES (%s, %s, 'pending', %s) RETURNING id", (title, note, uid))
-            new_id = cur.fetchone()[0]
+            # Shu nomdagi 'pending' yoki 'soon' allaqachon bormi? Bo'lsa — yangi yaratmaymiz,
+            # mavjud yozuvga obuna qilamiz (hammasi bitta yozuvda yig'iladi, hammasiga xabar boradi)
+            cur.execute("SELECT id FROM upcoming WHERE LOWER(TRIM(title)) = LOWER(TRIM(%s)) "
+                        "AND status IN ('pending','soon') ORDER BY id LIMIT 1", (title,))
+            row = cur.fetchone()
+            if row:
+                target_id = row[0]
+            else:
+                cur.execute("INSERT INTO upcoming (title, note, status, created_by) "
+                            "VALUES (%s, %s, 'pending', %s) RETURNING id", (title, note, uid))
+                target_id = cur.fetchone()[0]
             cur.execute("INSERT INTO upcoming_subs (upcoming_id, user_id, user_name) "
                         "VALUES (%s, %s, %s) ON CONFLICT (upcoming_id, user_id) DO NOTHING",
-                        (new_id, uid, session.get("tg_name", "")))
+                        (target_id, uid, session.get("tg_name", "")))
             conn.commit()
-        return jsonify({"ok": True})
+        return jsonify({"ok": True, "merged": bool(row)})
     except Exception as e:
         log.warning("upcoming request: %s", e)
         return jsonify({"error": "xato"}), 500
