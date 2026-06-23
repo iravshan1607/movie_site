@@ -28,12 +28,9 @@ DATABASE_URL   = os.getenv("DATABASE_URL", "")
 BOT_TOKEN      = os.getenv("BOT_TOKEN", "")
 BOT_USERNAME   = os.getenv("BOT_USERNAME", "")          # botga yo'naltirish + Telegram login uchun
 ADMIN_PASSWORD = os.getenv("KINO_ADMIN_PASSWORD", "admin123")
-ADMIN_CHAT_ID  = os.getenv("ADMIN_CHAT_ID", "")    # admin Telegram ID(lar), vergul bilan — yangi so'rov xabari uchun
-REVIEW_COOLDOWN  = int(os.getenv("REVIEW_COOLDOWN", "15"))    # izohlar orasidagi minimal vaqt (sekund)
-REQUEST_COOLDOWN = int(os.getenv("REQUEST_COOLDOWN", "30"))   # kino so'rovlari orasidagi minimal vaqt (sekund)
-ADMIN_CHAT_ID  = os.getenv("ADMIN_CHAT_ID", "")   # admin(lar) telegram ID — yangi so'rov xabari uchun (vergul bilan bir nechta)
+ADMIN_CHAT_ID  = os.getenv("ADMIN_CHAT_ID", "")    # admin(lar) Telegram ID — yangi so'rov xabari uchun (vergul bilan bir nechta)
 REVIEW_COOLDOWN  = int(os.getenv("REVIEW_COOLDOWN", "15"))    # soniya — izoh/javob orasidagi minimal vaqt
-REQUEST_COOLDOWN = int(os.getenv("REQUEST_COOLDOWN", "60"))   # soniya — yangi kino so'rovi orasidagi minimal vaqt
+REQUEST_COOLDOWN = int(os.getenv("REQUEST_COOLDOWN", "30"))   # soniya — yangi kino so'rovi orasidagi minimal vaqt
 TMDB_TOKEN     = os.getenv("TMDB_TOKEN", "")   # TMDB v4 "Read Access Token" (Bearer)
 TMDB_KEY       = os.getenv("TMDB_KEY", "")     # TMDB v3 API key (zaxira)
 PORT           = int(os.getenv("PORT", "8080"))
@@ -1614,7 +1611,8 @@ def seo_top():
     return _render_listing("Eng yaxshilar", "Reyting bo'yicha eng zo'r kinolar —",
                            rows, total, page, 24, "/top", "Eng yaxshilar")
 
-
+# ══════════════════ ADMIN ══════════════════
+def _check(d):
     # Sessiyada admin bo'lsa — parol shart emas; aks holda parol orqali (zaxira)
     if session.get("is_admin"):
         return True
