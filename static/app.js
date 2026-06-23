@@ -1,5 +1,21 @@
 let BOT = '';
 let curType = 'all', curGenre = 'all', curSort = 'new';
+
+// Ko'rishni davom ettirish — ochilgan kinolar (localStorage)
+function getRecent(){
+  try { return JSON.parse(localStorage.getItem('astra_recent') || '[]'); }
+  catch(e){ return []; }
+}
+function pushRecent(m){
+  if (!m || !m.id) return;
+  try {
+    let list = getRecent().filter(x => x.id !== m.id);
+    list.unshift({ id:m.id, title:m.title, poster_id:m.poster_id, poster_url:m.poster_url,
+                   type:m.type, year:m.year, rating:m.rating, genre:m.genre });
+    list = list.slice(0, 12);
+    localStorage.setItem('astra_recent', JSON.stringify(list));
+  } catch(e){}
+}
 let allMovies = [];
 const typeLabel = { movie: 'Kino', series: 'Serial', anime: 'Anime', cartoon: 'Multfilm' };
 // Fake poster ranglari (poster bo'lmasa)
@@ -278,6 +294,15 @@ async function loadHome(){
     const listTitle = (curType==='all' && curGenre==='all')
       ? {new:'🆕 Yangi qo\'shildi', views:'🔥 Eng ko\'p ko\'rilgan', year:'📅 Yil bo\'yicha'}[curSort]
       : 'Natijalar';
+
+    // #1 Ko'rishni davom ettiring (faqat "Yangi" + Barchasi rejimida, tepada)
+    if (curSort === 'new' && curType === 'all' && curGenre === 'all') {
+      const recent = getRecent();
+      if (recent.length) {
+        html += rowHtml('▶ Ko\'rishni davom ettiring', recent.map(cardHtml).join(''));
+      }
+    }
+
     html += rowHtml(listTitle, sorted.slice(0, 10).map(cardHtml).join(''));
 
     // Qo'shimcha qatorlar — faqat "Yangi" saralash + Barchasi rejimida
@@ -289,6 +314,15 @@ async function loadHome(){
       for (const [t, label] of [['movie','🎬 Kinolar'],['series','📺 Seriallar'],['anime','🌸 Anime'],['cartoon','🧸 Multfilmlar']]) {
         const sub = movies.filter(m=>m.type===t);
         if (sub.length) html += rowHtml(label, sub.slice(0,12).map(cardHtml).join(''));
+      }
+      // #2 Janr bo'yicha qatorlar (eng ko'p uchragan 4 ta janr)
+      const gcount = {};
+      movies.forEach(m => (m.genre||'').split(',').map(s=>s.trim()).filter(Boolean)
+        .forEach(g => { gcount[g] = (gcount[g]||0) + 1; }));
+      const topGenres = Object.keys(gcount).sort((a,b)=>gcount[b]-gcount[a]).slice(0,4);
+      for (const g of topGenres) {
+        const sub = movies.filter(m => (m.genre||'').toLowerCase().includes(g.toLowerCase()));
+        if (sub.length >= 2) html += rowHtml('🎭 ' + g, sub.slice(0,12).map(cardHtml).join(''));
       }
     }
     rows.innerHTML = html;
@@ -484,6 +518,7 @@ async function openMovie(id){
     const d = await r.json();
     if (!d.found) { box.innerHTML = '<div class="state-msg">Topilmadi</div>'; return; }
     const m = d.movie;
+    pushRecent(m);
     const p = posterUrl(m);
     const isSeries = m.type==='series' || m.type==='anime';
     const botLink = BOT ? `https://t.me/${BOT}?start=movie_${m.id}` : '#';
