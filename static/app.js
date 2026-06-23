@@ -1,6 +1,8 @@
 let BOT = '';
 let curType = 'all', curGenre = 'all', curSort = 'new';
 let gridPage = 1, gridSort = 'new';      // kategoriya/janr to'ri uchun sahifalash
+let gridYear = 'all', gridLang = 'all', gridQuality = 'all';   // qo'shimcha filtrlar
+let FILTERS = null;                       // /api/filters keshi
 let searchPage = 1, searchQ = '';        // qidiruv sahifalashi
 
 // Ko'rishni davom ettirish — ochilgan kinolar (localStorage)
@@ -45,6 +47,76 @@ function toast(msg, isErr){
   t._timer = setTimeout(function(){ t.style.opacity='0'; t.style.transform='translateX(-50%) translateY(20px)'; }, 3200);
 }
 
+// Kontent almashganda yumshoq paydo bo'lish animatsiyasi
+function fadeIn(el){
+  if (!el) return;
+  el.classList.remove('view-fade');
+  void el.offsetWidth;      // animatsiyani qayta ishga tushiramiz
+  el.classList.add('view-fade');
+}
+
+// ── Bildirishnomalar (qo'ng'iroq) ────────────────────────────────────────────
+var _notifItems = [], _notifPoll = null;function startNotifPoll(){
+  if (_notifPoll) return;
+  _notifPoll = setInterval(function(){ if (ME.logged_in) loadNotif(); }, 60000);
+}
+function loadNotif(){
+  fetch('/api/notifications').then(function(r){return r.json();}).then(function(d){
+    if (!d || d.logged_in === false) return;
+    _notifItems = d.items || [];
+    var badge = document.getElementById('navBellBadge');
+    if (badge){
+      var n = d.unread || 0;
+      badge.textContent = n > 9 ? '9+' : n;
+      badge.style.display = n > 0 ? '' : 'none';
+    }
+    var panel = document.getElementById('notifPanel');
+    if (panel && panel.classList.contains('open')) renderNotif();
+  }).catch(function(){});
+}
+function renderNotif(){
+  var list = document.getElementById('notifList');
+  if (!list) return;
+  if (!_notifItems.length){
+    list.innerHTML = '<div class="notif-empty">Hozircha bildirishnoma yo\'q 🔕</div>';
+    return;
+  }
+  list.innerHTML = _notifItems.map(function(n){
+    var icon = n.type === 'release' ? '🎉' : '💬';
+    var clickable = n.movie_id ? (' onclick="openNotif('+n.movie_id+')"') : '';
+    return '<div class="notif-item'+(n.read?'':' unread')+(n.movie_id?' clickable':'')+'"'+clickable+'>'
+      + '<span class="notif-ic">'+icon+'</span>'
+      + '<div class="notif-body"><div class="notif-text">'+esc(n.text)+'</div>'
+      + '<div class="notif-date">'+esc(n.date)+'</div></div></div>';
+  }).join('');
+}
+function toggleNotif(){
+  var panel = document.getElementById('notifPanel');
+  if (!panel) return;
+  var open = panel.classList.contains('open');
+  if (open){ panel.classList.remove('open'); return; }
+  closeUserMenu();
+  renderNotif();
+  panel.classList.add('open');
+  // ochilganda — o'qilgan deb belgilaymiz
+  if (_notifItems.some(function(n){ return !n.read; })){
+    fetch('/api/notifications/read', { method:'POST' }).then(function(){
+      var badge = document.getElementById('navBellBadge');
+      if (badge) badge.style.display = 'none';
+      _notifItems.forEach(function(n){ n.read = true; });
+    }).catch(function(){});
+  }
+}
+function closeNotif(){ var p = document.getElementById('notifPanel'); if (p) p.classList.remove('open'); }
+function openNotif(movieId){ closeNotif(); openMovie(movieId); }
+document.addEventListener('click', function(e){
+  var panel = document.getElementById('notifPanel');
+  var bell = document.getElementById('navBell');
+  if (panel && panel.classList.contains('open') && !panel.contains(e.target) && bell && !bell.contains(e.target)){
+    closeNotif();
+  }
+});
+
 // Sevimlilar — kirgan bo'lsa serverda (bot bilan umumiy), aks holda qurilmada
 let ME = { logged_in: false };
 let SERVER_FAVS = null; // kirgan foydalanuvchi sevimlilari (id massivi)
@@ -72,6 +144,7 @@ function toggleFav(id, el){
     try { localStorage.setItem('astra_favs', JSON.stringify(f)); } catch(e){}
   }
   if (el) el.classList.toggle('faved', adding);
+  toast(adding ? '❤️ Sevimlilarga qo\'shildi' : 'Sevimlilardan olib tashlandi');
   if (curType === 'fav') loadHome();
 }
 
@@ -139,14 +212,17 @@ function applyMe(me){
   ME = me || {logged_in:false};
   var login = document.getElementById('navLogin');
   var av = document.getElementById('navAvatar');
+  var bell = document.getElementById('navBell');
   if (ME.logged_in){
     login.style.display='none';
     av.style.display='';
     setAvatar(ME.photo || '', ME.name || 'Foydalanuvchi');
     document.getElementById('userMenuName').textContent = ME.name || 'Foydalanuvchi';
+    if (bell){ bell.style.display=''; loadNotif(); startNotifPoll(); }
   } else {
     login.style.display = BOT ? '' : 'none';
     av.style.display='none';
+    if (bell) bell.style.display='none';
     closeUserMenu();
   }
 }
@@ -216,8 +292,9 @@ function cardHtml(m){
   const bg = p ? `<img src="${p}" loading="lazy" onerror="this.remove()">` : '';
   const fav = isFav(m.id) ? ' faved' : '';
   const rate = m.rating ? `<span class="card-rate">⭐ ${(+m.rating).toFixed(1)}</span>` : '';
+  const meta = [m.year, ({movie:'Kino',series:'Serial',anime:'Anime',cartoon:'Multfilm'}[m.type]||''), m.quality].filter(Boolean).join(' · ');
   return `<a href="/kino/${m.id}" class="card ${pal(m.id)}" onclick="event.preventDefault();openMovie(${m.id})">
-    <div class="card-img">${bg}${rate}<span class="card-name">${esc(m.title)}</span></div>
+    <div class="card-img">${bg}${rate}<span class="card-name">${esc(m.title)}</span>${meta?`<span class="card-meta">${esc(meta)}</span>`:''}</div>
     <button class="fav-btn${fav}" onclick="event.stopPropagation();event.preventDefault();toggleFav(${m.id},this)" aria-label="Sevimlilarga qo'shish"><svg viewBox="0 0 24 24"><path d="M12 21s-8-5.3-8-11a4.5 4.5 0 0 1 8-2.8A4.5 4.5 0 0 1 20 10c0 5.7-8 11-8 11z"/></svg></button>
     <div class="card-overlay"><div class="card-play"><svg viewBox="0 0 24 24" fill="#000"><path d="M8 5v14l11-7z"/></svg></div></div>
   </a>`;
@@ -295,15 +372,49 @@ function paginationHtml(page, pages, fn){
 }
 
 // ── Kategoriya / janr ko'rinishi (sahifalangan to'r) ─────────────────────────
+function loadFilters(){
+  if (FILTERS) return Promise.resolve(FILTERS);
+  return fetch('/api/filters').then(function(r){return r.json();})
+    .then(function(d){ FILTERS = d || {years:[],languages:[],qualities:[]}; return FILTERS; })
+    .catch(function(){ FILTERS = {years:[],languages:[],qualities:[]}; return FILTERS; });
+}
+function filterBarHtml(){
+  var f = FILTERS || {years:[],languages:[],qualities:[]};
+  function sel(id, label, opts, cur){
+    var o = '<option value="all">'+label+'</option>' + (opts||[]).map(function(v){
+      return '<option value="'+esc(String(v))+'"'+(String(v)===String(cur)?' selected':'')+'>'+esc(String(v))+'</option>';
+    }).join('');
+    return '<select class="filter-sel" onchange="setGridFilter(\''+id+'\',this.value)">'+o+'</select>';
+  }
+  var active = (gridYear!=='all'||gridLang!=='all'||gridQuality!=='all');
+  return '<div class="filter-bar">'
+    + sel('year','📅 Yil', f.years, gridYear)
+    + sel('language','🌐 Til', f.languages, gridLang)
+    + sel('quality','🎞 Sifat', f.qualities, gridQuality)
+    + (active ? '<button class="filter-clear" onclick="clearGridFilters()">✕ Tozalash</button>' : '')
+    + '</div>';
+}
+function setGridFilter(key, val){
+  if (key==='year') gridYear = val;
+  else if (key==='language') gridLang = val;
+  else if (key==='quality') gridQuality = val;
+  gridPage = 1; loadGrid();
+}
+function clearGridFilters(){ gridYear='all'; gridLang='all'; gridQuality='all'; gridPage=1; loadGrid(); }
+
 async function loadGrid(){
   const rows = document.getElementById('rows');
   if (heroTimer){ clearInterval(heroTimer); heroTimer = null; }
   if (typeof setHero === 'function') setHero(null);
   rows.innerHTML = skeletonGrid(18);
+  await loadFilters();
   var params = { page: gridPage, sort: gridSort };
   if (curType === 'top'){ params.rated = 1; }            // Eng yaxshilar — faqat reytingli kinolar
   else if (curType !== 'all'){ params.type = curType; }
   if (curGenre !== 'all') params.genre = curGenre;
+  if (gridYear !== 'all') params.year = gridYear;
+  if (gridLang !== 'all') params.language = gridLang;
+  if (gridQuality !== 'all') params.quality = gridQuality;
   try {
     const d = await fetchMovies(params);
     if (d.error){ rows.innerHTML = '<div class="state-msg">⚠️ Xato: '+esc(d.error)+'</div>'; return; }
@@ -320,11 +431,13 @@ async function loadGrid(){
       + '<button class="sort-btn '+(gridSort==='popular'?'active':'')+'" onclick="setGridSort(\'popular\')">🔥 Mashhur</button>'
       + '<button class="sort-btn '+(gridSort==='rating'?'active':'')+'" onclick="setGridSort(\'rating\')">⭐ Reyting</button>'
       + '</div>';
+    html += filterBarHtml();
     html += '<div class="row-header" style="margin-bottom:14px;"><span class="row-title">'+title
       + ' <span class="row-count">'+(d.total||movies.length)+'</span></span></div>';
     html += '<div class="cards">' + movies.map(cardHtml).join('') + '</div>';
     html += paginationHtml(d.page || gridPage, d.pages || 1, 'gotoGridPage');
     rows.innerHTML = html;
+    fadeIn(rows);
   } catch(e){
     rows.innerHTML = '<div class="state-msg">❌ Yuklashda xatolik.</div>';
   }
@@ -458,6 +571,7 @@ async function loadHome(){
       }
     }
     rows.innerHTML = html;
+    fadeIn(rows);
     // Bosh sahifada "Tez orada" qatorini qo'shamiz (faqat Yangi + Barchasi rejimida)
     if (curSort === 'new' && curType === 'all' && curGenre === 'all') {
       injectUpcomingTeaser();
@@ -491,6 +605,7 @@ async function loadUpcoming(rows){
       html += '</div>';
     }
     rows.innerHTML = html;
+    fadeIn(rows);
   } catch(e){
     rows.innerHTML = '<div class="state-msg">❌ Yuklashda xatolik.</div>';
   }
@@ -636,6 +751,7 @@ function setHero(m, animate){
 function setType(t){
   curType = t; curGenre = 'all';
   gridPage = 1; gridSort = (t === 'top') ? 'rating' : 'new';
+  gridYear = 'all'; gridLang = 'all'; gridQuality = 'all';
   document.querySelectorAll('.genre-pill').forEach((p,i)=>p.classList.toggle('active', i===0));
   document.querySelectorAll('[data-nav]').forEach(a=>a.classList.toggle('nav-active', a.getAttribute('data-nav')===t));
   window.scrollTo({top:0,behavior:'smooth'});
@@ -673,6 +789,7 @@ async function renderSearch(scroll){
     if (!d.movies || !d.movies.length){ box.innerHTML = '<div class="state-msg">Topilmadi</div>'; return; }
     box.innerHTML = '<div class="cards">' + d.movies.map(cardHtml).join('') + '</div>'
       + paginationHtml(d.page || searchPage, d.pages || 1, 'gotoSearchPage');
+    fadeIn(box);
     if (scroll){
       var so = document.getElementById('searchOverlay');
       if (so) so.scrollTo({ top: 0, behavior: 'smooth' });

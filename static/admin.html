@@ -621,7 +621,7 @@ function soonRow(it) {
     actions += '<button style="'+bs+'border-color:rgba(124,92,255,0.5);color:#b6a4ff;" onclick="publishSoon('+it.id+')">👁 Ko\'rsatish</button>';
   }
   if (it.status === 'pending' || it.status === 'soon') {
-    actions += '<button style="'+bs+'border-color:rgba(103,224,138,0.5);color:#67e08a;" onclick="openRelease('+it.id+')">✅ Chiqdi</button>';
+    actions += '<button style="'+bs+'border-color:rgba(103,224,138,0.5);color:#67e08a;" onclick="openRelease('+it.id+',\''+esc((it.title||'').replace(/\x27/g,"")).slice(0,60)+'\')">✅ Chiqdi</button>';
   }
   if (it.status === 'released' && it.movie_id) {
     actions += '<a href="/kino/'+it.movie_id+'" target="_blank" style="'+bs+'text-decoration:none;">↗ Kino</a>';
@@ -697,14 +697,18 @@ async function deleteSoon(id, title) {
     else soonMsg(d.error || 'Xato', false);
   } catch(e) { soonMsg('Tarmoq xatosi', false); }
 }
-function openRelease(id) {
+function openRelease(id, title) {
   var box = document.getElementById('releaseBox'+id);
   if (!box) return;
   var open = box.style.display !== 'none';
   box.style.display = open ? 'none' : 'block';
   if (!open) {
     var inp = document.getElementById('releaseSearch'+id);
-    if (inp) { inp.focus(); }
+    if (inp) {
+      // So'rov nomini avtomatik qo'yib, darrov qidiramiz (admin qayta yozmaydi)
+      if (title && !inp.value) { inp.value = title; releaseSearch(id); }
+      inp.focus();
+    }
   }
 }
 async function releaseSearch(id) {

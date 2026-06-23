@@ -1379,3 +1379,67 @@
 
 /* Qidiruv natijalari ko'p bo'lsa — oyna ichida aylantirish mumkin */
 .search-overlay { overflow-y: auto; }
+
+/* ═══════════ BILDIRISHNOMA QO'NG'IROG'I ═══════════ */
+.nav-bell {
+  position: relative; background: none; border: none; color: #fff;
+  cursor: pointer; padding: 6px; opacity: .85; display: flex; align-items: center;
+}
+.nav-bell:hover { opacity: 1; }
+.nav-bell-badge {
+  position: absolute; top: 0; right: 0; min-width: 17px; height: 17px;
+  background: var(--red); color: #fff; border-radius: 999px; font-size: 10px;
+  font-weight: 700; display: flex; align-items: center; justify-content: center;
+  padding: 0 4px; border: 2px solid var(--bg);
+}
+.notif-panel {
+  position: absolute; top: 64px; right: 16px; width: 340px; max-width: calc(100vw - 24px);
+  background: var(--bg2); border: 1px solid var(--bg3); border-radius: 14px;
+  box-shadow: 0 16px 50px rgba(0,0,0,.55); overflow: hidden; z-index: 1200;
+  opacity: 0; transform: translateY(-8px); pointer-events: none; transition: opacity .18s, transform .18s;
+}
+.notif-panel.open { opacity: 1; transform: translateY(0); pointer-events: auto; }
+.notif-head { padding: 14px 16px; font-weight: 700; font-size: 15px; border-bottom: 1px solid var(--bg3); }
+.notif-list { max-height: 60vh; overflow-y: auto; }
+.notif-empty { padding: 28px 16px; text-align: center; color: var(--text-dim); font-size: 14px; }
+.notif-item {
+  display: flex; gap: 11px; padding: 12px 16px; border-bottom: 1px solid rgba(255,255,255,.04);
+  transition: background .12s;
+}
+.notif-item.clickable { cursor: pointer; }
+.notif-item.clickable:hover { background: rgba(124,92,255,.1); }
+.notif-item.unread { background: rgba(124,92,255,.07); }
+.notif-ic { font-size: 18px; flex: 0 0 auto; }
+.notif-body { min-width: 0; }
+.notif-text { font-size: 13.5px; color: var(--text); line-height: 1.45; }
+.notif-date { font-size: 11.5px; color: var(--text-dim); margin-top: 3px; }
+@media (max-width: 560px){ .notif-panel { top: 58px; right: 8px; } }
+
+/* ═══════════ FILTR PANELI ═══════════ */
+.filter-bar { display: flex; gap: 9px; flex-wrap: wrap; align-items: center; margin: -8px 0 22px; }
+.filter-sel {
+  background: var(--bg2); border: 1px solid var(--bg3); color: var(--text);
+  border-radius: 10px; padding: 9px 13px; font-size: 13px; font-family: inherit; cursor: pointer;
+}
+.filter-sel:focus { outline: none; border-color: var(--red); }
+.filter-sel:hover { border-color: rgba(124,92,255,.5); }
+.filter-clear {
+  background: rgba(248,113,113,.12); border: 1px solid rgba(248,113,113,.4); color: #f87171;
+  border-radius: 10px; padding: 9px 14px; font-size: 13px; font-family: inherit; cursor: pointer;
+}
+.filter-clear:hover { background: rgba(248,113,113,.2); }
+
+/* ═══════════ YUMSHOQ FADE (sahifa o'tishlari) ═══════════ */
+@keyframes viewFade { from { opacity: 0; } to { opacity: 1; } }
+.view-fade { animation: viewFade .28s ease both; }
+@media (prefers-reduced-motion: reduce){ .view-fade { animation: none; } }
+
+/* ═══════════ KARTA HOVER — qisqa ma'lumot (Netflix uslubi) ═══════════ */
+.card-meta {
+  position: absolute; left: 8px; right: 8px; bottom: 6px; z-index: 2;
+  font-size: 11px; color: #cfc9f0; opacity: 0; transform: translateY(4px);
+  transition: opacity .25s, transform .25s; pointer-events: none; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
+}
+.card:hover .card-name { transform: translateY(-14px); transition: transform .25s; }
+.card:hover .card-meta { opacity: 1; transform: translateY(0); }

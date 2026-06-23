@@ -157,6 +157,17 @@ def _notify_admins_request(title, who, uid):
             _tg_send(cid, msg)
     threading.Thread(target=worker, daemon=True).start()
 
+# ── Saytdagi bildirishnoma (qo'ng'iroq) yozuvini qo'shish ─────────────────────
+def _add_notification(user_id, ntype, text, movie_id=None):
+    try:
+        with get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("INSERT INTO notifications (user_id, type, text, movie_id) VALUES (%s,%s,%s,%s)",
+                        (int(user_id), ntype, (text or "")[:300], movie_id))
+            conn.commit()
+    except Exception as e:
+        log.warning("add_notification: %s", e)
+
 # ── Baza (pg8000 — sof Python, libpq kerak emas) ──────────────────────────────
 def _parse_db_url(url):
     """postgresql://user:pass@host:port/dbname → pg8000 parametrlari."""
@@ -257,6 +268,19 @@ def init_db():
                     PRIMARY KEY (upcoming_id, user_id)
                 )
             """)
+            # Saytdagi bildirishnomalar (qo'ng'iroq) — javoblar va chiqqan kinolar
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS notifications (
+                    id SERIAL PRIMARY KEY,
+                    user_id BIGINT NOT NULL,
+                    type TEXT NOT NULL,          -- reply | release
+                    text TEXT NOT NULL,
+                    movie_id BIGINT,
+                    is_read BOOLEAN DEFAULT FALSE,
+                    created_at TIMESTAMP DEFAULT NOW()
+                )
+            """)
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_notif_user ON notifications(user_id, is_read)")
             conn.commit()
         log.info("Kino baza tayyor (poster_url + site_settings + favorites + reviews + upcoming)")
     except Exception as e:
@@ -744,6 +768,9 @@ def api_reviews_add():
         # O'ziga o'zi javob yozsa — xabar bermaymiz
         if parent_id and notify_uid and notify_uid != int(uid):
             _notify_reply(notify_uid, my_name, movie_title, int(mid), text)
+            _add_notification(notify_uid, "reply",
+                              f"💬 {my_name} izohingizga javob berdi"
+                              + (f" — {movie_title}" if movie_title else ""), int(mid))
         return jsonify({"ok": True, "id": rid})
     except Exception as e:
         log.warning("reviews add: %s", e)
@@ -972,11 +999,55 @@ def admin_upcoming_release():
             subs = [int(r[0]) for r in cur.fetchall()]
             cur.execute("UPDATE upcoming SET status='released', movie_id=%s, released_at=NOW() WHERE id=%s",
                         (int(movie_id), int(up_id)))
+            # Saytdagi bildirishnoma (qo'ng'iroq) — har bir obunachiga
+            note_text = f"🎉 «{title}» qo'shildi! Hoziroq ko'ring"
+            for u in subs:
+                cur.execute("INSERT INTO notifications (user_id, type, text, movie_id) VALUES (%s,'release',%s,%s)",
+                            (u, note_text, int(movie_id)))
             conn.commit()
         _notify_release(subs, title, int(movie_id))
         return jsonify({"ok": True, "notified": len(subs)})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+# ── Saytdagi bildirishnomalar (qo'ng'iroq) ────────────────────────────────────
+@app.route("/api/notifications")
+def api_notifications():
+    uid = session.get("tg_id")
+    if not uid:
+        return jsonify({"items": [], "unread": 0, "logged_in": False})
+    try:
+        with get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT id, type, text, movie_id, is_read, created_at FROM notifications "
+                        "WHERE user_id=%s ORDER BY created_at DESC LIMIT 30", (uid,))
+            rows = cur.fetchall()
+            cur.execute("SELECT COUNT(*) FROM notifications WHERE user_id=%s AND is_read=FALSE", (uid,))
+            unread = cur.fetchone()[0]
+        items = [{
+            "id": r[0], "type": r[1], "text": r[2], "movie_id": r[3],
+            "read": bool(r[4]),
+            "date": r[5].strftime("%d.%m %H:%M") if r[5] else "",
+        } for r in rows]
+        return jsonify({"items": items, "unread": int(unread or 0), "logged_in": True})
+    except Exception as e:
+        log.warning("notifications: %s", e)
+        return jsonify({"items": [], "unread": 0, "logged_in": True})
+
+@app.route("/api/notifications/read", methods=["POST"])
+def api_notifications_read():
+    uid = session.get("tg_id")
+    if not uid:
+        return jsonify({"error": "login kerak"}), 401
+    try:
+        with get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("UPDATE notifications SET is_read=TRUE WHERE user_id=%s AND is_read=FALSE", (uid,))
+            conn.commit()
+        return jsonify({"ok": True})
+    except Exception as e:
+        log.warning("notif read: %s", e)
+        return jsonify({"error": "xato"}), 500
 
 # ══════════════════ SEO (Google uchun) ══════════════════
 import html as _html

@@ -94,6 +94,10 @@
   </ul>
   <div class="nav-right">
     <button class="nav-search" onclick="openSearch()" aria-label="Qidirish"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg></button>
+    <button class="nav-bell" id="navBell" onclick="toggleNotif()" aria-label="Bildirishnomalar" style="display:none">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+      <span class="nav-bell-badge" id="navBellBadge" style="display:none">0</span>
+    </button>
     <button class="nav-login" id="navLogin" onclick="openLogin()" aria-label="Kirish" style="display:none">
       <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M21.94 4.3a1.2 1.2 0 0 0-1.27-.18L3.4 11.3c-.86.36-.8 1.6.08 1.88l4.33 1.36 1.64 5.13c.1.32.35.55.68.6.33.06.66-.07.86-.34l2.4-3.1 4.43 3.26c.5.37 1.22.1 1.36-.5L22.3 5.4a1.2 1.2 0 0 0-.36-1.1zM9.7 14.2l-.5 3.18-1.1-3.44 8.2-5.3-6.6 5.56z"/></svg>
       <span>Kirish</span>
@@ -110,6 +114,10 @@
     </div>
     <button class="user-menu-btn" onclick="setType('fav');closeUserMenu();">⭐ Saqlangan kinolar</button>
     <button class="user-menu-btn" onclick="doLogout()">🚪 Chiqish</button>
+  </div>
+  <div class="notif-panel" id="notifPanel">
+    <div class="notif-head">🔔 Bildirishnomalar</div>
+    <div class="notif-list" id="notifList"></div>
   </div>
 </nav>
 <div class="login-modal-bg" id="loginModalBg" onclick="closeLogin()"></div>
