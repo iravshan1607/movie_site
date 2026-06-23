@@ -861,3 +861,103 @@ loadHome();
     }
   } catch(e){}
 })();
+
+// ── Qidiruvda avtomatik to'ldirish (live takliflar) ──────────────────────────
+(function(){
+  var inp = document.getElementById('searchInput');
+  var wrap = inp ? inp.closest('.search-input-wrap') : null;
+  if (!inp || !wrap) return;
+
+  // CSS — faqat app.js o'zgarsin uchun JS orqali qo'shamiz
+  var css = ''
+    + '.search-suggest{position:absolute;top:100%;left:0;right:0;margin-top:8px;'
+    + 'background:#161430;border:1px solid #2a2750;border-radius:12px;overflow:hidden auto;'
+    + 'box-shadow:0 14px 44px rgba(0,0,0,.55);z-index:5;display:none;max-height:62vh;}'
+    + '.search-suggest.show{display:block;}'
+    + '.ss-item{display:flex;align-items:center;gap:12px;padding:9px 12px;cursor:pointer;'
+    + 'border-bottom:1px solid rgba(255,255,255,.05);transition:background .12s;}'
+    + '.ss-item:last-child{border-bottom:none;}'
+    + '.ss-item:hover,.ss-item.active{background:rgba(124,92,255,.18);}'
+    + '.ss-poster{width:38px;height:54px;border-radius:6px;background:#252154;flex:0 0 auto;'
+    + 'display:flex;align-items:center;justify-content:center;overflow:hidden;font-size:18px;}'
+    + '.ss-poster img{width:100%;height:100%;object-fit:cover;}'
+    + '.ss-main{min-width:0;flex:1;}'
+    + '.ss-title{font-size:15px;color:#fff;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}'
+    + '.ss-meta{font-size:12px;color:#8c87b8;margin-top:2px;}'
+    + '.ss-empty{padding:15px 16px;color:#8c87b8;font-size:14px;}'
+    + '.ss-foot{padding:11px 14px;font-size:13.5px;color:#b6a4ff;cursor:pointer;text-align:center;'
+    + 'border-top:1px solid rgba(255,255,255,.06);background:rgba(124,92,255,.06);}'
+    + '.ss-foot:hover{background:rgba(124,92,255,.14);}';
+  var st = document.createElement('style'); st.textContent = css; document.head.appendChild(st);
+
+  var box = document.createElement('div');
+  box.className = 'search-suggest';
+  box.id = 'searchSuggest';
+  wrap.appendChild(box);
+
+  var timer = null, items = [], active = -1, lastQ = '';
+  function hide(){ box.classList.remove('show'); active = -1; }
+  function show(){ box.classList.add('show'); }
+  function typeUz(t){ return ({movie:'Kino',series:'Serial',anime:'Anime',cartoon:'Multfilm'})[t] || 'Kino'; }
+
+  function render(list){
+    items = list; active = -1;
+    if (!list.length){ box.innerHTML = '<div class="ss-empty">Hech narsa topilmadi 😕</div>'; show(); return; }
+    var html = list.map(function(m, i){
+      var p = posterUrl(m);
+      var pos = '<div class="ss-poster">' + (p
+        ? '<img src="'+esc(p)+'" loading="lazy" onerror="this.remove()">'
+        : '🎬') + '</div>';
+      var meta = [typeUz(m.type), m.year||'', (m.rating?('⭐ '+(+m.rating).toFixed(1)):'')].filter(Boolean).join(' · ');
+      return '<div class="ss-item" data-i="'+i+'" onclick="pickSuggest('+m.id+')">'+pos
+        + '<div class="ss-main"><div class="ss-title">'+esc(m.title)+'</div>'
+        + '<div class="ss-meta">'+esc(meta)+'</div></div></div>';
+    }).join('');
+    html += '<div class="ss-foot" onclick="searchAll()">Barcha natijalarni ko\'rish →</div>';
+    box.innerHTML = html; show();
+  }
+
+  function fetchSuggest(q){
+    fetchMovies({ q: q, page: 1 }).then(function(d){
+      if (lastQ !== q) return;            // eskirgan so'rov natijasini tashlaymiz
+      render((d.movies||[]).slice(0, 8));
+    }).catch(function(){});
+  }
+
+  inp.addEventListener('input', function(){
+    var q = inp.value.trim();
+    lastQ = q;
+    clearTimeout(timer);
+    if (q.length < 2){ hide(); return; }
+    timer = setTimeout(function(){ fetchSuggest(q); }, 200);
+  });
+
+  // ↑ ↓ Enter Esc bilan boshqarish (inline onkeydown'ni almashtiramiz)
+  inp.onkeydown = function(e){
+    var open = box.classList.contains('show') && items.length;
+    if (e.key === 'ArrowDown' && open){ e.preventDefault(); setActive(active + 1); }
+    else if (e.key === 'ArrowUp' && open){ e.preventDefault(); setActive(active - 1); }
+    else if (e.key === 'Enter'){
+      if (open && active >= 0 && items[active]){ e.preventDefault(); pickSuggest(items[active].id); }
+      else { hide(); doSearch(); }
+    } else if (e.key === 'Escape'){ hide(); }
+  };
+
+  function setActive(i){
+    var els = box.querySelectorAll('.ss-item');
+    if (!els.length) return;
+    active = (i + els.length) % els.length;
+    els.forEach(function(el, j){ el.classList.toggle('active', j === active); });
+    if (els[active]) els[active].scrollIntoView({ block: 'nearest' });
+  }
+
+  document.addEventListener('click', function(e){
+    if (!box.contains(e.target) && e.target !== inp) hide();
+  });
+
+  // Globallar
+  window.pickSuggest = function(id){ hide(); if (window.closeSearch) window.closeSearch(); openMovie(id); };
+  window.searchAll = function(){ hide(); doSearch(); };
+  var _origCloseSearch = window.closeSearch;
+  window.closeSearch = function(){ hide(); if (_origCloseSearch) _origCloseSearch(); };
+})();
