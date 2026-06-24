@@ -1378,7 +1378,7 @@ def movie_page(mid):
 
     # Treyler bloki — bosilganda yuklanadi (sahifa tez ochilishi uchun iframe darrov yuklanmaydi)
     if trailer_id:
-        poster_bg = abs_poster or yt_thumb
+        poster_bg = yt_thumb or abs_poster   # 16:9 YouTube rasmi treyler oynasiga to'g'ri keladi
         trailer_html = (
             '<section style="padding:8px 20px 4px;">'
             '<h2 style="font-family:Bebas Neue,sans-serif;font-size:24px;letter-spacing:1px;margin:0 0 12px;">🎬 Treyler</h2>'
@@ -1390,9 +1390,15 @@ def movie_page(mid):
             '<div style="width:68px;height:68px;border-radius:50%;background:rgba(229,9,20,0.92);display:flex;'
             'align-items:center;justify-content:center;color:#fff;font-size:26px;padding-left:5px;">▶</div></div>'
             '</div>'
-            f'<a href="{e(bot_link)}" style="display:inline-flex;align-items:center;gap:8px;margin-top:16px;'
+            '<div style="max-width:760px;display:flex;gap:12px;flex-wrap:wrap;margin-top:14px;">'
+            f'<a href="{e(bot_link)}" style="display:inline-flex;align-items:center;gap:8px;'
             'background:#e50914;color:#fff;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:700;font-size:15px;">'
             f'🎬 To\'liqini botda ko\'rish / yuklab olish</a>'
+            f'<a href="https://www.youtube.com/watch?v={trailer_id}" target="_blank" rel="noopener" '
+            'style="display:inline-flex;align-items:center;gap:8px;'
+            'background:rgba(255,255,255,0.08);color:#fff;padding:14px 22px;border-radius:8px;text-decoration:none;'
+            'font-weight:600;font-size:14px;border:1px solid rgba(255,255,255,0.18);">▶ YouTube\'da ochish</a>'
+            '</div>'
             '</section>'
         )
     else:
@@ -1447,7 +1453,7 @@ def movie_page(mid):
 <nav id="navbar"><a href="/" class="nav-logo" aria-label="ASTRA"><img src="/static/logo.svg" alt="ASTRA" class="nav-logo-img"></a></nav>
 <main style="padding-top:90px; max-width:900px; margin:0 auto;">
   <article style="display:flex; gap:24px; flex-wrap:wrap; padding:20px;">
-    {f'<img src="{e(poster)}" alt="{e(title)}" style="width:220px; border-radius:10px;">' if poster else ''}
+    {f'<img src="{e(poster)}" alt="{e(title)}" style="width:220px;aspect-ratio:2/3;object-fit:cover;border-radius:10px;display:block;max-width:100%;">' if poster else ''}
     <div style="flex:1; min-width:260px;">
       <h1 style="font-family:Bebas Neue,sans-serif; font-size:40px; letter-spacing:1px;">{e(title)}</h1>
       <p style="color:#a3a3a3; margin:8px 0;">{type_uz}{f' · {year}' if year else ''}{f' · {e(genre)}' if genre else ''}</p>
