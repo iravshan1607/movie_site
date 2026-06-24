@@ -1304,7 +1304,7 @@ def movie_page(mid):
             f'</a>'
         )
     more_html = (
-        '<section style="padding:10px 20px 48px;">'
+        '<section style="padding:18px 8px 48px;">'
         '<h2 style="font-family:Bebas Neue,sans-serif;font-size:26px;letter-spacing:1px;margin:0 0 16px;">Boshqa kinolar</h2>'
         '<div style="display:flex;gap:14px;overflow-x:auto;padding-bottom:10px;scrollbar-width:thin;">'
         + "".join(more_cards) + '</div></section>'
@@ -1379,16 +1379,16 @@ def movie_page(mid):
     # Treyler — to'g'ridan-to'g'ri qo'yilgan iframe (bosish shart emas, ishonchli ochiladi)
     if trailer_id:
         trailer_html = (
-            '<section style="padding:8px 20px 4px;">'
+            '<section style="padding:14px 8px 4px;">'
             '<h2 style="font-family:Bebas Neue,sans-serif;font-size:24px;letter-spacing:1px;margin:0 0 12px;">🎬 Treyler</h2>'
-            '<div style="position:relative;max-width:760px;aspect-ratio:16/9;border-radius:12px;overflow:hidden;background:#000;">'
+            '<div style="position:relative;width:100%;aspect-ratio:16/9;border-radius:12px;overflow:hidden;background:#000;">'
             f'<iframe src="https://www.youtube.com/embed/{trailer_id}?rel=0&modestbranding=1" '
             'title="Treyler" loading="lazy" frameborder="0" '
             'allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" '
             'referrerpolicy="strict-origin-when-cross-origin" allowfullscreen '
             'style="position:absolute;inset:0;width:100%;height:100%;border:0;"></iframe>'
             '</div>'
-            '<div style="max-width:760px;margin-top:10px;">'
+            '<div style="margin-top:10px;">'
             f'<a href="https://www.youtube.com/watch?v={trailer_id}" target="_blank" rel="noopener" '
             'style="display:inline-flex;align-items:center;gap:6px;color:#9b93c4;text-decoration:none;font-size:13px;">'
             '▶ Agar treyler ochilmasa — YouTube\'da ko\'rish</a>'
@@ -1445,26 +1445,24 @@ def movie_page(mid):
 </head>
 <body>
 <nav id="navbar"><a href="/" class="nav-logo" aria-label="ASTRA"><img src="/static/logo.svg" alt="ASTRA" class="nav-logo-img"></a></nav>
-<main>
-  <header style="position:relative; overflow:hidden;">
-    {f'<div style="position:absolute; inset:0; background:#000 center/cover no-repeat url(&quot;{e(poster)}&quot;); filter:blur(30px) brightness(0.42); transform:scale(1.25);"></div>' if poster else ''}
-    <div style="position:absolute; inset:0; background:linear-gradient(180deg, rgba(18,16,42,0.40) 0%, rgba(18,16,42,0.78) 60%, #12102a 100%);"></div>
-    <div style="position:relative; max-width:900px; margin:0 auto; display:flex; gap:24px; padding:104px 22px 28px; flex-wrap:wrap; align-items:flex-end;">
-      {f'<img src="{e(poster)}" alt="{e(title)}" style="width:150px; aspect-ratio:2/3; object-fit:cover; border-radius:12px; display:block; box-shadow:0 12px 44px rgba(0,0,0,0.6);">' if poster else ''}
-      <div style="flex:1; min-width:240px;">
-        <h1 style="font-family:Bebas Neue,sans-serif; font-size:44px; letter-spacing:1px; line-height:1.04; margin:0;">{e(title)}</h1>
-        <p style="color:#cbb8f0; margin:10px 0 0; font-size:15px;">{type_uz}{f' · {year}' if year else ''}{f' · {e(genre)}' if genre else ''}</p>
+<main style="max-width:880px; margin:0 auto; padding:84px 14px 44px;">
+  <header style="position:relative; overflow:hidden; border-radius:16px; min-height:240px; display:flex; align-items:flex-end;">
+    {f'<div style="position:absolute; inset:0; background:#1a1640 center/cover no-repeat url(&quot;{e(poster)}&quot;); filter:blur(16px) brightness(0.7); transform:scale(1.15);"></div>' if poster else '<div style="position:absolute; inset:0; background:#1a1640;"></div>'}
+    <div style="position:absolute; inset:0; background:linear-gradient(180deg, rgba(18,16,42,0.10) 0%, rgba(18,16,42,0.48) 55%, rgba(18,16,42,0.93) 100%);"></div>
+    <div style="position:relative; display:flex; gap:20px; padding:24px; flex-wrap:wrap; align-items:flex-end; width:100%;">
+      {f'<img src="{e(poster)}" alt="{e(title)}" style="width:128px; aspect-ratio:2/3; object-fit:cover; border-radius:10px; display:block; box-shadow:0 12px 40px rgba(0,0,0,0.7);">' if poster else ''}
+      <div style="flex:1; min-width:200px;">
+        <h1 style="font-family:Bebas Neue,sans-serif; font-size:42px; letter-spacing:1px; line-height:1.04; margin:0;">{e(title)}</h1>
+        <p style="color:#cbb8f0; margin:9px 0 0; font-size:15px;">{type_uz}{f' · {year}' if year else ''}{f' · {e(genre)}' if genre else ''}</p>
         {rating_html}
       </div>
     </div>
   </header>
-
-  <div style="max-width:900px; margin:0 auto;">
     {trailer_html}
 
-    <section style="padding:16px 22px 8px;">
-      <p style="line-height:1.7; color:#c8c8c8; margin:0 0 16px; max-width:760px;">{e(desc)}</p>
-      <div style="background:rgba(42,171,238,0.12); border:1px solid rgba(42,171,238,0.45); border-radius:10px; padding:14px 16px; margin:0 0 18px; color:#d6ecff; font-size:14.5px; line-height:1.65; max-width:760px;">
+    <section style="padding:18px 8px 8px;">
+      <p style="line-height:1.7; color:#c8c8c8; margin:0 0 16px;">{e(desc)}</p>
+      <div style="background:rgba(42,171,238,0.12); border:1px solid rgba(42,171,238,0.45); border-radius:10px; padding:14px 16px; margin:0 0 18px; color:#d6ecff; font-size:14.5px; line-height:1.65;">
         <b>ℹ️ Eslatma:</b> Ushbu {type_uz.lower()} <b>Telegram bot</b> orqali ko'riladi. Quyidagi tugmani bossangiz, botimizga o'tasiz va u yerda bemalol tomosha qilasiz yoki yuklab olasiz — tez, bepul va ro'yxatdan o'tmasdan.
       </div>
       <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
@@ -1478,8 +1476,7 @@ def movie_page(mid):
       <p style="margin-top:24px;"><a href="/" style="color:#a3a3a3;">← Barcha kinolar</a></p>
     </section>
 
-    {more_html}
-  </div>
+  {more_html}
 </main>
 <script>
 function loadTrailer(el){{
