@@ -1221,12 +1221,24 @@ def movie_page(mid):
     title = r[1] or "Kino"
     genre = r[2] or ""
     year = r[3] or ""
-    desc = (r[6] or f"{title} — o'zbek tilida onlayn ko'rish.")[:300]
     ctype = r[7]
+    language = r[4] or ""
+    quality = r[5] or ""
+    type_uz = {"movie":"Kino","series":"Serial","anime":"Anime","cartoon":"Multfilm"}.get(ctype,"Kino")
+    # Tavsif — bo'sh bo'lsa, har kino uchun O'ZIGA XOS matn hosil qilamiz.
+    # (Bir xil shablon → Google "dublikat/thin kontent" deb indekslamaydi.)
+    _rd = (r[6] or "").strip()
+    if _rd:
+        desc = _rd[:300]
+    else:
+        _g1 = genre.split(",")[0].strip() if genre else ""
+        _head = f"{title} ({year})" if year else title
+        _kind = f"{_g1} {type_uz.lower()}" if _g1 else type_uz.lower()
+        _tail = ([f"{quality} sifat"] if quality else []) + ["bepul onlayn tomosha", "Telegram orqali yuklab olish"]
+        desc = (f"{_head} — {_kind} o'zbek tilida tarjima. " + ", ".join(_tail) + ".")[:300]
     poster = r[9] or (f"/api/poster/{mid}" if r[8] else "")
     bot_link = f"https://t.me/{BOT_USERNAME}?start=movie_{mid}" if BOT_USERNAME else "#"
     e = _html.escape
-    type_uz = {"movie":"Kino","series":"Serial","anime":"Anime","cartoon":"Multfilm"}.get(ctype,"Kino")
     page_title = f"{title} ({year}) — o'zbek tilida | ASTRA" if year else f"{title} — o'zbek tilida | ASTRA"
     canonical = f"{BASE_URL}/kino/{mid}"
     abs_poster = poster if poster.startswith("http") else (f"{BASE_URL}{poster}" if poster else "")
@@ -1318,6 +1330,20 @@ def movie_page(mid):
     # Sahifa struktura ma'lumoti
     jsonld = _json.dumps(ld, ensure_ascii=False)
     video_script = f'<script type="application/ld+json">{video_jsonld}</script>' if video_jsonld else ''
+    # BreadcrumbList — qidiruvda "Bosh sahifa › Kcategory › Kino" yo'lini ko'rsatadi
+    _cat_path = {"movie":"/kategoriya/movie","series":"/kategoriya/series",
+                 "anime":"/kategoriya/anime","cartoon":"/kategoriya/cartoon"}.get(ctype, "/kategoriya/movie")
+    _cat_name = {"movie":"Kinolar","series":"Seriallar","anime":"Anime",
+                 "cartoon":"Multfilmlar"}.get(ctype, "Kinolar")
+    breadcrumb_ld = {
+        "@context": "https://schema.org", "@type": "BreadcrumbList",
+        "itemListElement": [
+            {"@type": "ListItem", "position": 1, "name": "Bosh sahifa", "item": BASE_URL + "/"},
+            {"@type": "ListItem", "position": 2, "name": _cat_name, "item": BASE_URL + _cat_path},
+            {"@type": "ListItem", "position": 3, "name": title, "item": canonical},
+        ]
+    }
+    breadcrumb_script = f'<script type="application/ld+json">{_json.dumps(breadcrumb_ld, ensure_ascii=False)}</script>'
     # Ulashish uchun JS-xavfsiz qiymatlar (kerakli qo'shtirnoq/maxsus belgilar ekranlanadi)
     share_url_js = _json.dumps(canonical)
     share_title_js = _json.dumps(title)
@@ -1385,6 +1411,7 @@ def movie_page(mid):
 {f'<meta name="twitter:image" content="{e(abs_poster)}">' if abs_poster else ''}
 <script type="application/ld+json">{jsonld}</script>
 {video_script}
+{breadcrumb_script}
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/static/style.css">
 </head>
