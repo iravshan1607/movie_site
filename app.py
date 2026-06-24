@@ -41,6 +41,8 @@ app = Flask(__name__, static_folder="static")
 app.secret_key = os.getenv("SECRET_KEY") or hashlib.sha256(
     (BOT_TOKEN or "astra-fallback-secret").encode()).hexdigest()
 
+import gzip as _gzip   # javoblarni siqish uchun (qo'shimcha kutubxona kerak emas)
+
 # ── Poster server keshi (xotirada) — Telegram'ga takror bormaslik uchun ────────
 _poster_cache = {}              # poster_id -> (bytes, content_type, timestamp)
 _poster_lock = threading.Lock()
@@ -333,6 +335,32 @@ def admin_page():
 def cors(resp):
     resp.headers["Access-Control-Allow-Origin"] = "*"
     resp.headers["Access-Control-Allow-Headers"] = "Content-Type"
+    p = request.path or ""
+    # Statik aktivlar uchun brauzer keshi (takroriy tashriflar — tezroq)
+    if p.startswith("/static/"):
+        if p.endswith((".png", ".jpg", ".jpeg", ".webp", ".svg", ".ico", ".woff2", ".woff", ".ttf")):
+            resp.headers["Cache-Control"] = "public, max-age=604800"   # 7 kun — rasm/font/ikonka
+        elif p.endswith((".js", ".css")):
+            resp.headers["Cache-Control"] = "public, max-age=3600"      # 1 soat — JS/CSS (deploy'dan keyin tez yangilanadi)
+    # Gzip siqish — matn/JS/CSS/JSON/XML javoblarini ~70% kichraytiradi.
+    # To'liq himoyalangan: xato bo'lsa javob asl holicha qaytadi.
+    try:
+        ae = request.headers.get("Accept-Encoding", "") or ""
+        ctype = resp.headers.get("Content-Type", "") or ""
+        compressible = (ctype.startswith("text/") or "javascript" in ctype
+                        or "json" in ctype or "xml" in ctype or "svg" in ctype)
+        if ("gzip" in ae.lower() and resp.status_code == 200
+                and "Content-Encoding" not in resp.headers and compressible):
+            if getattr(resp, "direct_passthrough", False):
+                resp.direct_passthrough = False
+            data = resp.get_data()
+            if data and len(data) > 500:
+                comp = _gzip.compress(data, 6)
+                resp.set_data(comp)
+                resp.headers["Content-Encoding"] = "gzip"
+                resp.headers["Vary"] = "Accept-Encoding"
+    except Exception:
+        pass
     return resp
 
 # ── Kinolar ro'yxati (filtr/qidiruv bilan) ───────────────────────────────────
