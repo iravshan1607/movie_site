@@ -1388,14 +1388,10 @@ def movie_page(mid):
             'referrerpolicy="strict-origin-when-cross-origin" allowfullscreen '
             'style="position:absolute;inset:0;width:100%;height:100%;border:0;"></iframe>'
             '</div>'
-            '<div style="max-width:760px;display:flex;gap:12px;flex-wrap:wrap;margin-top:14px;">'
-            f'<a href="{e(bot_link)}" style="display:inline-flex;align-items:center;gap:8px;'
-            'background:#e50914;color:#fff;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:700;font-size:15px;">'
-            f'🎬 To\'liqini botda ko\'rish / yuklab olish</a>'
+            '<div style="max-width:760px;margin-top:10px;">'
             f'<a href="https://www.youtube.com/watch?v={trailer_id}" target="_blank" rel="noopener" '
-            'style="display:inline-flex;align-items:center;gap:8px;'
-            'background:rgba(255,255,255,0.08);color:#fff;padding:14px 22px;border-radius:8px;text-decoration:none;'
-            'font-weight:600;font-size:14px;border:1px solid rgba(255,255,255,0.18);">▶ YouTube\'da ochish</a>'
+            'style="display:inline-flex;align-items:center;gap:6px;color:#9b93c4;text-decoration:none;font-size:13px;">'
+            '▶ Agar treyler ochilmasa — YouTube\'da ko\'rish</a>'
             '</div>'
             '</section>'
         )
@@ -1449,28 +1445,41 @@ def movie_page(mid):
 </head>
 <body>
 <nav id="navbar"><a href="/" class="nav-logo" aria-label="ASTRA"><img src="/static/logo.svg" alt="ASTRA" class="nav-logo-img"></a></nav>
-<main style="padding-top:90px; max-width:900px; margin:0 auto;">
-  <article style="display:flex; gap:24px; flex-wrap:wrap; padding:20px;">
-    {f'<img src="{e(poster)}" alt="{e(title)}" style="width:220px;aspect-ratio:2/3;object-fit:cover;border-radius:10px;display:block;max-width:100%;">' if poster else ''}
-    <div style="flex:1; min-width:260px;">
-      <h1 style="font-family:Bebas Neue,sans-serif; font-size:40px; letter-spacing:1px;">{e(title)}</h1>
-      <p style="color:#a3a3a3; margin:8px 0;">{type_uz}{f' · {year}' if year else ''}{f' · {e(genre)}' if genre else ''}</p>
-      {rating_html}
-      <p style="line-height:1.7; color:#c8c8c8; margin:16px 0;">{e(desc)}</p>
-      <div style="background:rgba(42,171,238,0.12); border:1px solid rgba(42,171,238,0.45); border-radius:10px; padding:14px 16px; margin:18px 0; color:#d6ecff; font-size:14.5px; line-height:1.65;">
-        <b>ℹ️ Eslatma:</b> Ushbu {type_uz.lower()} <b>Telegram bot</b> orqali ko'riladi. Quyidagi tugmani bossangiz, Telegram botimizga o'tasiz va u yerda bemalol tomosha qilasiz yoki yuklab olasiz — tez, bepul va ro'yxatdan o'tmasdan.
+<main>
+  <header style="position:relative; overflow:hidden;">
+    {f'<div style="position:absolute; inset:0; background:#000 center/cover no-repeat url(&quot;{e(poster)}&quot;); filter:blur(30px) brightness(0.42); transform:scale(1.25);"></div>' if poster else ''}
+    <div style="position:absolute; inset:0; background:linear-gradient(180deg, rgba(18,16,42,0.40) 0%, rgba(18,16,42,0.78) 60%, #12102a 100%);"></div>
+    <div style="position:relative; max-width:900px; margin:0 auto; display:flex; gap:24px; padding:104px 22px 28px; flex-wrap:wrap; align-items:flex-end;">
+      {f'<img src="{e(poster)}" alt="{e(title)}" style="width:150px; aspect-ratio:2/3; object-fit:cover; border-radius:12px; display:block; box-shadow:0 12px 44px rgba(0,0,0,0.6);">' if poster else ''}
+      <div style="flex:1; min-width:240px;">
+        <h1 style="font-family:Bebas Neue,sans-serif; font-size:44px; letter-spacing:1px; line-height:1.04; margin:0;">{e(title)}</h1>
+        <p style="color:#cbb8f0; margin:10px 0 0; font-size:15px;">{type_uz}{f' · {year}' if year else ''}{f' · {e(genre)}' if genre else ''}</p>
+        {rating_html}
       </div>
-      <a href="{e(bot_link)}" style="display:inline-block; background:#229ed9; color:#fff; padding:14px 28px; border-radius:8px; text-decoration:none; font-weight:600;">▶ Telegram botda ko'rish</a>
-      <button onclick="astraShare()" style="display:inline-flex; align-items:center; gap:8px; margin-left:10px; background:rgba(124,92,255,0.15); color:#fff; padding:14px 24px; border:1px solid rgba(124,92,255,0.5); border-radius:8px; font-weight:600; font-size:15px; font-family:inherit; cursor:pointer;">
-        <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></svg>
-        Do'stga yuborish
-      </button>
-      <span id="astraShareMsg" style="display:none; margin-left:10px; color:#67e08a; font-size:14px;">✅ Havola nusxa olindi!</span>
-      <p style="margin-top:24px;"><a href="/" style="color:#a3a3a3;">← Barcha kinolar</a></p>
     </div>
-  </article>
-  {trailer_html}
-  {more_html}
+  </header>
+
+  <div style="max-width:900px; margin:0 auto;">
+    {trailer_html}
+
+    <section style="padding:16px 22px 8px;">
+      <p style="line-height:1.7; color:#c8c8c8; margin:0 0 16px; max-width:760px;">{e(desc)}</p>
+      <div style="background:rgba(42,171,238,0.12); border:1px solid rgba(42,171,238,0.45); border-radius:10px; padding:14px 16px; margin:0 0 18px; color:#d6ecff; font-size:14.5px; line-height:1.65; max-width:760px;">
+        <b>ℹ️ Eslatma:</b> Ushbu {type_uz.lower()} <b>Telegram bot</b> orqali ko'riladi. Quyidagi tugmani bossangiz, botimizga o'tasiz va u yerda bemalol tomosha qilasiz yoki yuklab olasiz — tez, bepul va ro'yxatdan o'tmasdan.
+      </div>
+      <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+        <a href="{e(bot_link)}" style="display:inline-block; background:#229ed9; color:#fff; padding:14px 28px; border-radius:8px; text-decoration:none; font-weight:600;">▶ Telegram botda ko'rish</a>
+        <button onclick="astraShare()" style="display:inline-flex; align-items:center; gap:8px; background:rgba(124,92,255,0.15); color:#fff; padding:14px 24px; border:1px solid rgba(124,92,255,0.5); border-radius:8px; font-weight:600; font-size:15px; font-family:inherit; cursor:pointer;">
+          <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></svg>
+          Do'stga yuborish
+        </button>
+        <span id="astraShareMsg" style="display:none; color:#67e08a; font-size:14px;">✅ Havola nusxa olindi!</span>
+      </div>
+      <p style="margin-top:24px;"><a href="/" style="color:#a3a3a3;">← Barcha kinolar</a></p>
+    </section>
+
+    {more_html}
+  </div>
 </main>
 <script>
 function loadTrailer(el){{
