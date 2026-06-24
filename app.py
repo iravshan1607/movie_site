@@ -1376,19 +1376,17 @@ def movie_page(mid):
     share_url_js = _json.dumps(canonical)
     share_title_js = _json.dumps(title)
 
-    # Treyler bloki — bosilganda yuklanadi (sahifa tez ochilishi uchun iframe darrov yuklanmaydi)
+    # Treyler — to'g'ridan-to'g'ri qo'yilgan iframe (bosish shart emas, ishonchli ochiladi)
     if trailer_id:
-        poster_bg = yt_thumb or abs_poster   # 16:9 YouTube rasmi treyler oynasiga to'g'ri keladi
         trailer_html = (
             '<section style="padding:8px 20px 4px;">'
             '<h2 style="font-family:Bebas Neue,sans-serif;font-size:24px;letter-spacing:1px;margin:0 0 12px;">🎬 Treyler</h2>'
-            f'<div class="trailer-box" data-yt="{trailer_id}" onclick="loadTrailer(this)" '
-            'style="position:relative;max-width:760px;aspect-ratio:16/9;border-radius:12px;overflow:hidden;cursor:pointer;'
-            f'background:#000 center/cover no-repeat url(&quot;{e(poster_bg)}&quot;);">'
-            '<div style="position:absolute;inset:0;background:rgba(0,0,0,0.35);"></div>'
-            '<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;">'
-            '<div style="width:68px;height:68px;border-radius:50%;background:rgba(229,9,20,0.92);display:flex;'
-            'align-items:center;justify-content:center;color:#fff;font-size:26px;padding-left:5px;">▶</div></div>'
+            '<div style="position:relative;max-width:760px;aspect-ratio:16/9;border-radius:12px;overflow:hidden;background:#000;">'
+            f'<iframe src="https://www.youtube.com/embed/{trailer_id}?rel=0&modestbranding=1" '
+            'title="Treyler" loading="lazy" frameborder="0" '
+            'allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" '
+            'referrerpolicy="strict-origin-when-cross-origin" allowfullscreen '
+            'style="position:absolute;inset:0;width:100%;height:100%;border:0;"></iframe>'
             '</div>'
             '<div style="max-width:760px;display:flex;gap:12px;flex-wrap:wrap;margin-top:14px;">'
             f'<a href="{e(bot_link)}" style="display:inline-flex;align-items:center;gap:8px;'
