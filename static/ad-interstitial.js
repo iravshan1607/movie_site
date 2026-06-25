@@ -1,24 +1,31 @@
-/* ASTRA — to'liq ekranli reklama (interstitial).
-   - Sahifa ochilganda /api/ad dan reklama oladi.
-   - Butun ekranni qoplaydi; X tugmasi bir necha soniya (LOCK_SECONDS) yopiq turadi (sanoq).
-   - Sessiyada faqat BIR marta ko'rsatiladi (har sahifada bezdirmaslik uchun).
+/* ASTRA — to'liq ekranli MAJBURIY reklama (interstitial).
+   - Sayt ochilganda DARROV emas — bir necha soniyadan keyin chiqadi (FIRST_DELAY_MS).
+   - Keyin har bir necha daqiqada qaytadan chiqadi (REPEAT_MS).
+   - X tugmasi LOCK_SECONDS soniya yopiq turadi (sanoq), keyin bosiladi.
+   - Vaqt sahifalar orasida saqlanadi (sessionStorage) — navigatsiyada qaytadan boshlanmaydi.
    - Adaptiv: rasm bo'lsa rasm bilan, bo'lmasa toza matn.
-   - To'liq himoyalangan: xato bo'lsa sayt ishiga ta'sir qilmaydi. */
+   - To'liq himoyalangan: istalgan xato saytga ta'sir qilmaydi. */
 (function () {
-  var LOCK_SECONDS = 5;   // necha soniya yopib bo'lmaydi
-  try {
-    if (sessionStorage.getItem('astra_ad_shown') === '1') return;
-  } catch (e) {}
+  var FIRST_DELAY_MS = 12000;   // kirgandan keyin birinchi marta (~12 soniya)
+  var REPEAT_MS      = 180000;  // keyin har ~3 daqiqada qaytadan
+  var LOCK_SECONDS   = 5;       // X necha soniya yopiq tursin
 
-  function esc(s) {
+  var isOpen = false;
+
+  function nowMs(){ return Date.now(); }
+  function getLast(){ try { return parseInt(sessionStorage.getItem('astra_ad_last') || '0', 10) || 0; } catch (e) { return 0; } }
+  function setLast(t){ try { sessionStorage.setItem('astra_ad_last', String(t)); } catch (e) {} }
+
+  function esc(s){
     return String(s == null ? '' : s).replace(/[<>&"]/g, function (c) {
       return ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' })[c];
     });
   }
 
-  function show(ad) {
-    if (!ad || !ad.title) return;
-    try { sessionStorage.setItem('astra_ad_shown', '1'); } catch (e) {}
+  function buildAndShow(ad){
+    if (!ad || !ad.title || isOpen) return;
+    isOpen = true;
+    setLast(nowMs());
 
     var ov = document.createElement('div');
     ov.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(6,4,16,0.9);' +
@@ -61,6 +68,7 @@
     document.body.appendChild(ov);
 
     var btn = ov.querySelector('#astraAdClose');
+    function close(){ try { ov.remove(); } catch (e) {} isOpen = false; }
     var left = LOCK_SECONDS;
     var timer = setInterval(function () {
       left--;
@@ -71,25 +79,36 @@
         btn.style.cursor = 'pointer';
         btn.style.background = 'rgba(255,255,255,0.18)';
         btn.style.color = '#fff';
-        btn.onclick = function () { try { ov.remove(); } catch (e) {} };
+        btn.onclick = close;
       } else {
         btn.textContent = left;
       }
     }, 1000);
   }
 
-  function init() {
+  function tick(){
     try {
       fetch('/api/ad')
         .then(function (r) { return r.json(); })
-        .then(function (d) { if (d && d.ad) show(d.ad); })
+        .then(function (d) { if (d && d.ad) buildAndShow(d.ad); })
         .catch(function () {});
     } catch (e) {}
+    // Keyingi takror — ko'rsatilsa ham, ko'rsatilmasa ham
+    setTimeout(tick, REPEAT_MS);
   }
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
-  } else {
-    init();
+  function schedule(){
+    var last = getLast();
+    var delay;
+    if (!last) {
+      delay = FIRST_DELAY_MS;
+    } else {
+      var elapsed = nowMs() - last;
+      delay = Math.max(REPEAT_MS - elapsed, 3000);
+    }
+    setTimeout(tick, delay);
   }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', schedule);
+  else schedule();
 })();
