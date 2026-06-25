@@ -601,6 +601,7 @@ async function loadHome(){
     }
     rows.innerHTML = html;
     fadeIn(rows);
+    injectInlineAd();
     // Bosh sahifada "Tez orada" qatorini qo'shamiz (faqat Yangi + Barchasi rejimida)
     if (curSort === 'new' && curType === 'all' && curGenre === 'all') {
       injectUpcomingTeaser();
@@ -709,6 +710,39 @@ function injectUpcomingTeaser(){
 }
 
 function setSort(s){ curSort = s; loadHome(); }
+
+// Bilinar-bilinmas inline reklama — qatorlar orasiga nozik banner qo'yadi
+function injectInlineAd(){
+  try {
+    fetch('/api/ad').then(function(r){return r.json();}).then(function(d){
+      var ad = d && d.ad; var rowsEl = document.getElementById('rows');
+      if (!ad || !rowsEl) return;
+      if (rowsEl.querySelector('.inline-ad-row')) return;  // ikki marta qo'ymaymiz
+      var inner;
+      if (ad.image_url) {
+        inner = '<img src="'+esc(ad.image_url)+'" alt="" loading="lazy" style="width:58px;height:40px;object-fit:cover;border-radius:6px;flex:0 0 auto;">'
+          + '<div style="min-width:0;font-size:13.5px;color:#cfcae8;line-height:1.4;">'+esc(ad.title)+(ad.link?' <span style="color:#9b93c4;">— Batafsil →</span>':'')+'</div>';
+      } else {
+        inner = '<div style="width:30px;height:30px;flex:0 0 auto;border-radius:7px;background:rgba(124,92,255,0.18);display:flex;align-items:center;justify-content:center;font-size:15px;">📢</div>'
+          + '<div style="min-width:0;font-size:13.5px;color:#cfcae8;line-height:1.4;">'+esc(ad.title)+(ad.link?' <span style="color:#9b93c4;">— Batafsil →</span>':'')+'</div>';
+      }
+      var style = 'display:flex;align-items:center;gap:12px;background:rgba(124,92,255,0.06);border:1px solid rgba(124,92,255,0.18);border-radius:10px;padding:10px 14px;text-decoration:none;position:relative;';
+      var label = '<span style="position:absolute;top:5px;right:9px;font-size:9px;color:#7a7398;text-transform:uppercase;letter-spacing:0.5px;">Reklama</span>';
+      var box = ad.link
+        ? '<a href="'+esc(ad.link)+'" target="_blank" rel="noopener nofollow sponsored" style="'+style+'">'+label+inner+'</a>'
+        : '<div style="'+style+'">'+label+inner+'</div>';
+      var row = document.createElement('div');
+      row.className = 'row inline-ad-row';
+      row.style.cssText = 'margin:18px 0;';
+      row.innerHTML = box;
+      // 2-qatordan keyin joylashtiramiz (kontent ichida, bilinar-bilinmas)
+      var allRows = rowsEl.querySelectorAll(':scope > .row');
+      if (allRows.length >= 2) rowsEl.insertBefore(row, allRows[1].nextSibling);
+      else rowsEl.appendChild(row);
+    }).catch(function(){});
+  } catch(e) {}
+}
+
 function randomMovie(){
   if (!allMovies.length) return;
   const m = allMovies[Math.floor(Math.random()*allMovies.length)];
