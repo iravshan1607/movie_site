@@ -1585,8 +1585,8 @@ def movie_page(mid):
 <nav id="navbar"><a href="/" class="nav-logo" aria-label="ASTRA"><img src="/static/logo.svg" alt="ASTRA" class="nav-logo-img"></a></nav>
 <main>
   <header style="position:relative; overflow:hidden;">
-    {f'<div style="position:absolute; inset:0; background:#1a1640 center/cover no-repeat url(&quot;{e(poster)}&quot;); filter:blur(22px) brightness(0.6); transform:scale(1.18);"></div>' if poster else '<div style="position:absolute; inset:0; background:#1a1640;"></div>'}
-    <div style="position:absolute; inset:0; background:linear-gradient(180deg, rgba(18,16,42,0.35) 0%, rgba(18,16,42,0.72) 70%, #12102a 100%);"></div>
+    {f'<div style="position:absolute; inset:0; background:#1a1640 center/cover no-repeat url(&quot;{e(poster)}&quot;);"></div>' if poster else '<div style="position:absolute; inset:0; background:#1a1640;"></div>'}
+    <div style="position:absolute; inset:0; background:linear-gradient(180deg, rgba(18,16,42,0.55) 0%, rgba(18,16,42,0.82) 70%, #12102a 100%);"></div>
     <div style="position:relative; max-width:1180px; margin:0 auto; padding:110px 32px 48px; display:flex; gap:36px; flex-wrap:wrap; align-items:flex-start;">
       {f'<img src="{e(poster)}" alt="{e(title)}" style="width:200px; aspect-ratio:2/3; object-fit:cover; border-radius:12px; display:block; box-shadow:0 16px 50px rgba(0,0,0,0.7); flex:0 0 auto;">' if poster else ''}
       <div style="flex:1; min-width:300px;">
