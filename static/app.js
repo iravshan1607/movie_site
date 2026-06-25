@@ -170,8 +170,18 @@ fetch('/api/botlink').then(r=>r.json()).then(d=>{ BOT = d.bot || ''; var tg=docu
       var ad = d && d.ad; var box = document.getElementById('adBanner');
       if (!ad || !box) return;
       function esc(s){ return String(s==null?'':s).replace(/[<>&"]/g,function(c){return ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'})[c];}); }
-      var img = ad.image_url ? '<img src="'+esc(ad.image_url)+'" alt="" loading="lazy" style="width:100%;max-height:160px;object-fit:cover;border-radius:8px;margin-bottom:10px;">' : '';
-      var inner = img + '<div style="font-size:15px;color:#fff;font-weight:500;line-height:1.5;">'+esc(ad.title)+'</div>';
+      var inner;
+      if (ad.image_url) {
+        inner = '<div style="display:flex;gap:13px;align-items:center;">'
+          + '<img src="'+esc(ad.image_url)+'" alt="" loading="lazy" style="width:96px;height:68px;object-fit:cover;border-radius:8px;flex:0 0 auto;">'
+          + '<div style="min-width:0;"><div style="font-size:15px;color:#fff;font-weight:500;line-height:1.45;">'+esc(ad.title)+'</div>'
+          + (ad.link ? '<div style="font-size:13px;color:#9b93c4;margin-top:4px;">Batafsil →</div>' : '')
+          + '</div></div>';
+      } else {
+        inner = '<div style="display:flex;gap:12px;align-items:center;">'
+          + '<div style="width:38px;height:38px;flex:0 0 auto;border-radius:9px;background:rgba(124,92,255,0.25);display:flex;align-items:center;justify-content:center;font-size:19px;">📢</div>'
+          + '<div style="font-size:15px;color:#fff;font-weight:500;line-height:1.45;">'+esc(ad.title)+'</div></div>';
+      }
       var style = 'display:block;text-decoration:none;background:rgba(124,92,255,0.10);border:1px solid rgba(124,92,255,0.4);border-radius:12px;padding:16px;margin:20px 0 6px;position:relative;';
       var label = '<span style="position:absolute;top:8px;right:10px;font-size:10px;color:#8a82b8;text-transform:uppercase;letter-spacing:0.5px;">Reklama</span>';
       if (ad.link) box.innerHTML = '<a href="'+esc(ad.link)+'" target="_blank" rel="noopener nofollow sponsored" style="'+style+'">'+label+inner+'</a>';
