@@ -1181,22 +1181,35 @@ def _get_site_ad():
     return None
 
 def _render_ad_banner(ad):
-    """Reklama bannerini HTML qilib qaytaradi (ad None bo'lsa — bo'sh)."""
+    """Reklama bannerini HTML qilib qaytaradi (adaptiv: rasm bor=karta, yo'q=toza matn)."""
     if not ad:
         return ""
     e = _html.escape
-    img = (f'<img src="{e(ad["image_url"])}" alt="" loading="lazy" '
-           'style="width:100%;max-height:140px;object-fit:cover;border-radius:8px;display:block;margin-bottom:10px;">'
-           ) if ad.get("image_url") else ""
-    inner = (img + f'<div style="font-size:15px;color:#fff;font-weight:500;line-height:1.5;">{e(ad["title"])}</div>')
-    box_style = ("display:block;text-decoration:none;background:rgba(124,92,255,0.10);"
-                 "border:1px solid rgba(124,92,255,0.4);border-radius:12px;padding:16px;margin:18px 0;position:relative;")
+    title = e(ad["title"])
+    link = ad.get("link") or ""
+    box = ("display:block;text-decoration:none;background:rgba(124,92,255,0.10);"
+           "border:1px solid rgba(124,92,255,0.4);border-radius:12px;padding:14px;margin:18px 0;position:relative;")
     label = ('<span style="position:absolute;top:8px;right:10px;font-size:10px;color:#8a82b8;'
              'text-transform:uppercase;letter-spacing:0.5px;">Reklama</span>')
-    if ad.get("link"):
-        return (f'<a href="{e(ad["link"])}" target="_blank" rel="noopener nofollow sponsored" '
-                f'style="{box_style}">{label}{inner}</a>')
-    return f'<div style="{box_style}">{label}{inner}</div>'
+    if ad.get("image_url"):
+        # Rasm bor — yon-ma-yon karta (rasm chap, matn o'ng), kesilmaydi xunuk emas
+        inner = ('<div style="display:flex;gap:13px;align-items:center;">'
+                 f'<img src="{e(ad["image_url"])}" alt="" loading="lazy" '
+                 'style="width:96px;height:68px;object-fit:cover;border-radius:8px;flex:0 0 auto;">'
+                 '<div style="min-width:0;">'
+                 f'<div style="font-size:15px;color:#fff;font-weight:500;line-height:1.45;">{title}</div>'
+                 + ('<div style="font-size:13px;color:#9b93c4;margin-top:4px;">Batafsil →</div>' if link else '')
+                 + '</div></div>')
+    else:
+        # Rasm yo'q — toza matn (kichik ikonka + matn)
+        inner = ('<div style="display:flex;gap:12px;align-items:center;">'
+                 '<div style="width:38px;height:38px;flex:0 0 auto;border-radius:9px;background:rgba(124,92,255,0.25);'
+                 'display:flex;align-items:center;justify-content:center;font-size:19px;">📢</div>'
+                 f'<div style="font-size:15px;color:#fff;font-weight:500;line-height:1.45;">{title}</div></div>')
+    if link:
+        return (f'<a href="{e(link)}" target="_blank" rel="noopener nofollow sponsored" '
+                f'style="{box}">{label}{inner}</a>')
+    return f'<div style="{box}">{label}{inner}</div>'
 
 # ══════════════════ SEO (Google uchun) ══════════════════
 import html as _html
@@ -1630,6 +1643,7 @@ function astraShare(){{
   window.open('https://t.me/share/url?url=' + encodeURIComponent(ASTRA_SHARE_URL) + '&text=' + encodeURIComponent(ASTRA_SHARE_TITLE + ' — ASTRA da ko\'ring 🎬'), '_blank');
 }}
 </script>
+<script src="/static/ad-interstitial.js"></script>
 </body>
 </html>"""
     return Response(page, mimetype="text/html")
