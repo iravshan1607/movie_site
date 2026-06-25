@@ -1474,7 +1474,12 @@ def movie_page(mid):
   <div style="max-width:1180px; margin:0 auto; padding:0 32px;">
     {trailer_html}
     {more_html}
-    <p style="padding:8px; margin:8px 0 0;"><a href="/" style="color:#a3a3a3;">← Barcha kinolar</a></p>
+    <div style="text-align:center; padding:28px 8px 16px;">
+      <a href="/" style="display:inline-flex; align-items:center; gap:10px; background:#7c5cff; color:#fff; padding:16px 40px; border-radius:12px; text-decoration:none; font-weight:700; font-size:16px; box-shadow:0 10px 30px rgba(124,92,255,0.45);">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+        Barcha kinolarni ko'rish
+      </a>
+    </div>
   </div>
 </main>
 <script>
