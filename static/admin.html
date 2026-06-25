@@ -365,6 +365,46 @@ textarea { resize:vertical; min-height:80px; }
     </div>
   </div>
 
+  <!-- REKLAMA (sayt + bot) -->
+  <div class="box" id="adsPanel" style="padding:0;margin-bottom:18px;border:1px solid rgba(90,209,255,0.28);border-radius:14px;overflow:hidden;">
+    <div onclick="toggleAds()" style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:15px 20px;cursor:pointer;user-select:none;">
+      <div style="font-size:17px;font-weight:600;display:flex;align-items:center;gap:9px;">
+        <span style="font-size:20px;">📢</span>
+        <span>Reklama <span id="adsCount" style="font-size:13px;color:var(--dim);font-weight:400;"></span></span>
+      </div>
+      <span id="adsChevron" style="font-size:18px;color:var(--dim);transition:transform .2s;">▸</span>
+    </div>
+    <div id="adsBody" style="display:none;padding:0 20px 20px;">
+      <div style="font-size:13px;color:var(--dim);margin:0 0 14px;line-height:1.6;">
+        Bu yerga qo'shgan reklama <b>saytda</b> (kino sahifasida) va <b>botda</b> (kino yuborilganda) ko'rinadi.
+        Joylashuv: <b>Ikkalasi</b> = sayt + bot, <b>Sayt</b> = faqat sayt, <b>Bot</b> = faqat bot.
+        <b>Faol</b> belgisini olib qo'ysangiz — reklama ko'rinmaydi (o'chirmasdan).
+      </div>
+      <input type="hidden" id="adId">
+      <div style="display:grid;grid-template-columns:1fr;gap:8px;margin-bottom:8px;">
+        <input id="adTitle" placeholder="Reklama matni (masalan: 🎬 Eng tez VPN — 30% chegirma!)" style="padding:11px 13px;">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <input id="adImage" placeholder="Rasm URL (ixtiyoriy)" style="flex:2;min-width:150px;padding:11px 13px;">
+          <input id="adLink" placeholder="Havola (bosilganda ochiladi, ixtiyoriy)" style="flex:2;min-width:150px;padding:11px 13px;">
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+          <select id="adPlacement" style="padding:11px 13px;">
+            <option value="all">Ikkalasi (sayt + bot)</option>
+            <option value="site">Faqat sayt</option>
+            <option value="bot">Faqat bot</option>
+          </select>
+          <label style="display:flex;align-items:center;gap:7px;font-size:14px;cursor:pointer;">
+            <input type="checkbox" id="adActive" checked> Faol
+          </label>
+          <button onclick="saveAd()" id="adSaveBtn" style="flex:0 0 auto;padding:11px 22px;">+ Saqlash</button>
+          <button onclick="resetAdForm()" id="adCancelBtn" style="flex:0 0 auto;padding:11px 18px;background:rgba(255,255,255,0.06);display:none;">Bekor</button>
+        </div>
+      </div>
+      <div id="adsAdminMsg" style="font-size:13px;margin:4px 0 12px;min-height:16px;"></div>
+      <div id="adsList"></div>
+    </div>
+  </div>
+
   <!-- QIDIRUV -->
   <div class="search-row">
     <input id="searchInput" placeholder="Serial yoki kino nomini yozing..." onkeydown="if(event.key==='Enter')search()">
@@ -745,6 +785,115 @@ async function confirmRelease(upId, movieId, title) {
     if (d.ok) { soonMsg('🎉 Chiqarildi! '+(d.notified||0)+' obunachiga xabar yuborilmoqda.', true); loadSoon(); }
     else soonMsg(d.error || 'Xato', false);
   } catch(e) { soonMsg('Tarmoq xatosi', false); }
+}
+
+// ── REKLAMA ──
+function toggleAds() {
+  const b = document.getElementById('adsBody');
+  const ch = document.getElementById('adsChevron');
+  const open = b.style.display !== 'none';
+  b.style.display = open ? 'none' : 'block';
+  ch.style.transform = open ? '' : 'rotate(90deg)';
+  if (!open) loadAds();
+}
+function adsMsg(t, ok) {
+  const el = document.getElementById('adsAdminMsg');
+  el.textContent = t; el.style.color = ok ? '#67e08a' : '#ff8a8a';
+}
+function resetAdForm() {
+  document.getElementById('adId').value = '';
+  document.getElementById('adTitle').value = '';
+  document.getElementById('adImage').value = '';
+  document.getElementById('adLink').value = '';
+  document.getElementById('adPlacement').value = 'all';
+  document.getElementById('adActive').checked = true;
+  document.getElementById('adSaveBtn').textContent = '+ Saqlash';
+  document.getElementById('adCancelBtn').style.display = 'none';
+}
+async function loadAds() {
+  try {
+    const r = await fetch('/api/admin/ads/list', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ password: PASS })
+    });
+    const d = await r.json();
+    const items = d.items || [];
+    document.getElementById('adsCount').textContent = items.length ? '('+items.length+')' : '';
+    const box = document.getElementById('adsList');
+    if (!items.length) { box.innerHTML = '<div style="color:var(--dim);font-size:13px;">Hozircha reklama yo\'q.</div>'; return; }
+    const PL = { all:'Sayt + Bot', site:'Faqat sayt', bot:'Faqat bot' };
+    box.innerHTML = items.map(a => `
+      <div style="display:flex;gap:12px;align-items:center;padding:11px 0;border-top:1px solid var(--line);">
+        ${a.image_url ? `<img src="${esc(a.image_url)}" alt="" style="width:54px;height:40px;object-fit:cover;border-radius:6px;flex:0 0 auto;">` : ''}
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:14px;${a.is_active?'':'opacity:.5;text-decoration:line-through;'}">${esc(a.title)}</div>
+          <div style="font-size:12px;color:var(--dim);margin-top:2px;">${PL[a.placement]||a.placement}${a.link?' · 🔗 havola bor':''}${a.is_active?'':' · ⏸ faolsiz'}</div>
+        </div>
+        <button onclick="editAd(${a.id})" style="flex:0 0 auto;padding:7px 12px;background:rgba(90,209,255,0.12);border:1px solid rgba(90,209,255,0.4);color:#5ad1ff;border-radius:8px;font-family:inherit;font-size:12px;cursor:pointer;">✏️</button>
+        <button onclick="toggleAdActive(${a.id})" style="flex:0 0 auto;padding:7px 12px;background:rgba(124,92,255,0.12);border:1px solid rgba(124,92,255,0.4);color:#b69bff;border-radius:8px;font-family:inherit;font-size:12px;cursor:pointer;">${a.is_active?'⏸':'▶'}</button>
+        <button onclick="delAd(${a.id})" style="flex:0 0 auto;padding:7px 12px;background:rgba(255,90,90,0.12);border:1px solid rgba(255,90,90,0.4);color:#ff8a8a;border-radius:8px;font-family:inherit;font-size:12px;cursor:pointer;">🗑</button>
+      </div>`).join('');
+    window._adsCache = items;
+  } catch(e) { adsMsg('Tarmoq xatosi', false); }
+}
+function editAd(id) {
+  const a = (window._adsCache||[]).find(x => x.id === id);
+  if (!a) return;
+  document.getElementById('adId').value = a.id;
+  document.getElementById('adTitle').value = a.title || '';
+  document.getElementById('adImage').value = a.image_url || '';
+  document.getElementById('adLink').value = a.link || '';
+  document.getElementById('adPlacement').value = a.placement || 'all';
+  document.getElementById('adActive').checked = !!a.is_active;
+  document.getElementById('adSaveBtn').textContent = '💾 Yangilash';
+  document.getElementById('adCancelBtn').style.display = '';
+  document.getElementById('adTitle').focus();
+}
+async function saveAd() {
+  const title = document.getElementById('adTitle').value.trim();
+  if (!title) { adsMsg('Reklama matnini kiriting', false); return; }
+  const body = {
+    password: PASS,
+    id: document.getElementById('adId').value || null,
+    title: title,
+    image_url: document.getElementById('adImage').value.trim(),
+    link: document.getElementById('adLink').value.trim(),
+    placement: document.getElementById('adPlacement').value,
+    is_active: document.getElementById('adActive').checked
+  };
+  try {
+    const r = await fetch('/api/admin/ads/save', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(body)
+    });
+    const d = await r.json();
+    if (d.ok) { adsMsg('✅ Saqlandi.', true); resetAdForm(); loadAds(); }
+    else adsMsg(d.error || 'Xato', false);
+  } catch(e) { adsMsg('Tarmoq xatosi', false); }
+}
+async function toggleAdActive(id) {
+  const a = (window._adsCache||[]).find(x => x.id === id);
+  if (!a) return;
+  try {
+    const r = await fetch('/api/admin/ads/save', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ password: PASS, id: a.id, title: a.title, image_url: a.image_url, link: a.link, placement: a.placement, is_active: !a.is_active })
+    });
+    const d = await r.json();
+    if (d.ok) loadAds(); else adsMsg(d.error || 'Xato', false);
+  } catch(e) { adsMsg('Tarmoq xatosi', false); }
+}
+async function delAd(id) {
+  if (!confirm('Reklamani o\'chirilsinmi?')) return;
+  try {
+    const r = await fetch('/api/admin/ads/delete', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ password: PASS, id: id })
+    });
+    const d = await r.json();
+    if (d.ok) { adsMsg('O\'chirildi.', true); loadAds(); }
+    else adsMsg(d.error || 'Xato', false);
+  } catch(e) { adsMsg('Tarmoq xatosi', false); }
 }
 
 // ── QIDIRUV ──
