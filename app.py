@@ -280,6 +280,18 @@ def init_db():
                 )
             """)
             cur.execute("CREATE INDEX IF NOT EXISTS idx_notif_user ON notifications(user_id, is_read)")
+            # Reklama (sayt + bot uchun umumiy) — admin saytdan boshqaradi
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS ads (
+                    id SERIAL PRIMARY KEY,
+                    title TEXT NOT NULL,
+                    image_url TEXT DEFAULT '',
+                    link TEXT DEFAULT '',
+                    placement TEXT DEFAULT 'all',   -- site | bot | all
+                    is_active BOOLEAN DEFAULT TRUE,
+                    created_at TIMESTAMP DEFAULT NOW()
+                )
+            """)
             conn.commit()
         log.info("Kino baza tayyor (poster_url + site_settings + favorites + reviews + upcoming)")
     except Exception as e:
@@ -1074,6 +1086,118 @@ def api_notifications_read():
         log.warning("notif read: %s", e)
         return jsonify({"error": "xato"}), 500
 
+# ══════════════════ REKLAMA (sayt + bot umumiy) ══════════════════
+@app.route("/api/ad")
+def api_ad():
+    """Sayt uchun bitta faol reklama (placement: site yoki all)."""
+    try:
+        with get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT id, title, image_url, link FROM ads "
+                        "WHERE is_active=TRUE AND placement IN ('site','all') "
+                        "ORDER BY RANDOM() LIMIT 1")
+            r = cur.fetchone()
+        if not r:
+            return jsonify({"ad": None})
+        return jsonify({"ad": {"id": r[0], "title": r[1], "image_url": r[2] or "", "link": r[3] or ""}})
+    except Exception as e:
+        log.warning("api_ad: %s", e)
+        return jsonify({"ad": None})
+
+@app.route("/api/admin/ads/list", methods=["POST"])
+def admin_ads_list():
+    if not _check(request.get_json() or {}):
+        return jsonify({"error": "ruxsat yo'q"}), 403
+    try:
+        with get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT id, title, image_url, link, placement, is_active, created_at "
+                        "FROM ads ORDER BY id DESC")
+            rows = cur.fetchall()
+        items = [{"id": r[0], "title": r[1], "image_url": r[2] or "", "link": r[3] or "",
+                  "placement": r[4] or "all", "is_active": bool(r[5])} for r in rows]
+        return jsonify({"items": items})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/admin/ads/save", methods=["POST"])
+def admin_ads_save():
+    d = request.get_json() or {}
+    if not _check(d):
+        return jsonify({"error": "ruxsat yo'q"}), 403
+    title = (d.get("title") or "").strip()
+    if not title:
+        return jsonify({"error": "matn kiriting"}), 400
+    image_url = (d.get("image_url") or "").strip()
+    link = (d.get("link") or "").strip()
+    placement = (d.get("placement") or "all").strip()
+    if placement not in ("site", "bot", "all"):
+        placement = "all"
+    is_active = bool(d.get("is_active", True))
+    aid = d.get("id")
+    try:
+        with get_conn() as conn:
+            cur = conn.cursor()
+            if aid:
+                cur.execute("UPDATE ads SET title=%s, image_url=%s, link=%s, placement=%s, is_active=%s WHERE id=%s",
+                            (title[:500], image_url, link, placement, is_active, int(aid)))
+            else:
+                cur.execute("INSERT INTO ads (title, image_url, link, placement, is_active) "
+                            "VALUES (%s,%s,%s,%s,%s) RETURNING id",
+                            (title[:500], image_url, link, placement, is_active))
+                aid = cur.fetchone()[0]
+            conn.commit()
+        return jsonify({"ok": True, "id": aid})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/admin/ads/delete", methods=["POST"])
+def admin_ads_delete():
+    d = request.get_json() or {}
+    if not _check(d):
+        return jsonify({"error": "ruxsat yo'q"}), 403
+    try:
+        with get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("DELETE FROM ads WHERE id=%s", (int(d.get("id")),))
+            conn.commit()
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+def _get_site_ad():
+    """Sayt sahifalari uchun bitta faol reklama (yoki None) — hech qachon xato bermaydi."""
+    try:
+        with get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT title, image_url, link FROM ads "
+                        "WHERE is_active=TRUE AND placement IN ('site','all') "
+                        "ORDER BY RANDOM() LIMIT 1")
+            r = cur.fetchone()
+        if r:
+            return {"title": r[0], "image_url": r[1] or "", "link": r[2] or ""}
+    except Exception as e:
+        log.warning("get_site_ad: %s", e)
+    return None
+
+def _render_ad_banner(ad):
+    """Reklama bannerini HTML qilib qaytaradi (ad None bo'lsa — bo'sh)."""
+    if not ad:
+        return ""
+    e = _html.escape
+    img = (f'<img src="{e(ad["image_url"])}" alt="" loading="lazy" '
+           'style="width:100%;max-height:140px;object-fit:cover;border-radius:8px;display:block;margin-bottom:10px;">'
+           ) if ad.get("image_url") else ""
+    inner = (img + f'<div style="font-size:15px;color:#fff;font-weight:500;line-height:1.5;">{e(ad["title"])}</div>')
+    box_style = ("display:block;text-decoration:none;background:rgba(124,92,255,0.10);"
+                 "border:1px solid rgba(124,92,255,0.4);border-radius:12px;padding:16px;margin:18px 0;position:relative;")
+    label = ('<span style="position:absolute;top:8px;right:10px;font-size:10px;color:#8a82b8;'
+             'text-transform:uppercase;letter-spacing:0.5px;">Reklama</span>')
+    if ad.get("link"):
+        return (f'<a href="{e(ad["link"])}" target="_blank" rel="noopener nofollow sponsored" '
+                f'style="{box_style}">{label}{inner}</a>')
+    return f'<div style="{box_style}">{label}{inner}</div>'
+
 # ══════════════════ SEO (Google uchun) ══════════════════
 import html as _html
 
@@ -1372,6 +1496,7 @@ def movie_page(mid):
         ]
     }
     breadcrumb_script = f'<script type="application/ld+json">{_json.dumps(breadcrumb_ld, ensure_ascii=False)}</script>'
+    ad_html = _render_ad_banner(_get_site_ad())   # reklama banner (bo'lmasa bo'sh)
     # Ulashish uchun JS-xavfsiz qiymatlar (kerakli qo'shtirnoq/maxsus belgilar ekranlanadi)
     share_url_js = _json.dumps(canonical)
     share_title_js = _json.dumps(title)
@@ -1472,6 +1597,7 @@ def movie_page(mid):
   </header>
 
   <div style="max-width:1180px; margin:0 auto; padding:0 32px;">
+    {ad_html}
     {trailer_html}
     {more_html}
     <div style="text-align:center; padding:28px 8px 16px;">
