@@ -1443,3 +1443,14 @@
 }
 .card:hover .card-name { transform: translateY(-14px); transition: transform .25s; }
 .card:hover .card-meta { opacity: 1; transform: translateY(0); }
+/* ========================================================================
+   TELEFON UCHUN TEZLASHTIRISH — og'ir GPU effektlarini o'chiramiz (qotmaslik)
+   ======================================================================== */
+@media (max-width: 768px) {
+  /* Doimiy animatsiyali katta blur fonlar — telefonda eng ko'p qotiradi */
+  .aurora, .orbs { display: none !important; }
+  .orb { animation: none !important; filter: none !important; }
+  .aurora { filter: none !important; }
+  /* Modal/menyu orqa fonidagi blur — telefonda oddiy quyuq rang bilan almashtiramiz */
+  .movie-modal-bg, .mobile-menu-bg { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
+}

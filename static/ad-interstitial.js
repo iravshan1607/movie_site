@@ -6,8 +6,8 @@
    - Adaptiv: rasm bo'lsa rasm bilan, bo'lmasa toza matn.
    - To'liq himoyalangan: istalgan xato saytga ta'sir qilmaydi. */
 (function () {
-  var FIRST_DELAY_MS = 15000;   // kirgandan keyin birinchi marta (~12 soniya)
-  var REPEAT_MS      = 600000;  // keyin har ~3 daqiqada qaytadan
+  var FIRST_DELAY_MS = 12000;   // kirgandan keyin birinchi marta (~12 soniya)
+  var REPEAT_MS      = 180000;  // keyin har ~3 daqiqada qaytadan
   var LOCK_SECONDS   = 5;       // X necha soniya yopiq tursin
 
   var isOpen = false;
@@ -28,9 +28,8 @@
     setLast(nowMs());
 
     var ov = document.createElement('div');
-    ov.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(6,4,16,0.9);' +
-      'display:flex;align-items:center;justify-content:center;padding:20px;' +
-      '-webkit-backdrop-filter:blur(5px);backdrop-filter:blur(5px);';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(6,4,16,0.93);' +
+      'display:flex;align-items:center;justify-content:center;padding:20px;';
 
     var img = ad.image_url
       ? '<img src="' + esc(ad.image_url) + '" alt="" style="width:100%;max-height:300px;' +
