@@ -206,6 +206,7 @@ def init_db():
             cur = conn.cursor()
             cur.execute("ALTER TABLE movies ADD COLUMN IF NOT EXISTS poster_url TEXT")
             cur.execute("ALTER TABLE movies ADD COLUMN IF NOT EXISTS trailer TEXT")
+            cur.execute("ALTER TABLE movies ADD COLUMN IF NOT EXISTS is_premium BOOLEAN DEFAULT FALSE")
             # Fon effektlari sozlamalari uchun kalit-qiymat jadvali
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS site_settings (
@@ -440,7 +441,8 @@ def api_movies():
             cur.execute(f"""
                 SELECT id, title, genre, year, language, quality,
                        COALESCE(content_type,'movie'), poster_id,
-                       COALESCE(views,0), rating, poster_url
+                       COALESCE(views,0), rating, poster_url,
+                       COALESCE(is_premium, FALSE)
                 FROM movies{wsql}
                 ORDER BY {order}
                 LIMIT %s OFFSET %s
@@ -451,6 +453,7 @@ def api_movies():
             "language": r[4] or "", "quality": r[5] or "", "type": r[6],
             "has_poster": bool(r[7]), "poster_url": r[10] or "",
             "views": r[8], "rating": float(r[9]) if r[9] else None,
+            "is_premium": bool(r[11]),
         } for r in rows]
         return jsonify({"movies": movies, "total": total, "page": page,
                         "pages": (total + per - 1) // per})
@@ -1362,7 +1365,8 @@ def movie_page(mid):
             cur = conn.cursor()
             cur.execute("""
                 SELECT id, title, genre, year, language, quality, description,
-                       COALESCE(content_type,'movie'), poster_id, poster_url, trailer
+                       COALESCE(content_type,'movie'), poster_id, poster_url, trailer,
+                       COALESCE(is_premium, FALSE)
                 FROM movies WHERE id=%s
             """, (mid,))
             r = cur.fetchone()
@@ -1390,6 +1394,10 @@ def movie_page(mid):
     language = r[4] or ""
     quality = r[5] or ""
     type_uz = {"movie":"Kino","series":"Serial","anime":"Anime","cartoon":"Multfilm"}.get(ctype,"Kino")
+    is_prem = bool(r[11]) if len(r) > 11 else False
+    prem_badge = ('<span style="display:inline-block;background:linear-gradient(90deg,#f7d046,#e0950b);'
+                  'color:#231803;font-size:13px;font-weight:700;padding:5px 14px;border-radius:20px;'
+                  'margin-top:12px;">💎 Premium</span>') if is_prem else ''
     # Tavsif — bo'sh bo'lsa, har kino uchun O'ZIGA XOS matn hosil qilamiz.
     # (Bir xil shablon → Google "dublikat/thin kontent" deb indekslamaydi.)
     _rd = (r[6] or "").strip()
@@ -1592,6 +1600,7 @@ def movie_page(mid):
       <div style="flex:1; min-width:300px;">
         <h1 style="font-family:Bebas Neue,sans-serif; font-size:48px; letter-spacing:1px; line-height:1.02; margin:0;">{e(title)}</h1>
         <p style="color:#cbb8f0; margin:12px 0 0; font-size:16px;">{type_uz}{f' · {year}' if year else ''}{f' · {e(genre)}' if genre else ''}</p>
+        {prem_badge}
         {rating_html}
         <p style="line-height:1.75; color:#dcdcea; margin:18px 0 20px; font-size:15.5px; max-width:680px;">{e(desc)}</p>
         <div style="background:rgba(42,171,238,0.12); border:1px solid rgba(42,171,238,0.45); border-radius:10px; padding:13px 16px; margin:0 0 20px; color:#d6ecff; font-size:14px; line-height:1.6; max-width:680px;">
