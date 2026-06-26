@@ -319,9 +319,10 @@ function cardHtml(m){
   const bg = p ? `<img src="${p}" loading="lazy" onerror="this.remove()">` : '';
   const fav = isFav(m.id) ? ' faved' : '';
   const rate = m.rating ? `<span class="card-rate">⭐ ${(+m.rating).toFixed(1)}</span>` : '';
+  const prem = m.is_premium ? `<span style="position:absolute;top:8px;left:8px;z-index:3;background:linear-gradient(90deg,#f7d046,#e0950b);color:#231803;font-size:11px;font-weight:700;padding:3px 9px;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.3);">💎</span>` : '';
   const meta = [m.year, ({movie:'Kino',series:'Serial',anime:'Anime',cartoon:'Multfilm'}[m.type]||''), m.quality].filter(Boolean).join(' · ');
   return `<a href="/kino/${m.id}" class="card ${pal(m.id)}" onclick="event.preventDefault();openMovie(${m.id})">
-    <div class="card-img">${bg}${rate}<span class="card-name">${esc(m.title)}</span>${meta?`<span class="card-meta">${esc(meta)}</span>`:''}</div>
+    <div class="card-img">${bg}${prem}${rate}<span class="card-name">${esc(m.title)}</span>${meta?`<span class="card-meta">${esc(meta)}</span>`:''}</div>
     <button class="fav-btn${fav}" onclick="event.stopPropagation();event.preventDefault();toggleFav(${m.id},this)" aria-label="Sevimlilarga qo'shish"><svg viewBox="0 0 24 24"><path d="M12 21s-8-5.3-8-11a4.5 4.5 0 0 1 8-2.8A4.5 4.5 0 0 1 20 10c0 5.7-8 11-8 11z"/></svg></button>
     <div class="card-overlay"><div class="card-play"><svg viewBox="0 0 24 24" fill="#000"><path d="M8 5v14l11-7z"/></svg></div></div>
   </a>`;
