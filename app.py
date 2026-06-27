@@ -1220,7 +1220,19 @@ import html as _html
 @app.route("/robots.txt")
 def robots():
     base = BASE_URL
-    txt = f"User-agent: *\nAllow: /\nSitemap: {base}/sitemap.xml\n"
+    txt = (
+        f"User-agent: *\n"
+        f"Allow: /\n"
+        f"Disallow: /api/\n"
+        f"Disallow: /admin\n\n"
+        f"User-agent: Yandex\n"
+        f"Allow: /\n"
+        f"Disallow: /api/\n"
+        f"Disallow: /admin\n"
+        f"Clean-param: page /\n\n"
+        f"Sitemap: {base}/sitemap.xml\n"
+        f"Sitemap: {base}/sitemap_video.xml\n"
+    )
     return Response(txt, mimetype="text/plain")
 
 # ── PWA (telefonga o'rnatish uchun) ──
@@ -1568,6 +1580,7 @@ def movie_page(mid):
 <link rel="shortcut icon" href="/static/icon-192.png">
 <link rel="apple-touch-icon" href="/static/icon-192.png">
 <meta name="google-site-verification" content="NWyfq_vRf53C8JMiGFZ8xL666JbpZg4NJAfKzabPoik" />
+<meta name="yandex-verification" content="a8a24b5075df6e17" />
 <title>{e(page_title)}</title>
 <meta name="description" content="{e(desc)}">
 <meta name="keywords" content="{e(title)}, {e(genre)}, o'zbek tilida, uzbek tilida, {year}, onlayn kino, tarjima">
