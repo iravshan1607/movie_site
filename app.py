@@ -1574,7 +1574,7 @@ def movie_page(mid):
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<link rel="icon" type="image/png" href="/static/favicon.png">
+<link rel="icon" type="image/png" sizes="64x64" href="/static/favicon.png">
 <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
 <link rel="icon" type="image/png" sizes="192x192" href="/static/icon-192.png">
 <link rel="icon" type="image/png" sizes="512x512" href="/static/icon-512.png">
@@ -1771,7 +1771,8 @@ def _render_listing(h1, intro, rows, total, page, per, base_path, crumb_label):
 <meta property="og:description" content="{e(desc)}">
 <meta property="og:type" content="website"><meta property="og:url" content="{canonical}">
 <link rel="stylesheet" href="/static/style.css">
-<link rel="icon" href="/static/favicon.svg">
+<link rel="icon" type="image/png" sizes="64x64" href="/static/favicon.png">
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
 <script type="application/ld+json">{_json.dumps(breadcrumb, ensure_ascii=False)}</script>
 <script type="application/ld+json">{_json.dumps(itemlist, ensure_ascii=False)}</script>
 <style>
