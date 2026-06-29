@@ -1574,6 +1574,7 @@ def movie_page(mid):
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" type="image/png" href="/static/favicon.png">
 <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
 <link rel="icon" type="image/png" sizes="192x192" href="/static/icon-192.png">
 <link rel="icon" type="image/png" sizes="512x512" href="/static/icon-512.png">
