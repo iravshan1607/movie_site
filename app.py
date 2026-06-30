@@ -1220,20 +1220,15 @@ import html as _html
 @app.route("/robots.txt")
 def robots():
     base = BASE_URL
-    txt = (
-        f"User-agent: *\n"
-        f"Allow: /\n"
-        f"Disallow: /api/\n"
-        f"Disallow: /admin\n\n"
-        f"User-agent: Yandex\n"
-        f"Allow: /\n"
-        f"Disallow: /api/\n"
-        f"Disallow: /admin\n"
-        f"Clean-param: page /\n\n"
-        f"Sitemap: {base}/sitemap.xml\n"
-        f"Sitemap: {base}/sitemap_video.xml\n"
-    )
+    txt = f"User-agent: *\nAllow: /\nSitemap: {base}/sitemap.xml\n"
     return Response(txt, mimetype="text/plain")
+
+# ── Favicon (Yandex/brauzerlar sayt ildizidan /favicon.ico ni so'raydi) ──
+@app.route("/favicon.ico")
+def favicon_ico():
+    resp = send_from_directory("static", "favicon.ico", mimetype="image/x-icon")
+    resp.headers["Cache-Control"] = "public, max-age=604800"
+    return resp
 
 # ── PWA (telefonga o'rnatish uchun) ──
 @app.route("/manifest.json")
@@ -1574,14 +1569,13 @@ def movie_page(mid):
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<link rel="icon" type="image/png" sizes="64x64" href="/static/favicon.png">
 <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
 <link rel="icon" type="image/png" sizes="192x192" href="/static/icon-192.png">
+<link rel="shortcut icon" href="/favicon.ico">
 <link rel="icon" type="image/png" sizes="512x512" href="/static/icon-512.png">
 <link rel="shortcut icon" href="/static/icon-192.png">
 <link rel="apple-touch-icon" href="/static/icon-192.png">
 <meta name="google-site-verification" content="NWyfq_vRf53C8JMiGFZ8xL666JbpZg4NJAfKzabPoik" />
-<meta name="yandex-verification" content="a8a24b5075df6e17" />
 <title>{e(page_title)}</title>
 <meta name="description" content="{e(desc)}">
 <meta name="keywords" content="{e(title)}, {e(genre)}, o'zbek tilida, uzbek tilida, {year}, onlayn kino, tarjima">
@@ -1771,8 +1765,9 @@ def _render_listing(h1, intro, rows, total, page, per, base_path, crumb_label):
 <meta property="og:description" content="{e(desc)}">
 <meta property="og:type" content="website"><meta property="og:url" content="{canonical}">
 <link rel="stylesheet" href="/static/style.css">
-<link rel="icon" type="image/png" sizes="64x64" href="/static/favicon.png">
-<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+<link rel="icon" href="/static/favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="/static/icon-192.png">
+<link rel="shortcut icon" href="/favicon.ico">
 <script type="application/ld+json">{_json.dumps(breadcrumb, ensure_ascii=False)}</script>
 <script type="application/ld+json">{_json.dumps(itemlist, ensure_ascii=False)}</script>
 <style>
@@ -1796,7 +1791,12 @@ def _render_listing(h1, intro, rows, total, page, per, base_path, crumb_label):
   .pglist .pg:hover{{border-color:#7c5cff;color:#fff;}}
   .pglist .pg.cur{{background:#7c5cff;border-color:#7c5cff;color:#fff;font-weight:700;}}
   .pglist .pg.gap{{background:none;border:none;}}
-  .seo-back{{display:inline-block;margin-top:30px;color:#5ad1ff;text-decoration:none;font-size:14px;}}
+  .seo-back{{display:inline-flex;align-items:center;gap:8px;margin-top:36px;color:#fff;
+    text-decoration:none;font-size:14.5px;font-weight:600;padding:12px 26px;border-radius:12px;
+    background:linear-gradient(135deg,#7c5cff,#5a8cff);box-shadow:0 6px 20px rgba(124,92,255,.35);
+    transition:transform .15s ease, box-shadow .15s ease;}}
+  .seo-back:hover{{transform:translateY(-2px);box-shadow:0 10px 26px rgba(124,92,255,.5);}}
+  .seo-backwrap{{text-align:center;}}
 </style>
 </head><body>
 <div class="seo-wrap">
@@ -1809,7 +1809,9 @@ def _render_listing(h1, intro, rows, total, page, per, base_path, crumb_label):
   <p class="seo-intro">{e(intro)} <b>{total}</b> ta.</p>
   <div class="lc-grid">{grid}</div>
   {pag}
-  <a class="seo-back" href="/">← Bosh sahifaga qaytish</a>
+  <div class="seo-backwrap">
+    <a class="seo-back" href="/">← Bosh sahifaga qaytish</a>
+  </div>
 </div>
 </body></html>"""
     return Response(page_html, mimetype="text/html")
