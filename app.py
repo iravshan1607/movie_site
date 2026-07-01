@@ -298,7 +298,8 @@ def init_db():
                     id SERIAL PRIMARY KEY,
                     name TEXT NOT NULL,
                     logo_url TEXT DEFAULT '',
-                    stream_url TEXT DEFAULT '',      -- HLS (.m3u8) yoki boshqa oqim havolasi
+                    stream_url TEXT DEFAULT '',      -- HLS (.m3u8) yoki YouTube havola/ID
+                    source_type TEXT DEFAULT 'hls',  -- hls | youtube
                     category TEXT DEFAULT 'Umumiy',  -- Umumiy | Yangiliklar | Sport | Bolalar | Kino | Musiqa
                     description TEXT DEFAULT '',
                     sort_order INTEGER DEFAULT 0,
@@ -306,6 +307,7 @@ def init_db():
                     created_at TIMESTAMP DEFAULT NOW()
                 )
             """)
+            cur.execute("ALTER TABLE channels ADD COLUMN IF NOT EXISTS source_type TEXT DEFAULT 'hls'")
             conn.commit()
         log.info("Kino baza tayyor (poster_url + site_settings + favorites + reviews + upcoming)")
     except Exception as e:
@@ -1182,18 +1184,46 @@ def admin_ads_delete():
         return jsonify({"error": str(e)}), 500
 
 # ══════════════════ TELEKANALLAR (TV) ══════════════════
+import re as _re
+
+def _extract_youtube_embed(url_or_id):
+    """YouTube havola/handle/ID dan iframe uchun embed manzilini yasaydi.
+    Qo'llab-quvvatlaydi: youtube.com/watch?v=ID, youtu.be/ID, /live/ID,
+    @handle/live, /channel/UC.../live, yoki to'g'ridan-to'g'ri video ID."""
+    s = (url_or_id or "").strip()
+    if not s:
+        return ""
+    # To'g'ridan-to'g'ri 11-belgili video ID (havola emas)
+    if _re.fullmatch(r"[A-Za-z0-9_-]{11}", s):
+        return f"https://www.youtube.com/embed/{s}?autoplay=1"
+    m = _re.search(r"(?:v=|youtu\.be/|/live/|/embed/)([A-Za-z0-9_-]{11})", s)
+    if m:
+        return f"https://www.youtube.com/embed/{m.group(1)}?autoplay=1"
+    # @handle yoki /channel/UC... — kanalning joriy live efiri
+    m = _re.search(r"youtube\.com/(@[\w.-]+|channel/[\w-]+|c/[\w-]+)", s)
+    if m:
+        return f"https://www.youtube.com/embed/{m.group(1)}/live?autoplay=1"
+    return ""
+
 @app.route("/api/channels")
 def api_channels():
     """Sayt /tv sahifasi uchun faol telekanallar ro'yxati."""
     try:
         with get_conn() as conn:
             cur = conn.cursor()
-            cur.execute("SELECT id, name, logo_url, stream_url, category, description "
+            cur.execute("SELECT id, name, logo_url, stream_url, category, description, "
+                        "COALESCE(source_type,'hls') "
                         "FROM channels WHERE is_active=TRUE "
                         "ORDER BY sort_order ASC, id ASC")
             rows = cur.fetchall()
-        items = [{"id": r[0], "name": r[1], "logo_url": r[2] or "", "stream_url": r[3] or "",
-                  "category": r[4] or "Umumiy", "description": r[5] or ""} for r in rows]
+        items = []
+        for r in rows:
+            source_type = r[6] or "hls"
+            item = {"id": r[0], "name": r[1], "logo_url": r[2] or "", "stream_url": r[3] or "",
+                    "category": r[4] or "Umumiy", "description": r[5] or "", "source_type": source_type}
+            if source_type == "youtube":
+                item["embed_url"] = _extract_youtube_embed(r[3] or "")
+            items.append(item)
         return jsonify({"channels": items})
     except Exception as e:
         log.warning("api_channels: %s", e)
@@ -1207,11 +1237,12 @@ def admin_channels_list():
         with get_conn() as conn:
             cur = conn.cursor()
             cur.execute("SELECT id, name, logo_url, stream_url, category, description, "
-                        "sort_order, is_active FROM channels ORDER BY sort_order ASC, id ASC")
+                        "sort_order, is_active, COALESCE(source_type,'hls') "
+                        "FROM channels ORDER BY sort_order ASC, id ASC")
             rows = cur.fetchall()
         items = [{"id": r[0], "name": r[1], "logo_url": r[2] or "", "stream_url": r[3] or "",
                   "category": r[4] or "Umumiy", "description": r[5] or "",
-                  "sort_order": r[6] or 0, "is_active": bool(r[7])} for r in rows]
+                  "sort_order": r[6] or 0, "is_active": bool(r[7]), "source_type": r[8] or "hls"} for r in rows]
         return jsonify({"items": items})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -1226,6 +1257,9 @@ def admin_channels_save():
         return jsonify({"error": "kanal nomini kiriting"}), 400
     logo_url = (d.get("logo_url") or "").strip()
     stream_url = (d.get("stream_url") or "").strip()
+    source_type = (d.get("source_type") or "hls").strip()
+    if source_type not in ("hls", "youtube"):
+        source_type = "hls"
     category = (d.get("category") or "Umumiy").strip() or "Umumiy"
     description = (d.get("description") or "").strip()
     try:
@@ -1239,14 +1273,14 @@ def admin_channels_save():
             cur = conn.cursor()
             if cid:
                 cur.execute("UPDATE channels SET name=%s, logo_url=%s, stream_url=%s, category=%s, "
-                            "description=%s, sort_order=%s, is_active=%s WHERE id=%s",
+                            "description=%s, sort_order=%s, is_active=%s, source_type=%s WHERE id=%s",
                             (name[:200], logo_url, stream_url, category[:60], description[:500],
-                             sort_order, is_active, int(cid)))
+                             sort_order, is_active, source_type, int(cid)))
             else:
                 cur.execute("INSERT INTO channels (name, logo_url, stream_url, category, description, "
-                            "sort_order, is_active) VALUES (%s,%s,%s,%s,%s,%s,%s) RETURNING id",
+                            "sort_order, is_active, source_type) VALUES (%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id",
                             (name[:200], logo_url, stream_url, category[:60], description[:500],
-                             sort_order, is_active))
+                             sort_order, is_active, source_type))
                 cid = cur.fetchone()[0]
             conn.commit()
         return jsonify({"ok": True, "id": cid})
@@ -1289,6 +1323,7 @@ def tv_page():
   .player-box{background:#000;border-radius:14px;overflow:hidden;position:relative;aspect-ratio:16/9;
     box-shadow:0 10px 40px rgba(0,0,0,.5);margin-bottom:10px;}
   .player-box video{width:100%;height:100%;display:block;background:#000;}
+  .player-box iframe{width:100%;height:100%;display:block;border:0;}
   .player-empty{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;
     justify-content:center;color:#8c87b8;gap:10px;text-align:center;padding:20px;}
   .now-playing{color:#fff;font-size:16px;font-weight:600;margin:0 0 20px;min-height:22px;}
@@ -1322,6 +1357,7 @@ def tv_page():
   <div class="player-box">
     <span class="live-badge" id="liveBadge">● JONLI</span>
     <video id="tvVideo" controls playsinline></video>
+    <iframe id="tvFrame" style="display:none;" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>
     <div class="player-empty" id="playerEmpty">
       <div style="font-size:42px;">📺</div>
       <div>Ko'rish uchun pastdan kanal tanlang</div>
@@ -1345,6 +1381,8 @@ const nowPlaying = document.getElementById('nowPlaying');
 
 function esc(s){return (s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
 
+const frame = document.getElementById('tvFrame');
+
 function play(ch){
   activeId = ch.id;
   document.querySelectorAll('.ch').forEach(e=>e.classList.toggle('active', +e.dataset.id===ch.id));
@@ -1352,6 +1390,19 @@ function play(ch){
   empty.style.display = 'none';
   liveBadge.style.display = 'block';
   if (hls){ hls.destroy(); hls = null; }
+  video.pause(); video.removeAttribute('src'); video.load();
+  frame.src = ''; frame.style.display = 'none'; video.style.display = 'block';
+
+  if (ch.source_type === 'youtube'){
+    const embed = ch.embed_url;
+    if (!embed){ nowPlaying.innerHTML = '⚠️ Bu kanalning YouTube havolasi noto\\'g\\'ri yoki qo\\'shilmagan.'; liveBadge.style.display='none'; return; }
+    video.style.display = 'none';
+    frame.style.display = 'block';
+    frame.src = embed;
+    window.scrollTo({top:0, behavior:'smooth'});
+    return;
+  }
+
   const url = ch.stream_url;
   if (!url){ nowPlaying.innerHTML = '⚠️ Bu kanalning oqim havolasi hali qo\\'shilmagan.'; liveBadge.style.display='none'; return; }
   if (video.canPlayType('application/vnd.apple.mpegurl')){
@@ -1377,7 +1428,7 @@ function render(){
       ? `<img class="ch-logo" src="${esc(c.logo_url)}" alt="" onerror="this.outerHTML='<div class=\\'ch-logo ph\\'>📺</div>'">`
       : `<div class="ch-logo ph">📺</div>`;
     return `<div class="ch ${c.id===activeId?'active':''}" data-id="${c.id}" onclick='play(${JSON.stringify(c).replace(/'/g,"&#39;")})'>
-      ${logo}<div class="ch-name">${esc(c.name)}</div><div class="ch-cat">${esc(c.category||'Umumiy')}</div></div>`;
+      ${logo}<div class="ch-name">${esc(c.name)}${c.source_type==='youtube'?' <span style="color:#ff4444;font-size:10px;">▶</span>':''}</div><div class="ch-cat">${esc(c.category||'Umumiy')}</div></div>`;
   }).join('');
 }
 function setCat(c){ curCat=c; render(); }

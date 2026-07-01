@@ -417,14 +417,21 @@ textarea { resize:vertical; min-height:80px; }
     <div id="tvBody" style="display:none;padding:0 20px 20px;">
       <div style="font-size:13px;color:var(--dim);margin:0 0 14px;line-height:1.6;">
         Bu yerga qo'shgan kanallar <b>saytda /tv sahifasida</b> jonli efirda ko'rinadi.
-        <b>Oqim havolasi</b> — kanalning <b>.m3u8 (HLS)</b> havolasi bo'lishi kerak (jonli oqim).
+        <b>Turi</b> — <b>HLS</b> = .m3u8 jonli oqim; <b>YouTube</b> = kanalning YouTube live havolasi
+        (masalan youtube.com/@Yoshlartelekanali/live yoki youtube.com/watch?v=...).
         Havolasiz qo'shsangiz kanal ko'rinadi, lekin bosilganda "havola qo'shilmagan" deydi.
         <b>Tartib</b> — kichik raqam yuqorida turadi.
       </div>
       <input type="hidden" id="chId">
       <div style="display:grid;grid-template-columns:1fr;gap:8px;margin-bottom:8px;">
         <input id="chName" placeholder="Kanal nomi (masalan: Yoshlar TV)" style="padding:11px 13px;">
-        <input id="chStream" placeholder="Oqim havolasi — .m3u8 (HLS)" style="padding:11px 13px;">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <select id="chSourceType" onchange="updateStreamPlaceholder()" style="flex:0 0 auto;padding:11px 13px;">
+            <option value="hls">📡 HLS (.m3u8)</option>
+            <option value="youtube">▶️ YouTube live</option>
+          </select>
+          <input id="chStream" placeholder="Oqim havolasi — .m3u8 (HLS)" style="flex:1;min-width:200px;padding:11px 13px;">
+        </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
           <input id="chLogo" placeholder="Logo URL (ixtiyoriy)" style="flex:2;min-width:150px;padding:11px 13px;">
           <input id="chCategory" placeholder="Kategoriya (Umumiy, Yangiliklar, Sport...)" style="flex:2;min-width:150px;padding:11px 13px;" list="chCatList">
@@ -951,16 +958,24 @@ function tvMsg(t, ok) {
   const el = document.getElementById('tvAdminMsg');
   el.textContent = t; el.style.color = ok ? '#67e08a' : '#ff8a8a';
 }
+function updateStreamPlaceholder() {
+  const t = document.getElementById('chSourceType').value;
+  document.getElementById('chStream').placeholder = t === 'youtube'
+    ? "YouTube havola (masalan: youtube.com/@Yoshlartelekanali/live)"
+    : "Oqim havolasi — .m3u8 (HLS)";
+}
 function resetChannelForm() {
   document.getElementById('chId').value = '';
   document.getElementById('chName').value = '';
   document.getElementById('chStream').value = '';
+  document.getElementById('chSourceType').value = 'hls';
   document.getElementById('chLogo').value = '';
   document.getElementById('chCategory').value = '';
   document.getElementById('chSort').value = '0';
   document.getElementById('chActive').checked = true;
   document.getElementById('chSaveBtn').textContent = '+ Saqlash';
   document.getElementById('chCancelBtn').style.display = 'none';
+  updateStreamPlaceholder();
 }
 async function loadChannels() {
   try {
@@ -978,7 +993,7 @@ async function loadChannels() {
         ${c.logo_url ? `<img src="${esc(c.logo_url)}" alt="" style="width:44px;height:44px;object-fit:contain;border-radius:8px;background:#0d0b22;flex:0 0 auto;">` : '<div style="width:44px;height:44px;border-radius:8px;background:#0d0b22;display:flex;align-items:center;justify-content:center;flex:0 0 auto;">📺</div>'}
         <div style="flex:1;min-width:0;">
           <div style="font-size:14px;${c.is_active?'':'opacity:.5;text-decoration:line-through;'}">${esc(c.name)}</div>
-          <div style="font-size:12px;color:var(--dim);margin-top:2px;">${esc(c.category)}${c.stream_url?' · 📡 oqim bor':' · ⚠️ oqim yo\'q'}${c.is_active?'':' · ⏸ faolsiz'}</div>
+          <div style="font-size:12px;color:var(--dim);margin-top:2px;">${esc(c.category)}${c.source_type==='youtube'?' · ▶️ YouTube':' · 📡 HLS'}${c.stream_url?'':' · ⚠️ havola yo\'q'}${c.is_active?'':' · ⏸ faolsiz'}</div>
         </div>
         <button onclick="editChannel(${c.id})" style="flex:0 0 auto;padding:7px 12px;background:rgba(90,209,255,0.12);border:1px solid rgba(90,209,255,0.4);color:#5ad1ff;border-radius:8px;font-family:inherit;font-size:12px;cursor:pointer;">✏️</button>
         <button onclick="toggleChannelActive(${c.id})" style="flex:0 0 auto;padding:7px 12px;background:rgba(124,92,255,0.12);border:1px solid rgba(124,92,255,0.4);color:#b69bff;border-radius:8px;font-family:inherit;font-size:12px;cursor:pointer;">${c.is_active?'⏸':'▶'}</button>
@@ -993,12 +1008,14 @@ function editChannel(id) {
   document.getElementById('chId').value = c.id;
   document.getElementById('chName').value = c.name || '';
   document.getElementById('chStream').value = c.stream_url || '';
+  document.getElementById('chSourceType').value = c.source_type || 'hls';
   document.getElementById('chLogo').value = c.logo_url || '';
   document.getElementById('chCategory').value = c.category || '';
   document.getElementById('chSort').value = c.sort_order || 0;
   document.getElementById('chActive').checked = !!c.is_active;
   document.getElementById('chSaveBtn').textContent = '💾 Yangilash';
   document.getElementById('chCancelBtn').style.display = '';
+  updateStreamPlaceholder();
   document.getElementById('chName').focus();
 }
 async function saveChannel() {
@@ -1009,6 +1026,7 @@ async function saveChannel() {
     id: document.getElementById('chId').value || null,
     name: name,
     stream_url: document.getElementById('chStream').value.trim(),
+    source_type: document.getElementById('chSourceType').value,
     logo_url: document.getElementById('chLogo').value.trim(),
     category: document.getElementById('chCategory').value.trim() || 'Umumiy',
     sort_order: parseInt(document.getElementById('chSort').value) || 0,
@@ -1030,7 +1048,7 @@ async function toggleChannelActive(id) {
   try {
     const r = await fetch('/api/admin/channels/save', {
       method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ password: PASS, id: c.id, name: c.name, stream_url: c.stream_url, logo_url: c.logo_url, category: c.category, sort_order: c.sort_order, is_active: !c.is_active })
+      body: JSON.stringify({ password: PASS, id: c.id, name: c.name, stream_url: c.stream_url, source_type: c.source_type, logo_url: c.logo_url, category: c.category, sort_order: c.sort_order, is_active: !c.is_active })
     });
     const d = await r.json();
     if (d.ok) loadChannels(); else tvMsg(d.error || 'Xato', false);
