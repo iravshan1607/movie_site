@@ -294,7 +294,7 @@ def init_db():
                 )
             """)
             cur.execute("""
-                CREATE TABLE IF NOT EXISTS channels (
+                CREATE TABLE IF NOT EXISTS tv_channels (
                     id SERIAL PRIMARY KEY,
                     name TEXT NOT NULL,
                     logo_url TEXT DEFAULT '',
@@ -307,7 +307,7 @@ def init_db():
                     created_at TIMESTAMP DEFAULT NOW()
                 )
             """)
-            cur.execute("ALTER TABLE channels ADD COLUMN IF NOT EXISTS source_type TEXT DEFAULT 'hls'")
+            cur.execute("ALTER TABLE tv_channels ADD COLUMN IF NOT EXISTS source_type TEXT DEFAULT 'hls'")
             conn.commit()
         log.info("Kino baza tayyor (poster_url + site_settings + favorites + reviews + upcoming)")
     except Exception as e:
@@ -1213,7 +1213,7 @@ def api_channels():
             cur = conn.cursor()
             cur.execute("SELECT id, name, logo_url, stream_url, category, description, "
                         "COALESCE(source_type,'hls') "
-                        "FROM channels WHERE is_active=TRUE "
+                        "FROM tv_channels WHERE is_active=TRUE "
                         "ORDER BY sort_order ASC, id ASC")
             rows = cur.fetchall()
         items = []
@@ -1238,7 +1238,7 @@ def admin_channels_list():
             cur = conn.cursor()
             cur.execute("SELECT id, name, logo_url, stream_url, category, description, "
                         "sort_order, is_active, COALESCE(source_type,'hls') "
-                        "FROM channels ORDER BY sort_order ASC, id ASC")
+                        "FROM tv_channels ORDER BY sort_order ASC, id ASC")
             rows = cur.fetchall()
         items = [{"id": r[0], "name": r[1], "logo_url": r[2] or "", "stream_url": r[3] or "",
                   "category": r[4] or "Umumiy", "description": r[5] or "",
@@ -1272,12 +1272,12 @@ def admin_channels_save():
         with get_conn() as conn:
             cur = conn.cursor()
             if cid:
-                cur.execute("UPDATE channels SET name=%s, logo_url=%s, stream_url=%s, category=%s, "
+                cur.execute("UPDATE tv_channels SET name=%s, logo_url=%s, stream_url=%s, category=%s, "
                             "description=%s, sort_order=%s, is_active=%s, source_type=%s WHERE id=%s",
                             (name[:200], logo_url, stream_url, category[:60], description[:500],
                              sort_order, is_active, source_type, int(cid)))
             else:
-                cur.execute("INSERT INTO channels (name, logo_url, stream_url, category, description, "
+                cur.execute("INSERT INTO tv_channels (name, logo_url, stream_url, category, description, "
                             "sort_order, is_active, source_type) VALUES (%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id",
                             (name[:200], logo_url, stream_url, category[:60], description[:500],
                              sort_order, is_active, source_type))
@@ -1295,7 +1295,7 @@ def admin_channels_delete():
     try:
         with get_conn() as conn:
             cur = conn.cursor()
-            cur.execute("DELETE FROM channels WHERE id=%s", (int(d.get("id")),))
+            cur.execute("DELETE FROM tv_channels WHERE id=%s", (int(d.get("id")),))
             conn.commit()
         return jsonify({"ok": True})
     except Exception as e:
