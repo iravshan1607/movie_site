@@ -1334,6 +1334,11 @@ def admin_channels_delete():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+def _clean_channel_name(name):
+    """'Milliy (1080p)' -> 'Milliy'. Oxiridagi (NNNp)/(NNNi) kabi sifat belgisini olib tashlaydi."""
+    name = _re.sub(r'\s*\((?:\d{3,4}[ip]|HD|FHD|UHD|4K|SD)\)\s*$', '', name, flags=_re.IGNORECASE)
+    return name.strip()
+
 def _parse_m3u(text):
     """M3U/M3U8 matnini [{name, logo, category, url}, ...] ro'yxatiga aylantiradi."""
     lines = text.splitlines()
@@ -1350,7 +1355,8 @@ def _parse_m3u(text):
             cur_logo = m_logo.group(1) if m_logo else ""
             cur_cat = m_cat.group(1) if m_cat else "Umumiy"
             m_name = _re.search(r',(.+)$', line)
-            cur_name = m_name.group(1).strip() if m_name else "Nomsiz kanal"
+            raw_name = m_name.group(1).strip() if m_name else "Nomsiz kanal"
+            cur_name = _clean_channel_name(raw_name)
         elif line.startswith("#"):
             continue
         else:
@@ -1359,6 +1365,60 @@ def _parse_m3u(text):
                         "category": cur_cat or "Umumiy", "url": line})
             cur_name, cur_logo, cur_cat = "", "", "Umumiy"
     return out
+
+@app.route("/api/admin/channels/cleanup", methods=["POST"])
+def admin_channels_cleanup():
+    """Mavjud kanallarning nomidagi (1080p)/(576p) kabi qo'shimchalarni olib tashlaydi
+    va logo bo'sh bo'lsa, iptv-org logos ro'yxatidan nom bo'yicha moslashtirib to'ldiradi."""
+    d = request.get_json() or {}
+    if not _check(d):
+        return jsonify({"error": "ruxsat yo'q"}), 403
+
+    fixed_names, fixed_logos = 0, 0
+    try:
+        logos_map = {}
+        try:
+            import urllib.request, json as _json
+            req = urllib.request.Request("https://iptv-org.github.io/api/channels.json",
+                                          headers={"User-Agent": "Mozilla/5.0"})
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                channels_data = _json.loads(resp.read().decode("utf-8", errors="ignore"))
+            req2 = urllib.request.Request("https://iptv-org.github.io/api/logos.json",
+                                           headers={"User-Agent": "Mozilla/5.0"})
+            with urllib.request.urlopen(req2, timeout=15) as resp:
+                logos_data = _json.loads(resp.read().decode("utf-8", errors="ignore"))
+            logo_by_id = {}
+            for l in logos_data:
+                if l.get("channel") and l.get("url") and l["channel"] not in logo_by_id:
+                    logo_by_id[l["channel"]] = l["url"]
+            for c in channels_data:
+                nm = (c.get("name") or "").strip().lower()
+                cid = c.get("id")
+                if nm and cid in logo_by_id:
+                    logos_map[nm] = logo_by_id[cid]
+        except Exception as e:
+            log.warning("cleanup: logos fetch failed: %s", e)
+
+        with get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT id, name, logo_url FROM tv_channels")
+            rows = cur.fetchall()
+            for cid, name, logo_url in rows:
+                new_name = _clean_channel_name(name or "")
+                new_logo = logo_url
+                if not new_logo:
+                    new_logo = logos_map.get(new_name.strip().lower(), "")
+                    if new_logo:
+                        fixed_logos += 1
+                if new_name != name or new_logo != logo_url:
+                    if new_name != name:
+                        fixed_names += 1
+                    cur.execute("UPDATE tv_channels SET name=%s, logo_url=%s WHERE id=%s",
+                                (new_name[:200], new_logo[:500], cid))
+            conn.commit()
+        return jsonify({"ok": True, "fixed_names": fixed_names, "fixed_logos": fixed_logos})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route("/api/admin/channels/import_m3u", methods=["POST"])
 def admin_channels_import_m3u():
