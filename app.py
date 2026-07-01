@@ -293,6 +293,19 @@ def init_db():
                     created_at TIMESTAMP DEFAULT NOW()
                 )
             """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS channels (
+                    id SERIAL PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    logo_url TEXT DEFAULT '',
+                    stream_url TEXT DEFAULT '',      -- HLS (.m3u8) yoki boshqa oqim havolasi
+                    category TEXT DEFAULT 'Umumiy',  -- Umumiy | Yangiliklar | Sport | Bolalar | Kino | Musiqa
+                    description TEXT DEFAULT '',
+                    sort_order INTEGER DEFAULT 0,
+                    is_active BOOLEAN DEFAULT TRUE,
+                    created_at TIMESTAMP DEFAULT NOW()
+                )
+            """)
             conn.commit()
         log.info("Kino baza tayyor (poster_url + site_settings + favorites + reviews + upcoming)")
     except Exception as e:
@@ -1168,7 +1181,219 @@ def admin_ads_delete():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+# ══════════════════ TELEKANALLAR (TV) ══════════════════
+@app.route("/api/channels")
+def api_channels():
+    """Sayt /tv sahifasi uchun faol telekanallar ro'yxati."""
+    try:
+        with get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT id, name, logo_url, stream_url, category, description "
+                        "FROM channels WHERE is_active=TRUE "
+                        "ORDER BY sort_order ASC, id ASC")
+            rows = cur.fetchall()
+        items = [{"id": r[0], "name": r[1], "logo_url": r[2] or "", "stream_url": r[3] or "",
+                  "category": r[4] or "Umumiy", "description": r[5] or ""} for r in rows]
+        return jsonify({"channels": items})
+    except Exception as e:
+        log.warning("api_channels: %s", e)
+        return jsonify({"channels": []})
+
+@app.route("/api/admin/channels/list", methods=["POST"])
+def admin_channels_list():
+    if not _check(request.get_json() or {}):
+        return jsonify({"error": "ruxsat yo'q"}), 403
+    try:
+        with get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT id, name, logo_url, stream_url, category, description, "
+                        "sort_order, is_active FROM channels ORDER BY sort_order ASC, id ASC")
+            rows = cur.fetchall()
+        items = [{"id": r[0], "name": r[1], "logo_url": r[2] or "", "stream_url": r[3] or "",
+                  "category": r[4] or "Umumiy", "description": r[5] or "",
+                  "sort_order": r[6] or 0, "is_active": bool(r[7])} for r in rows]
+        return jsonify({"items": items})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/admin/channels/save", methods=["POST"])
+def admin_channels_save():
+    d = request.get_json() or {}
+    if not _check(d):
+        return jsonify({"error": "ruxsat yo'q"}), 403
+    name = (d.get("name") or "").strip()
+    if not name:
+        return jsonify({"error": "kanal nomini kiriting"}), 400
+    logo_url = (d.get("logo_url") or "").strip()
+    stream_url = (d.get("stream_url") or "").strip()
+    category = (d.get("category") or "Umumiy").strip() or "Umumiy"
+    description = (d.get("description") or "").strip()
+    try:
+        sort_order = int(d.get("sort_order") or 0)
+    except Exception:
+        sort_order = 0
+    is_active = bool(d.get("is_active", True))
+    cid = d.get("id")
+    try:
+        with get_conn() as conn:
+            cur = conn.cursor()
+            if cid:
+                cur.execute("UPDATE channels SET name=%s, logo_url=%s, stream_url=%s, category=%s, "
+                            "description=%s, sort_order=%s, is_active=%s WHERE id=%s",
+                            (name[:200], logo_url, stream_url, category[:60], description[:500],
+                             sort_order, is_active, int(cid)))
+            else:
+                cur.execute("INSERT INTO channels (name, logo_url, stream_url, category, description, "
+                            "sort_order, is_active) VALUES (%s,%s,%s,%s,%s,%s,%s) RETURNING id",
+                            (name[:200], logo_url, stream_url, category[:60], description[:500],
+                             sort_order, is_active))
+                cid = cur.fetchone()[0]
+            conn.commit()
+        return jsonify({"ok": True, "id": cid})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/admin/channels/delete", methods=["POST"])
+def admin_channels_delete():
+    d = request.get_json() or {}
+    if not _check(d):
+        return jsonify({"error": "ruxsat yo'q"}), 403
+    try:
+        with get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("DELETE FROM channels WHERE id=%s", (int(d.get("id")),))
+            conn.commit()
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/tv")
+def tv_page():
+    """Telekanallar sahifasi — HLS pleyer bilan jonli efir."""
+    html = """<!DOCTYPE html>
+<html lang="uz"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Telekanallar — jonli efir | ASTRA</title>
+<meta name="description" content="ASTRA telekanallar — jonli efir, yangiliklar, sport va boshqa kanallar onlayn, bepul.">
+<link rel="stylesheet" href="/static/style.css">
+<link rel="icon" href="/static/favicon.svg">
+<link rel="shortcut icon" href="/favicon.ico">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.13/hls.min.js"></script>
+<style>
+  .tv-wrap{max-width:1200px;margin:0 auto;padding:16px 16px 60px;}
+  .tv-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;}
+  .tv-top .logo img{height:30px;display:block;}
+  .tv-top a.home{color:#8c87b8;text-decoration:none;font-size:14px;}
+  .tv-wrap h1{font-size:26px;margin:6px 0 4px;color:#fff;}
+  .tv-sub{color:#b8b4d8;font-size:14px;margin:0 0 18px;}
+  .player-box{background:#000;border-radius:14px;overflow:hidden;position:relative;aspect-ratio:16/9;
+    box-shadow:0 10px 40px rgba(0,0,0,.5);margin-bottom:10px;}
+  .player-box video{width:100%;height:100%;display:block;background:#000;}
+  .player-empty{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;color:#8c87b8;gap:10px;text-align:center;padding:20px;}
+  .now-playing{color:#fff;font-size:16px;font-weight:600;margin:0 0 20px;min-height:22px;}
+  .now-playing span{color:#7c5cff;}
+  .cat-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;}
+  .cat{padding:7px 15px;border-radius:999px;background:#1b1840;border:1px solid #252154;
+    color:#b8b4d8;font-size:13px;cursor:pointer;user-select:none;}
+  .cat.active{background:#7c5cff;border-color:#7c5cff;color:#fff;font-weight:600;}
+  .ch-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;}
+  .ch{background:#1b1840;border:1px solid #252154;border-radius:12px;padding:14px 10px;cursor:pointer;
+    text-align:center;transition:transform .15s, border-color .15s;}
+  .ch:hover{transform:translateY(-3px);border-color:#7c5cff;}
+  .ch.active{border-color:#7c5cff;box-shadow:0 0 0 2px rgba(124,92,255,.4) inset;}
+  .ch-logo{width:64px;height:64px;object-fit:contain;margin:0 auto 8px;display:block;border-radius:8px;background:#0d0b22;}
+  .ch-logo.ph{display:flex;align-items:center;justify-content:center;font-size:24px;color:#7c5cff;}
+  .ch-name{color:#fff;font-size:13px;font-weight:500;line-height:1.3;}
+  .ch-cat{color:#8c87b8;font-size:11px;margin-top:2px;}
+  .tv-empty{color:#b8b4d8;text-align:center;padding:50px 20px;}
+  .live-badge{position:absolute;top:12px;left:12px;background:#e5484d;color:#fff;font-size:11px;
+    font-weight:700;padding:3px 9px;border-radius:6px;letter-spacing:.5px;z-index:2;display:none;}
+</style>
+</head><body>
+<div class="tv-wrap">
+  <div class="tv-top">
+    <a class="logo" href="/"><img src="/static/logo.svg" alt="ASTRA"></a>
+    <a class="home" href="/">Bosh sahifa ↗</a>
+  </div>
+  <h1>📺 Telekanallar</h1>
+  <p class="tv-sub">Jonli efir — yangiliklar, sport va boshqa kanallar onlayn.</p>
+
+  <div class="player-box">
+    <span class="live-badge" id="liveBadge">● JONLI</span>
+    <video id="tvVideo" controls playsinline></video>
+    <div class="player-empty" id="playerEmpty">
+      <div style="font-size:42px;">📺</div>
+      <div>Ko'rish uchun pastdan kanal tanlang</div>
+    </div>
+  </div>
+  <p class="now-playing" id="nowPlaying"></p>
+
+  <div class="cat-row" id="catRow"></div>
+  <div class="ch-grid" id="chGrid"></div>
+  <div class="tv-empty" id="tvEmpty" style="display:none;">
+    Hozircha telekanallar qo'shilmagan. Tez orada! 📡
+  </div>
+</div>
+
+<script>
+let CHANNELS = [], curCat = "Hammasi", hls = null, activeId = null;
+const video = document.getElementById('tvVideo');
+const empty = document.getElementById('playerEmpty');
+const liveBadge = document.getElementById('liveBadge');
+const nowPlaying = document.getElementById('nowPlaying');
+
+function esc(s){return (s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+
+function play(ch){
+  activeId = ch.id;
+  document.querySelectorAll('.ch').forEach(e=>e.classList.toggle('active', +e.dataset.id===ch.id));
+  nowPlaying.innerHTML = '▶ <span>' + esc(ch.name) + '</span>';
+  empty.style.display = 'none';
+  liveBadge.style.display = 'block';
+  if (hls){ hls.destroy(); hls = null; }
+  const url = ch.stream_url;
+  if (!url){ nowPlaying.innerHTML = '⚠️ Bu kanalning oqim havolasi hali qo\\'shilmagan.'; liveBadge.style.display='none'; return; }
+  if (video.canPlayType('application/vnd.apple.mpegurl')){
+    video.src = url; video.play().catch(()=>{});
+  } else if (window.Hls && Hls.isSupported()){
+    hls = new Hls({lowLatencyMode:true});
+    hls.loadSource(url); hls.attachMedia(video);
+    hls.on(Hls.Events.MANIFEST_PARSED, ()=>video.play().catch(()=>{}));
+    hls.on(Hls.Events.ERROR, (e,data)=>{ if(data.fatal){ nowPlaying.innerHTML='⚠️ Oqimni ochib bo\\'lmadi (havola ishlamayapti yoki bloklangan).'; liveBadge.style.display='none'; } });
+  } else {
+    video.src = url; video.play().catch(()=>{});
+  }
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+
+function render(){
+  const cats = ["Hammasi", ...Array.from(new Set(CHANNELS.map(c=>c.category||"Umumiy")))];
+  document.getElementById('catRow').innerHTML = cats.map(c=>
+    `<div class="cat ${c===curCat?'active':''}" onclick="setCat('${esc(c)}')">${esc(c)}</div>`).join('');
+  const list = curCat==="Hammasi" ? CHANNELS : CHANNELS.filter(c=>(c.category||"Umumiy")===curCat);
+  document.getElementById('chGrid').innerHTML = list.map(c=>{
+    const logo = c.logo_url
+      ? `<img class="ch-logo" src="${esc(c.logo_url)}" alt="" onerror="this.outerHTML='<div class=\\'ch-logo ph\\'>📺</div>'">`
+      : `<div class="ch-logo ph">📺</div>`;
+    return `<div class="ch ${c.id===activeId?'active':''}" data-id="${c.id}" onclick='play(${JSON.stringify(c).replace(/'/g,"&#39;")})'>
+      ${logo}<div class="ch-name">${esc(c.name)}</div><div class="ch-cat">${esc(c.category||'Umumiy')}</div></div>`;
+  }).join('');
+}
+function setCat(c){ curCat=c; render(); }
+
+fetch('/api/channels').then(r=>r.json()).then(d=>{
+  CHANNELS = d.channels || [];
+  if (!CHANNELS.length){ document.getElementById('tvEmpty').style.display='block'; return; }
+  render();
+}).catch(()=>{ document.getElementById('tvEmpty').style.display='block'; });
+</script>
+</body></html>"""
+    return Response(html, mimetype="text/html")
+
+
 def _get_site_ad():
+    """Sayt sahifalari uchun bitta faol reklama (yoki None) — hech qachon xato bermaydi."""
     """Sayt sahifalari uchun bitta faol reklama (yoki None) — hech qachon xato bermaydi."""
     try:
         with get_conn() as conn:
@@ -1286,6 +1511,7 @@ def sitemap():
         parts.append(f"<url><loc>{base}/kategoriya/{ct}</loc>"
                      "<changefreq>daily</changefreq><priority>0.7</priority></url>")
     parts.append(f"<url><loc>{base}/top</loc><changefreq>daily</changefreq><priority>0.7</priority></url>")
+    parts.append(f"<url><loc>{base}/tv</loc><changefreq>daily</changefreq><priority>0.7</priority></url>")
     try:
         with get_conn() as conn:
             cur = conn.cursor()
