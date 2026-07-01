@@ -1334,6 +1334,104 @@ def admin_channels_delete():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+def _parse_m3u(text):
+    """M3U/M3U8 matnini [{name, logo, category, url}, ...] ro'yxatiga aylantiradi."""
+    lines = text.splitlines()
+    out = []
+    cur_name, cur_logo, cur_cat = "", "", "Umumiy"
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        if line.startswith("#EXTINF"):
+            # #EXTINF:-1 tvg-logo="..." group-title="...",Kanal Nomi
+            m_logo = _re.search(r'tvg-logo="([^"]*)"', line)
+            m_cat = _re.search(r'group-title="([^"]*)"', line)
+            cur_logo = m_logo.group(1) if m_logo else ""
+            cur_cat = m_cat.group(1) if m_cat else "Umumiy"
+            m_name = _re.search(r',(.+)$', line)
+            cur_name = m_name.group(1).strip() if m_name else "Nomsiz kanal"
+        elif line.startswith("#"):
+            continue
+        else:
+            # Stream URL qatori
+            out.append({"name": cur_name or "Nomsiz kanal", "logo": cur_logo,
+                        "category": cur_cat or "Umumiy", "url": line})
+            cur_name, cur_logo, cur_cat = "", "", "Umumiy"
+    return out
+
+@app.route("/api/admin/channels/import_m3u", methods=["POST"])
+def admin_channels_import_m3u():
+    """M3U havoladan yoki matndan ko'plab kanallarni birdaniga import qiladi.
+    Body: {password, m3u_url?, m3u_text?, category_filter?, source_type?, skip_existing?}"""
+    d = request.get_json() or {}
+    if not _check(d):
+        return jsonify({"error": "ruxsat yo'q"}), 403
+
+    m3u_url = (d.get("m3u_url") or "").strip()
+    m3u_text = d.get("m3u_text") or ""
+    category_filter = (d.get("category_filter") or "").strip().lower()
+    source_type = (d.get("source_type") or "hls").strip()
+    if source_type not in ("hls", "youtube"):
+        source_type = "hls"
+    skip_existing = bool(d.get("skip_existing", True))
+
+    if not m3u_text and m3u_url:
+        try:
+            import urllib.request
+            req = urllib.request.Request(m3u_url, headers={"User-Agent": "Mozilla/5.0"})
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                m3u_text = resp.read().decode("utf-8", errors="ignore")
+        except Exception as e:
+            return jsonify({"error": f"M3U yuklab bo'lmadi: {e}"}), 400
+
+    if not m3u_text.strip():
+        return jsonify({"error": "m3u_url yoki m3u_text kiriting"}), 400
+
+    try:
+        parsed = _parse_m3u(m3u_text)
+    except Exception as e:
+        return jsonify({"error": f"M3U parse xatoligi: {e}"}), 400
+
+    if category_filter:
+        parsed = [p for p in parsed if category_filter in (p["category"] or "").lower()]
+
+    if not parsed:
+        return jsonify({"error": "Kanal topilmadi (filtr juda tor bo'lishi mumkin)"}), 400
+
+    added, skipped, failed = 0, 0, 0
+    try:
+        with get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT name, stream_url FROM tv_channels")
+            existing = {(r[0].strip().lower(), r[1].strip()) for r in cur.fetchall()}
+            # keyingi sort_order eng kattasidan boshlanadi
+            cur.execute("SELECT COALESCE(MAX(sort_order),0) FROM tv_channels")
+            next_order = (cur.fetchone()[0] or 0) + 1
+
+            for ch in parsed:
+                key = (ch["name"].strip().lower(), ch["url"].strip())
+                if skip_existing and key in existing:
+                    skipped += 1
+                    continue
+                try:
+                    cur.execute(
+                        "INSERT INTO tv_channels (name, logo_url, stream_url, category, description, "
+                        "sort_order, is_active, source_type) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)",
+                        (ch["name"][:200], ch["logo"][:500], ch["url"][:1000],
+                         (ch["category"] or "Umumiy")[:60], "", next_order, True, source_type))
+                    existing.add(key)
+                    next_order += 1
+                    added += 1
+                except Exception as e:
+                    log.warning("import_m3u insert failed for %s: %s", ch.get("name"), e)
+                    failed += 1
+            conn.commit()
+        return jsonify({"ok": True, "added": added, "skipped": skipped,
+                        "failed": failed, "total_parsed": len(parsed)})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @app.route("/tv")
 def tv_page():
     """Telekanallar sahifasi — HLS pleyer bilan jonli efir."""
