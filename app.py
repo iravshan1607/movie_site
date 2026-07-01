@@ -1186,6 +1186,30 @@ def admin_ads_delete():
 # ══════════════════ TELEKANALLAR (TV) ══════════════════
 import re as _re
 
+_handle_to_channel_cache = {}
+
+def _resolve_handle_to_channel_id(handle):
+    """@handle (masalan @Yoshlartelekanali) ni UC... channel ID'ga aylantiradi.
+    Natija xotirada keshlanadi (server qayta ishga tushmaguncha)."""
+    handle = handle.lstrip("@")
+    if handle in _handle_to_channel_cache:
+        return _handle_to_channel_cache[handle]
+    try:
+        import urllib.request
+        req = urllib.request.Request(
+            f"https://www.youtube.com/@{handle}",
+            headers={"User-Agent": "Mozilla/5.0"}
+        )
+        with urllib.request.urlopen(req, timeout=6) as resp:
+            html = resp.read().decode("utf-8", errors="ignore")
+        m = _re.search(r'"channelId":"(UC[\w-]{22})"', html)
+        cid = m.group(1) if m else ""
+        _handle_to_channel_cache[handle] = cid
+        return cid
+    except Exception as e:
+        log.warning("handle resolve failed for @%s: %s", handle, e)
+        return ""
+
 def _extract_youtube_embed(url_or_id):
     """YouTube havola/handle/ID dan iframe uchun embed manzilini yasaydi.
     Qo'llab-quvvatlaydi: youtube.com/watch?v=ID, youtu.be/ID, /live/ID,
@@ -1199,10 +1223,19 @@ def _extract_youtube_embed(url_or_id):
     m = _re.search(r"(?:v=|youtu\.be/|/live/|/embed/)([A-Za-z0-9_-]{11})", s)
     if m:
         return f"https://www.youtube.com/embed/{m.group(1)}?autoplay=1"
-    # @handle yoki /channel/UC... — kanalning joriy live efiri
-    m = _re.search(r"youtube\.com/(@[\w.-]+|channel/[\w-]+|c/[\w-]+)", s)
+    # /channel/UC... — to'g'ridan-to'g'ri channel ID, YouTube live_stream buni qo'llab-quvvatlaydi
+    m = _re.search(r"youtube\.com/channel/([\w-]+)", s)
     if m:
-        return f"https://www.youtube.com/embed/{m.group(1)}/live?autoplay=1"
+        return f"https://www.youtube.com/embed/live_stream?channel={m.group(1)}&autoplay=1"
+    # To'g'ridan-to'g'ri UC... channel ID kiritilgan bo'lsa
+    if _re.fullmatch(r"UC[\w-]{22}", s):
+        return f"https://www.youtube.com/embed/live_stream?channel={s}&autoplay=1"
+    # @handle (masalan youtube.com/@Yoshlartelekanali/live yoki shunchaki @Yoshlartelekanali)
+    m = _re.search(r"(?:youtube\.com/)?(@[\w.-]+)", s)
+    if m:
+        cid = _resolve_handle_to_channel_id(m.group(1))
+        if cid:
+            return f"https://www.youtube.com/embed/live_stream?channel={cid}&autoplay=1"
     return ""
 
 @app.route("/api/channels")
