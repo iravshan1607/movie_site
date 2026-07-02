@@ -407,14 +407,26 @@ textarea { resize:vertical; min-height:80px; }
 
   <!-- TELEKANALLAR -->
   <div class="box" id="tvPanel" style="padding:0;margin-bottom:18px;border:1px solid rgba(124,92,255,0.3);border-radius:14px;overflow:hidden;">
-    <div onclick="toggleTv()" style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:15px 20px;cursor:pointer;user-select:none;">
+    <div onclick="openTvModal()" style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:15px 20px;cursor:pointer;user-select:none;">
       <div style="font-size:17px;font-weight:600;display:flex;align-items:center;gap:9px;">
         <span style="font-size:20px;">📺</span>
         <span>Telekanallar <span id="tvCount" style="font-size:13px;color:var(--dim);font-weight:400;"></span></span>
       </div>
-      <span id="tvChevron" style="font-size:18px;color:var(--dim);transition:transform .2s;">▸</span>
+      <span style="font-size:13px;color:var(--dim);">Ochish ▸</span>
     </div>
-    <div id="tvBody" style="display:none;padding:0 20px 20px;">
+  </div>
+
+  <!-- TELEKANALLAR MODAL -->
+  <div id="tvModalOverlay" style="display:none;position:fixed;inset:0;background:rgba(5,3,15,0.75);z-index:1000;padding:20px;overflow-y:auto;">
+    <div style="max-width:900px;margin:0 auto;background:#150f30;border:1px solid rgba(124,92,255,0.3);border-radius:14px;overflow:hidden;">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:15px 20px;border-bottom:1px solid var(--line);position:sticky;top:0;background:#150f30;z-index:1;">
+        <div style="font-size:17px;font-weight:600;display:flex;align-items:center;gap:9px;">
+          <span style="font-size:20px;">📺</span>
+          <span>Telekanallar <span id="tvCountModal" style="font-size:13px;color:var(--dim);font-weight:400;"></span></span>
+        </div>
+        <span onclick="closeTvModal()" style="font-size:22px;color:var(--dim);cursor:pointer;line-height:1;padding:4px 8px;">✕</span>
+      </div>
+      <div id="tvBody" style="padding:18px 20px;">
       <div style="font-size:13px;color:var(--dim);margin:0 0 14px;line-height:1.6;">
         Bu yerga qo'shgan kanallar <b>saytda /tv sahifasida</b> jonli efirda ko'rinadi.
         <b>Turi</b> — <b>HLS</b> = .m3u8 jonli oqim; <b>YouTube</b> = kanalning YouTube live havolasi
@@ -473,6 +485,7 @@ textarea { resize:vertical; min-height:80px; }
         </select>
       </div>
       <div id="tvList" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px;"></div>
+      </div>
     </div>
   </div>
 
@@ -968,14 +981,18 @@ async function delAd(id) {
 }
 
 // ══════════════ TELEKANALLAR ══════════════
-function toggleTv() {
-  const b = document.getElementById('tvBody');
-  const ch = document.getElementById('tvChevron');
-  const open = b.style.display !== 'none';
-  b.style.display = open ? 'none' : 'block';
-  ch.style.transform = open ? '' : 'rotate(90deg)';
-  if (!open) loadChannels();
+function openTvModal() {
+  document.getElementById('tvModalOverlay').style.display = 'block';
+  document.body.style.overflow = 'hidden';
+  loadChannels();
 }
+function closeTvModal() {
+  document.getElementById('tvModalOverlay').style.display = 'none';
+  document.body.style.overflow = '';
+}
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') closeTvModal();
+});
 function tvMsg(t, ok) {
   const el = document.getElementById('tvAdminMsg');
   el.textContent = t; el.style.color = ok ? '#67e08a' : '#ff8a8a';
@@ -1033,15 +1050,20 @@ async function runImportM3u() {
         skip_existing: true
       })
     });
-    const d = await r.json();
+    const raw = await r.text();
+    let d;
+    try { d = JSON.parse(raw); } catch(parseErr) {
+      document.getElementById('importMsg').textContent = `❌ Server javobi (${r.status}): ${raw.slice(0,200)}`;
+      return;
+    }
     if (d.ok) {
       document.getElementById('importMsg').innerHTML = `✅ Qo'shildi: ${d.added}, o'tkazib yuborildi: ${d.skipped}, xato: ${d.failed} (jami topildi: ${d.total_parsed})`;
       loadChannels();
     } else {
-      document.getElementById('importMsg').textContent = '❌ ' + (d.error || 'Xato');
+      document.getElementById('importMsg').textContent = '❌ ' + (d.error || `Xato (status ${r.status})`);
     }
   } catch(e) {
-    document.getElementById('importMsg').textContent = '❌ Tarmoq xatosi';
+    document.getElementById('importMsg').textContent = '❌ Tarmoq xatosi: ' + (e.message || e);
   } finally {
     btn.disabled = false; btn.textContent = 'Import qilish';
   }
@@ -1071,7 +1093,8 @@ function renderChannelList() {
     if (q && !(c.name || '').toLowerCase().includes(q)) return false;
     return true;
   });
-  document.getElementById('tvCount').textContent = items.length ? '(' + items.length + (filtered.length !== items.length ? ' / ' + filtered.length + ' ko\'rsatilmoqda' : '') + ')' : '';
+  document.getElementById('tvCount').textContent = items.length ? '(' + items.length + ')' : '';
+  document.getElementById('tvCountModal').textContent = items.length ? '(' + items.length + (filtered.length !== items.length ? ' / ' + filtered.length + ' ko\'rsatilmoqda' : '') + ')' : '';
   const box = document.getElementById('tvList');
   if (!items.length) { box.innerHTML = '<div style="grid-column:1/-1;color:var(--dim);font-size:13px;">Hozircha kanal yo\'q. Yuqoridan qo\'shing.</div>'; return; }
   if (!filtered.length) { box.innerHTML = '<div style="grid-column:1/-1;color:var(--dim);font-size:13px;">Mos kanal topilmadi.</div>'; return; }

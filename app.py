@@ -1440,10 +1440,10 @@ def admin_channels_import_m3u():
         try:
             import urllib.request
             req = urllib.request.Request(m3u_url, headers={"User-Agent": "Mozilla/5.0"})
-            with urllib.request.urlopen(req, timeout=15) as resp:
+            with urllib.request.urlopen(req, timeout=30) as resp:
                 m3u_text = resp.read().decode("utf-8", errors="ignore")
         except Exception as e:
-            return jsonify({"error": f"M3U yuklab bo'lmadi: {e}"}), 400
+            return jsonify({"error": f"M3U yuklab bo'lmadi: {type(e).__name__}: {e}"}), 400
 
     if not m3u_text.strip():
         return jsonify({"error": "m3u_url yoki m3u_text kiriting"}), 400
