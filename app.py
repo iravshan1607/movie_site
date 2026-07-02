@@ -1329,7 +1329,7 @@ def tv_viewers():
         log.warning("tv_viewers: %s", e)
         return jsonify({"viewers": {}})
 
-
+@app.route("/api/admin/channels/list", methods=["POST"])
 def admin_channels_list():
     if not _check(request.get_json() or {}):
         return jsonify({"error": "ruxsat yo'q"}), 403
