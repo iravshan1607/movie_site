@@ -1688,6 +1688,9 @@ def tv_page():
   .ch-row .ch-name{color:#fff;font-size:13px;font-weight:500;line-height:1.3;white-space:nowrap;
     overflow:hidden;text-overflow:ellipsis;}
   .ch-row .ch-cat{color:#8c87b8;font-size:11px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .ch-status{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px;flex:0 0 auto;vertical-align:middle;}
+  .ch-status-on{background:#4ade80;box-shadow:0 0 4px rgba(74,222,128,.7);}
+  .ch-status-off{background:#6b6688;}
 
   .tv-empty{color:#b8b4d8;text-align:center;padding:50px 20px;}
   .live-badge{position:absolute;top:12px;left:12px;background:#e5484d;color:#fff;font-size:11px;
@@ -1725,8 +1728,13 @@ def tv_page():
 
   <div class="tv-layout">
     <aside class="tv-sidebar" id="tvSidebar">
-      <div class="ch-sidebar-title">Kanallar</div>
-      <div class="cat-row" id="catRow"></div>
+      <div class="ch-sidebar-title" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;" onclick="toggleCatBox()">
+        <span>Kanallar</span>
+        <span id="catToggleBtn" style="font-size:11px;color:#8c87b8;font-weight:600;text-transform:none;letter-spacing:0;display:flex;align-items:center;gap:4px;">
+          Kategoriyalar <span id="catToggleIcon">▾</span>
+        </span>
+      </div>
+      <div class="cat-row" id="catRow" style="display:none;"></div>
       <input id="chSearchInput" class="tv-search" type="text" placeholder="🔍 Kanal qidirish..." oninput="onSearchInput()">
       <div class="ch-list" id="chList"></div>
       <div class="tv-empty" id="tvEmpty" style="display:none;">
@@ -1875,13 +1883,24 @@ function render(){
       ? `<img class="ch-logo" src="${esc(logoUrl)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.onerror=null;this.outerHTML='<div class=\\'ch-logo ph\\'>📺</div>'">`
       : `<div class="ch-logo ph">📺</div>`;
     const n = VIEWERS[String(c.id)] || 0;
+    const hasStream = !!(c.stream_url && c.stream_url.trim());
+    const statusDot = hasStream
+      ? '<span class="ch-status ch-status-on" title="Onlayn"></span>'
+      : '<span class="ch-status ch-status-off" title="Oflayn — havola qo\\'shilmagan"></span>';
     return `<div class="ch-row ${c.id===activeId?'active':''}" data-id="${c.id}" onclick='play(${JSON.stringify(c).replace(/'/g,"&#39;")})'>
-      ${logo}<div class="ch-info"><div class="ch-name">${esc(c.name)}${c.source_type==='youtube'?' <span style="color:#ff4444;font-size:10px;">▶</span>':''}</div>
+      ${logo}<div class="ch-info"><div class="ch-name">${statusDot}${esc(c.name)}${c.source_type==='youtube'?' <span style="color:#ff4444;font-size:10px;">▶</span>':''}</div>
       <div class="ch-cat">${esc(primaryCategory(c.category))}</div>
       <div class="ch-viewers"><span class="dot"></span><span class="ch-viewers-num">${fmtViewers(n)} tomoshada</span></div></div></div>`;
   }).join('');
 }
 function setCat(c){ curCat=c; render(); }
+function toggleCatBox(){
+  const box = document.getElementById('catRow');
+  const icon = document.getElementById('catToggleIcon');
+  const open = box.style.display !== 'none';
+  box.style.display = open ? 'none' : 'flex';
+  icon.textContent = open ? '▾' : '▴';
+}
 function onSearchInput(){ render(); }
 
 /* ── Tomoshabinlar soni: haqiqiy heartbeat asosida ── */
