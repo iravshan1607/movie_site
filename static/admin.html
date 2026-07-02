@@ -142,6 +142,10 @@ textarea { resize:vertical; min-height:80px; }
 }
 @media (max-width:800px){ #listContainer { grid-template-columns:repeat(3,1fr) !important; } }
 @media (max-width:520px){ #listContainer { grid-template-columns:repeat(2,1fr) !important; } }
+#tvList { display:grid; grid-template-columns:repeat(6,1fr); gap:10px; }
+@media (max-width:1500px){ #tvList { grid-template-columns:repeat(4,1fr) !important; } }
+@media (max-width:1000px){ #tvList { grid-template-columns:repeat(3,1fr) !important; } }
+@media (max-width:640px){ #tvList { grid-template-columns:repeat(2,1fr) !important; } }
 .mcard-wrap {
   position:relative; border-radius:14px;
 }
@@ -418,7 +422,7 @@ textarea { resize:vertical; min-height:80px; }
 
   <!-- TELEKANALLAR MODAL -->
   <div id="tvModalOverlay" style="display:none;position:fixed;inset:0;background:rgba(5,3,15,0.75);z-index:1000;padding:20px;overflow-y:auto;">
-    <div style="max-width:900px;margin:0 auto;background:#150f30;border:1px solid rgba(124,92,255,0.3);border-radius:14px;overflow:hidden;">
+    <div style="max-width:1600px;margin:0 auto;background:#150f30;border:1px solid rgba(124,92,255,0.3);border-radius:14px;overflow:hidden;">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:15px 20px;border-bottom:1px solid var(--line);position:sticky;top:0;background:#150f30;z-index:1;">
         <div style="font-size:17px;font-weight:600;display:flex;align-items:center;gap:9px;">
           <span style="font-size:20px;">📺</span>
@@ -499,7 +503,7 @@ textarea { resize:vertical; min-height:80px; }
         <button onclick="deleteSelectedChannels()" style="margin-left:auto;padding:7px 12px;font-size:12px;background:rgba(255,90,90,0.12);border:1px solid rgba(255,90,90,0.4);color:#ff8a8a;border-radius:7px;font-family:inherit;cursor:pointer;">🗑 Tanlanganlarni o'chirish</button>
         <button onclick="deleteAllChannels()" style="padding:7px 12px;font-size:12px;background:rgba(255,50,50,0.15);border:1px solid rgba(255,50,50,0.5);color:#ff6a6a;border-radius:7px;font-family:inherit;cursor:pointer;">🗑 Barchasini o'chirish</button>
       </div>
-      <div id="tvList" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px;"></div>
+      <div id="tvList"></div>
       <div id="tvPagination"></div>
       </div>
     </div>
@@ -1107,7 +1111,7 @@ async function loadChannels() {
     renderChannelList();
   } catch(e) { tvMsg('Tarmoq xatosi', false); }
 }
-const CH_PAGE_SIZE = 60;
+const CH_PAGE_SIZE = 120;
 function renderChannelList() {
   const items = window._tvCache || [];
   const q = (document.getElementById('chSearch').value || '').trim().toLowerCase();
