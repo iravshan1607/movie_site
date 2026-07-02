@@ -122,6 +122,47 @@ def _notify_release(user_ids, title, movie_id):
         log.info("Release bildirishnoma: %s/%s yuborildi (movie=%s)", ok, len(user_ids), movie_id)
     threading.Thread(target=worker, daemon=True).start()
 
+def _all_known_user_ids():
+    """Bazadagi barcha jadvallardan (favorites, reviews, upcoming_subs, notifications)
+    ma'lum bo'lgan foydalanuvchi ID'larini birlashtirib, noyob ro'yxat qaytaradi."""
+    ids = set()
+    try:
+        with get_conn() as conn:
+            cur = conn.cursor()
+            for q in (
+                "SELECT DISTINCT user_id FROM favorites",
+                "SELECT DISTINCT user_id FROM reviews",
+                "SELECT DISTINCT user_id FROM upcoming_subs",
+                "SELECT DISTINCT user_id FROM notifications",
+            ):
+                try:
+                    cur.execute(q)
+                    for (uid,) in cur.fetchall():
+                        if uid:
+                            ids.add(int(uid))
+                except Exception as e:
+                    log.warning("_all_known_user_ids: %s", e)
+    except Exception as e:
+        log.warning("_all_known_user_ids conn: %s", e)
+    return list(ids)
+
+def _broadcast_to_all(text, button_label=None, button_url=None):
+    """Barcha ma'lum foydalanuvchilarga bot orqali xabar + saytdagi bildirishnoma yuboradi (fon oqimida)."""
+    user_ids = _all_known_user_ids()
+    if not user_ids:
+        return 0
+    buttons = [[{"text": button_label, "url": button_url}]] if (button_label and button_url) else None
+    def worker():
+        ok = 0
+        for u in user_ids:
+            if _tg_send(u, text, buttons):
+                ok += 1
+            _add_notification(u, "broadcast", text)
+            time.sleep(0.05)  # Telegram limitiga ehtiyot (~20 xabar/sek)
+        log.info("Broadcast: %s/%s foydalanuvchiga yuborildi", ok, len(user_ids))
+    threading.Thread(target=worker, daemon=True).start()
+    return len(user_ids)
+
 # ── Spam himoyasi: oxirgi amaldan beri yetarlicha vaqt o'tdimi? ────────────────
 def _cooldown_left(table, user_col, uid, seconds):
     """Foydalanuvchining oxirgi yozuvidan beri 'seconds' o'tmagan bo'lsa,
@@ -2682,6 +2723,19 @@ def _check(d):
     if session.get("is_admin"):
         return True
     return ((d or {}).get("password") or "") == ADMIN_PASSWORD
+
+@app.route("/api/admin/broadcast", methods=["POST"])
+def admin_broadcast():
+    d = request.get_json() or {}
+    if not _check(d):
+        return jsonify({"error": "ruxsat yo'q"}), 403
+    text = (d.get("text") or "").strip()
+    if not text:
+        return jsonify({"error": "Xabar matni bo'sh"}), 400
+    btn_label = (d.get("button_label") or "").strip() or None
+    btn_url = (d.get("button_url") or "").strip() or None
+    count = _broadcast_to_all(text, btn_label, btn_url)
+    return jsonify({"ok": True, "recipients": count})
 
 @app.route("/api/admin/login", methods=["POST"])
 def admin_login():

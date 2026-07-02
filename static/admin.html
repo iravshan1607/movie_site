@@ -406,6 +406,26 @@ textarea { resize:vertical; min-height:80px; }
     </div>
   </div>
 
+  <!-- BROADCAST (hammaga xabar) -->
+  <div class="box" style="margin-bottom:18px;">
+    <div style="font-size:17px;font-weight:600;display:flex;align-items:center;gap:9px;margin-bottom:14px;">
+      <span style="font-size:20px;">📢</span><span>Hammaga xabar yuborish</span>
+    </div>
+    <div style="font-size:13px;color:var(--dim);margin:0 0 14px;line-height:1.6;">
+      Botdan foydalangan yoki saytda faollik ko'rsatgan barcha foydalanuvchilarga bir vaqtda Telegram bot orqali xabar
+      va saytdagi bildirishnoma (🔔) yuboriladi. HTML teglar (&lt;b&gt;, &lt;i&gt;) qo'llab-quvvatlanadi.
+    </div>
+    <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:8px;">
+      <textarea id="bcText" rows="4" placeholder="Xabar matni... (masalan: 🎉 3000 dan ortiq TV kanal qo'shildi! Endi saytda jonli efirda tomosha qiling.)" style="width:100%;box-sizing:border-box;padding:11px 13px;font-family:inherit;resize:vertical;"></textarea>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
+      <input id="bcBtnLabel" placeholder="Tugma matni (ixtiyoriy, masalan: 📺 Kanallarni ko'rish)" style="flex:1;min-width:200px;padding:11px 13px;">
+      <input id="bcBtnUrl" placeholder="Tugma havolasi (ixtiyoriy, masalan: https://astramovie.com/tv)" style="flex:2;min-width:220px;padding:11px 13px;">
+    </div>
+    <button onclick="sendBroadcast()" id="bcSendBtn" style="padding:11px 22px;background:rgba(124,92,255,0.85);border:1px solid #7c5cff;color:#fff;border-radius:10px;font-family:inherit;font-weight:600;cursor:pointer;">🚀 Barchaga yuborish</button>
+    <div id="bcMsg" style="font-size:13px;margin-top:10px;min-height:16px;"></div>
+  </div>
+
   <!-- TELEKANALLAR -->
   <div class="box" id="tvPanel" style="padding:0;margin-bottom:18px;border:1px solid rgba(124,92,255,0.3);border-radius:14px;overflow:hidden;">
     <div onclick="openTvModal()" style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:15px 20px;cursor:pointer;user-select:none;">
@@ -949,6 +969,39 @@ function editAd(id) {
   document.getElementById('adSaveBtn').textContent = '💾 Yangilash';
   document.getElementById('adCancelBtn').style.display = '';
   document.getElementById('adTitle').focus();
+}
+function bcMsg(text, ok) {
+  const el = document.getElementById('bcMsg');
+  el.textContent = text;
+  el.style.color = ok ? '#7dffa0' : '#ff8a8a';
+}
+async function sendBroadcast() {
+  const text = document.getElementById('bcText').value.trim();
+  if (!text) { bcMsg('Xabar matnini kiriting', false); return; }
+  const btnLabel = document.getElementById('bcBtnLabel').value.trim();
+  const btnUrl = document.getElementById('bcBtnUrl').value.trim();
+  if (!confirm('Xabar barcha ma\'lum foydalanuvchilarga (Telegram bot + saytdagi bildirishnoma) yuboriladi. Davom etilsinmi?')) return;
+  const btn = document.getElementById('bcSendBtn');
+  btn.disabled = true; btn.textContent = 'Yuborilmoqda...';
+  try {
+    const r = await fetch('/api/admin/broadcast', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ password: PASS, text: text, button_label: btnLabel, button_url: btnUrl })
+    });
+    const d = await r.json();
+    if (d.ok) {
+      bcMsg(`✅ Fon jarayonida ${d.recipients} ta foydalanuvchiga yuborilmoqda (bir necha daqiqa davom etishi mumkin).`, true);
+      document.getElementById('bcText').value = '';
+      document.getElementById('bcBtnLabel').value = '';
+      document.getElementById('bcBtnUrl').value = '';
+    } else {
+      bcMsg(d.error || 'Xato', false);
+    }
+  } catch(e) {
+    bcMsg('Tarmoq xatosi', false);
+  } finally {
+    btn.disabled = false; btn.textContent = '🚀 Barchaga yuborish';
+  }
 }
 async function saveAd() {
   const title = document.getElementById('adTitle').value.trim();
