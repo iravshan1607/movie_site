@@ -1693,7 +1693,7 @@ def tv_page():
   .live-badge{position:absolute;top:12px;left:12px;background:#e5484d;color:#fff;font-size:11px;
     font-weight:700;padding:3px 9px;border-radius:6px;letter-spacing:.5px;z-index:2;display:none;}
 
-  .fs-btn{position:absolute;bottom:10px;right:10px;z-index:3;display:flex;align-items:center;
+  .fs-btn{position:absolute;bottom:52px;right:10px;z-index:3;display:flex;align-items:center;
     justify-content:center;width:36px;height:36px;border-radius:8px;background:rgba(0,0,0,.55);
     backdrop-filter:blur(4px);border:1px solid rgba(255,255,255,.15);color:#fff;cursor:pointer;}
   .fs-btn:hover{background:rgba(124,92,255,.5);}
@@ -1808,7 +1808,15 @@ function isFullscreen(){
 function toggleFullscreen(){
   const box = document.querySelector('.player-box');
   if (!isFullscreen()){
-    if (box.requestFullscreen) box.requestFullscreen().catch(()=>{});
+    const target = (video.style.display !== 'none') ? box : box; // .player-box qamrab oladi (video + iframe)
+    if (target.requestFullscreen) {
+      target.requestFullscreen().catch(()=>{
+        // Ba'zi brauzerlarda div fullscreen ishlamaydi — video/iframe elementiga to'g'ridan urinib ko'ramiz
+        if (video.style.display !== 'none' && video.requestFullscreen) video.requestFullscreen().catch(()=>{});
+        else if (video.style.display !== 'none' && video.webkitEnterFullscreen) video.webkitEnterFullscreen();
+        else if (frame.style.display !== 'none' && frame.requestFullscreen) frame.requestFullscreen().catch(()=>{});
+      });
+    }
     else if (box.webkitRequestFullscreen) box.webkitRequestFullscreen();
     else if (video.style.display !== 'none' && video.webkitEnterFullscreen) video.webkitEnterFullscreen(); // iOS Safari
   } else {
@@ -1979,6 +1987,7 @@ fetch('/api/channels').then(r=>r.json()).then(d=>{
   render();
 }).catch(()=>{ document.getElementById('tvEmpty').style.display='block'; });
 </script>
+<script src="/static/ad-interstitial.js"></script>
 </body></html>"""
     html = html.replace("__TV_AD_SLOT__", _render_ad_banner(_get_site_ad()))
     return Response(html, mimetype="text/html")
