@@ -484,6 +484,14 @@ textarea { resize:vertical; min-height:80px; }
           <option value="">Barcha kategoriyalar</option>
         </select>
       </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px;">
+        <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;cursor:pointer;color:var(--dim);">
+          <input type="checkbox" id="chSelectAll" onchange="toggleSelectAllChannels()"> Hammasini belgilash
+        </label>
+        <span id="chSelectedCount" style="font-size:12.5px;color:var(--dim);"></span>
+        <button onclick="deleteSelectedChannels()" style="margin-left:auto;padding:7px 12px;font-size:12px;background:rgba(255,90,90,0.12);border:1px solid rgba(255,90,90,0.4);color:#ff8a8a;border-radius:7px;font-family:inherit;cursor:pointer;">🗑 Tanlanganlarni o'chirish</button>
+        <button onclick="deleteAllChannels()" style="padding:7px 12px;font-size:12px;background:rgba(255,50,50,0.15);border:1px solid rgba(255,50,50,0.5);color:#ff6a6a;border-radius:7px;font-family:inherit;cursor:pointer;">🗑 Barchasini o'chirish</button>
+      </div>
       <div id="tvList" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px;"></div>
       </div>
     </div>
@@ -1096,11 +1104,13 @@ function renderChannelList() {
   document.getElementById('tvCount').textContent = items.length ? '(' + items.length + ')' : '';
   document.getElementById('tvCountModal').textContent = items.length ? '(' + items.length + (filtered.length !== items.length ? ' / ' + filtered.length + ' ko\'rsatilmoqda' : '') + ')' : '';
   const box = document.getElementById('tvList');
-  if (!items.length) { box.innerHTML = '<div style="grid-column:1/-1;color:var(--dim);font-size:13px;">Hozircha kanal yo\'q. Yuqoridan qo\'shing.</div>'; return; }
-  if (!filtered.length) { box.innerHTML = '<div style="grid-column:1/-1;color:var(--dim);font-size:13px;">Mos kanal topilmadi.</div>'; return; }
+  if (!items.length) { box.innerHTML = '<div style="grid-column:1/-1;color:var(--dim);font-size:13px;">Hozircha kanal yo\'q. Yuqoridan qo\'shing.</div>'; updateSelectedCount(); return; }
+  if (!filtered.length) { box.innerHTML = '<div style="grid-column:1/-1;color:var(--dim);font-size:13px;">Mos kanal topilmadi.</div>'; updateSelectedCount(); return; }
+  if (!window._tvSelected) window._tvSelected = new Set();
   box.innerHTML = filtered.map(c => `
     <div style="display:flex;flex-direction:column;gap:8px;padding:12px;border:1px solid var(--line);border-radius:10px;background:rgba(255,255,255,0.02);${c.is_active?'':'opacity:.55;'}">
       <div style="display:flex;gap:10px;align-items:center;min-width:0;">
+        <input type="checkbox" class="chSelectBox" data-id="${c.id}" ${window._tvSelected.has(c.id)?'checked':''} onchange="onChannelCheckChange(${c.id}, this.checked)" style="flex:0 0 auto;width:16px;height:16px;cursor:pointer;">
         ${c.logo_url ? `<img src="${esc(c.logo_url)}" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" style="width:38px;height:38px;object-fit:contain;border-radius:8px;background:#0d0b22;flex:0 0 auto;">` : ''}
         <div style="width:38px;height:38px;border-radius:8px;background:#0d0b22;display:${c.logo_url?'none':'flex'};align-items:center;justify-content:center;flex:0 0 auto;font-size:16px;">📺</div>
         <div style="flex:1;min-width:0;">
@@ -1114,6 +1124,57 @@ function renderChannelList() {
         <button onclick="delChannel(${c.id})" style="flex:1;padding:6px 0;background:rgba(255,90,90,0.12);border:1px solid rgba(255,90,90,0.4);color:#ff8a8a;border-radius:7px;font-family:inherit;font-size:12px;cursor:pointer;">🗑</button>
       </div>
     </div>`).join('');
+  updateSelectedCount();
+}
+function onChannelCheckChange(id, checked) {
+  if (!window._tvSelected) window._tvSelected = new Set();
+  if (checked) window._tvSelected.add(id); else window._tvSelected.delete(id);
+  updateSelectedCount();
+}
+function toggleSelectAllChannels() {
+  const all = document.getElementById('chSelectAll').checked;
+  const boxes = document.querySelectorAll('.chSelectBox');
+  if (!window._tvSelected) window._tvSelected = new Set();
+  boxes.forEach(b => {
+    const id = parseInt(b.dataset.id);
+    b.checked = all;
+    if (all) window._tvSelected.add(id); else window._tvSelected.delete(id);
+  });
+  updateSelectedCount();
+}
+function updateSelectedCount() {
+  const n = window._tvSelected ? window._tvSelected.size : 0;
+  document.getElementById('chSelectedCount').textContent = n ? n + ' ta tanlangan' : '';
+}
+async function deleteSelectedChannels() {
+  const ids = Array.from(window._tvSelected || []);
+  if (!ids.length) { tvMsg('Avval kanal(lar)ni belgilang', false); return; }
+  if (!confirm(`${ids.length} ta tanlangan kanal o'chirilsinmi?`)) return;
+  try {
+    const r = await fetch('/api/admin/channels/bulk_delete', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ password: PASS, ids: ids })
+    });
+    const d = await r.json();
+    if (d.ok) { tvMsg(`✅ ${d.deleted} ta kanal o'chirildi.`, true); window._tvSelected.clear(); loadChannels(); }
+    else tvMsg(d.error || 'Xato', false);
+  } catch(e) { tvMsg('Tarmoq xatosi', false); }
+}
+async function deleteAllChannels() {
+  const catFilter = document.getElementById('chCatFilter').value;
+  const msg = catFilter
+    ? `"${catFilter}" kategoriyasidagi BARCHA kanallar o'chirilsinmi? Bu amalni orqaga qaytarib bo'lmaydi!`
+    : `RO'YXATDAGI BARCHA kanallar o'chirilsinmi? Bu amalni orqaga qaytarib bo'lmaydi!`;
+  if (!confirm(msg)) return;
+  try {
+    const r = await fetch('/api/admin/channels/bulk_delete', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ password: PASS, all: true, category: catFilter || undefined })
+    });
+    const d = await r.json();
+    if (d.ok) { tvMsg(`✅ ${d.deleted} ta kanal o'chirildi.`, true); window._tvSelected.clear(); loadChannels(); }
+    else tvMsg(d.error || 'Xato', false);
+  } catch(e) { tvMsg('Tarmoq xatosi', false); }
 }
 function editChannel(id) {
   const c = (window._tvCache||[]).find(x => x.id === id);
@@ -1129,7 +1190,7 @@ function editChannel(id) {
   document.getElementById('chSaveBtn').textContent = '💾 Yangilash';
   document.getElementById('chCancelBtn').style.display = '';
   updateStreamPlaceholder();
-  document.getElementById('chName').focus();
+  document.getElementById('chName').focus({preventScroll: true});
 }
 async function saveChannel() {
   const name = document.getElementById('chName').value.trim();

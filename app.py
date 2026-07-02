@@ -1334,36 +1334,85 @@ def admin_channels_delete():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route("/api/admin/channels/bulk_delete", methods=["POST"])
+def admin_channels_bulk_delete():
+    """Bir nechta kanalni birdaniga o'chiradi.
+    Body: {password, ids?: [1,2,3], all?: true, category?: "Music"}
+    - ids berilsa: faqat shu ID'lar o'chadi
+    - all=true berilsa: (category bilan yoki bo'lmasa) barcha kanallar o'chadi"""
+    d = request.get_json() or {}
+    if not _check(d):
+        return jsonify({"error": "ruxsat yo'q"}), 403
+    ids = d.get("ids") or []
+    delete_all = bool(d.get("all"))
+    category = (d.get("category") or "").strip()
+    try:
+        with get_conn() as conn:
+            cur = conn.cursor()
+            if delete_all:
+                if category:
+                    cur.execute("DELETE FROM tv_channels WHERE category=%s", (category,))
+                else:
+                    cur.execute("DELETE FROM tv_channels")
+            elif ids:
+                clean_ids = [int(i) for i in ids]
+                cur.execute("DELETE FROM tv_channels WHERE id = ANY(%s)", (clean_ids,))
+            else:
+                return jsonify({"error": "ids yoki all kiritilmagan"}), 400
+            deleted = cur.rowcount
+            conn.commit()
+        return jsonify({"ok": True, "deleted": deleted})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 def _clean_channel_name(name):
-    """'Milliy (1080p)' -> 'Milliy'. Oxiridagi (NNNp)/(NNNi) kabi sifat belgisini olib tashlaydi."""
-    name = _re.sub(r'\s*\((?:\d{3,4}[ip]|HD|FHD|UHD|4K|SD)\)\s*$', '', name, flags=_re.IGNORECASE)
-    return name.strip()
+    """'Milliy (1080p)' -> 'Milliy'. Oxiridagi (NNNp)/(NNNi)/[Not 24/7] kabi belgilarni olib tashlaydi."""
+    name = _re.sub(r'\s*\[[^\]]*\]\s*', ' ', name)  # [Not 24/7], [Geo-blocked] va h.k.
+    name = _re.sub(r'\s*\((?:\d{3,4}[ip]|HD|FHD|UHD|4K|SD)\)\s*', ' ', name, flags=_re.IGNORECASE)
+    name = _re.sub(r'\s+', ' ', name).strip()
+    return name
+
+def _looks_like_garbage_name(name):
+    """User-Agent qatoridan chiqib qolgan chalkash nomlarni aniqlaydi."""
+    low = name.lower()
+    if 'mozilla' in low or 'chrome/' in low or 'safari/' in low or 'applewebkit' in low:
+        return True
+    if len(name) > 120:
+        return True
+    return False
 
 def _parse_m3u(text):
-    """M3U/M3U8 matnini [{name, logo, category, url}, ...] ro'yxatiga aylantiradi."""
+    """M3U/M3U8 matnini [{name, logo, category, url}, ...] ro'yxatiga aylantiradi.
+    Faqat #EXTINF qatoridan bevosita keyin keladigan http(s) URL qatorlarini kanal deb oladi —
+    #EXTVLCOPT, #EXTGRP va boshqa meta-teglar chalkashtirmasligi uchun."""
     lines = text.splitlines()
     out = []
-    cur_name, cur_logo, cur_cat = "", "", "Umumiy"
+    pending = None  # oxirgi ko'rilgan #EXTINF ma'lumoti, hali URL kutilmoqda
     for line in lines:
         line = line.strip()
         if not line:
             continue
         if line.startswith("#EXTINF"):
-            # #EXTINF:-1 tvg-logo="..." group-title="...",Kanal Nomi
             m_logo = _re.search(r'tvg-logo="([^"]*)"', line)
             m_cat = _re.search(r'group-title="([^"]*)"', line)
-            cur_logo = m_logo.group(1) if m_logo else ""
-            cur_cat = m_cat.group(1) if m_cat else "Umumiy"
             m_name = _re.search(r',(.+)$', line)
             raw_name = m_name.group(1).strip() if m_name else "Nomsiz kanal"
-            cur_name = _clean_channel_name(raw_name)
+            clean_name = _clean_channel_name(raw_name)
+            pending = {
+                "name": clean_name if clean_name and not _looks_like_garbage_name(clean_name) else "Nomsiz kanal",
+                "logo": m_logo.group(1) if m_logo else "",
+                "category": m_cat.group(1) if m_cat else "Umumiy",
+            }
         elif line.startswith("#"):
-            continue
+            continue  # boshqa meta-teglar (#EXTVLCOPT, #EXTGRP va h.k.) — e'tiborsiz qoldiriladi
         else:
-            # Stream URL qatori
-            out.append({"name": cur_name or "Nomsiz kanal", "logo": cur_logo,
-                        "category": cur_cat or "Umumiy", "url": line})
-            cur_name, cur_logo, cur_cat = "", "", "Umumiy"
+            if line.startswith("http://") or line.startswith("https://"):
+                if pending:
+                    out.append({"name": pending["name"], "logo": pending["logo"],
+                                "category": pending["category"] or "Umumiy", "url": line})
+                    pending = None
+                # EXTINF'siz to'g'ridan-to'g'ri URL kelsa — e'tiborsiz qoldiramiz (nomsiz kanal keraksiz)
+            # http(s) bilan boshlanmagan boshqa qatorlar (masalan yana bir meta ma'lumot) — o'tkazib yuboriladi
     return out
 
 @app.route("/api/admin/channels/cleanup", methods=["POST"])
