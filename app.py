@@ -1281,6 +1281,10 @@ def tv_heartbeat():
             return jsonify({"ok": False}), 400
         with get_conn() as conn:
             cur = conn.cursor()
+            # bitta sessiya bir vaqtda faqat bitta kanalda "tomoshada" hisoblansin —
+            # boshqa kanaldagi eski yozuvini darhol o'chiramiz (40s kutmasdan)
+            cur.execute("DELETE FROM tv_viewers WHERE session_id=%s AND channel_id != %s",
+                        (session_id, channel_id))
             cur.execute(
                 "INSERT INTO tv_viewers (channel_id, session_id, last_seen) VALUES (%s,%s,NOW()) "
                 "ON CONFLICT (channel_id, session_id) DO UPDATE SET last_seen=NOW()",
@@ -1291,6 +1295,23 @@ def tv_heartbeat():
         return jsonify({"ok": True})
     except Exception as e:
         log.warning("tv_heartbeat: %s", e)
+        return jsonify({"ok": False}), 200
+
+@app.route("/api/tv/leave", methods=["POST"])
+def tv_leave():
+    """Foydalanuvchi kanalni tark etganda (boshqasiga o'tganda yoki sahifani yopganda) darhol hisobdan chiqaramiz."""
+    try:
+        d = request.get_json(force=True, silent=True) or {}
+        session_id = str(d.get("session_id") or "")[:80]
+        if not session_id:
+            return jsonify({"ok": False}), 400
+        with get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("DELETE FROM tv_viewers WHERE session_id=%s", (session_id,))
+            conn.commit()
+        return jsonify({"ok": True})
+    except Exception as e:
+        log.warning("tv_leave: %s", e)
         return jsonify({"ok": False}), 200
 
 @app.route("/api/tv/viewers")
@@ -1735,6 +1756,17 @@ const viewerCountNum = document.getElementById('viewerCountNum');
 
 function esc(s){return (s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
 
+/* Sayt https orqali ochiladi — logotip manzili http:// bo'lsa, ko'p mobil brauzer uni
+   "mixed content" deb bloklab, rasmni ko'rsatmaydi. Iloji boricha https'ga majburlaymiz. */
+function normalizeLogoUrl(url){
+  if (!url) return '';
+  url = url.trim();
+  if (!url) return '';
+  if (url.startsWith('//')) return 'https:' + url;
+  if (url.startsWith('http://')) return 'https://' + url.slice(7);
+  return url;
+}
+
 /* Baza kategoriyalari ba'zan "Culture;Music;Religious" kabi qo'shilgan holatda keladi —
    ko'rsatish uchun birinchi ma'noli bo'lakni olamiz va tanish nomlarga moslashtiramiz. */
 const CAT_LABELS = {
@@ -1832,8 +1864,9 @@ function render(){
     return;
   }
   listEl.innerHTML = list.map(c=>{
-    const logo = c.logo_url
-      ? `<img class="ch-logo" src="${esc(c.logo_url)}" alt="" onerror="this.outerHTML='<div class=\\'ch-logo ph\\'>📺</div>'">`
+    const logoUrl = normalizeLogoUrl(c.logo_url);
+    const logo = logoUrl
+      ? `<img class="ch-logo" src="${esc(logoUrl)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.onerror=null;this.outerHTML='<div class=\\'ch-logo ph\\'>📺</div>'">`
       : `<div class="ch-logo ph">📺</div>`;
     const n = VIEWERS[String(c.id)] || 0;
     return `<div class="ch-row ${c.id===activeId?'active':''}" data-id="${c.id}" onclick='play(${JSON.stringify(c).replace(/'/g,"&#39;")})'>
@@ -1862,6 +1895,16 @@ function sendHeartbeat(){
 function loadViewerCounts(){
   fetch('/api/tv/viewers').then(r=>r.json()).then(d=>{ VIEWERS = d.viewers || {}; updateViewerBadges(); }).catch(()=>{});
 }
+function sendLeave(){
+  const payload = JSON.stringify({session_id: SESSION_ID});
+  if (navigator.sendBeacon){
+    navigator.sendBeacon('/api/tv/leave', new Blob([payload], {type:'application/json'}));
+  } else {
+    fetch('/api/tv/leave', {method:'POST', headers:{'Content-Type':'application/json'}, body: payload, keepalive:true}).catch(()=>{});
+  }
+}
+window.addEventListener('pagehide', sendLeave);
+document.addEventListener('visibilitychange', ()=>{ if (document.visibilityState === 'hidden') sendLeave(); });
 setInterval(sendHeartbeat, 20000);
 setInterval(loadViewerCounts, 15000);
 loadViewerCounts();
