@@ -308,6 +308,14 @@ def init_db():
                 )
             """)
             cur.execute("ALTER TABLE tv_channels ADD COLUMN IF NOT EXISTS source_type TEXT DEFAULT 'hls'")
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS tv_viewers (
+                    channel_id INTEGER NOT NULL,
+                    session_id TEXT NOT NULL,
+                    last_seen TIMESTAMP DEFAULT NOW(),
+                    PRIMARY KEY (channel_id, session_id)
+                )
+            """)
             conn.commit()
         log.info("Kino baza tayyor (poster_url + site_settings + favorites + reviews + upcoming)")
     except Exception as e:
@@ -1262,7 +1270,45 @@ def api_channels():
         log.warning("api_channels: %s", e)
         return jsonify({"channels": []})
 
-@app.route("/api/admin/channels/list", methods=["POST"])
+@app.route("/api/tv/heartbeat", methods=["POST"])
+def tv_heartbeat():
+    """Foydalanuvchi qaysi kanalni tomosha qilayotganini bildiradi (tirik hisoblagich uchun)."""
+    try:
+        d = request.get_json(force=True, silent=True) or {}
+        channel_id = int(d.get("channel_id") or 0)
+        session_id = str(d.get("session_id") or "")[:80]
+        if not channel_id or not session_id:
+            return jsonify({"ok": False}), 400
+        with get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "INSERT INTO tv_viewers (channel_id, session_id, last_seen) VALUES (%s,%s,NOW()) "
+                "ON CONFLICT (channel_id, session_id) DO UPDATE SET last_seen=NOW()",
+                (channel_id, session_id))
+            # eskirgan (40s dan ortiq faolsiz) yozuvlarni safarbar tozalab boramiz
+            cur.execute("DELETE FROM tv_viewers WHERE last_seen < NOW() - INTERVAL '40 seconds'")
+            conn.commit()
+        return jsonify({"ok": True})
+    except Exception as e:
+        log.warning("tv_heartbeat: %s", e)
+        return jsonify({"ok": False}), 200
+
+@app.route("/api/tv/viewers")
+def tv_viewers():
+    """Har bir kanalni hozir necha kishi tomosha qilayotgani (so'nggi 40 soniyada faol)."""
+    try:
+        with get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT channel_id, COUNT(*) FROM tv_viewers "
+                "WHERE last_seen > NOW() - INTERVAL '40 seconds' GROUP BY channel_id")
+            counts = {str(r[0]): r[1] for r in cur.fetchall()}
+        return jsonify({"viewers": counts})
+    except Exception as e:
+        log.warning("tv_viewers: %s", e)
+        return jsonify({"viewers": {}})
+
+
 def admin_channels_list():
     if not _check(request.get_json() or {}):
         return jsonify({"error": "ruxsat yo'q"}), 403
@@ -1577,7 +1623,7 @@ def tv_page():
   .tv-sidebar{flex:0 0 300px;width:300px;overflow:hidden;transition:width .22s ease,flex-basis .22s ease,
     opacity .18s ease,margin .22s ease;opacity:1;}
   .tv-sidebar.collapsed{flex:0 0 0;width:0;opacity:0;pointer-events:none;}
-  .tv-main{flex:1 1 0%;min-width:0;}
+  .tv-main{flex:1 1 0%;min-width:0;position:sticky;top:16px;align-self:flex-start;}
 
   .player-box{background:#000;border-radius:14px;overflow:hidden;position:relative;aspect-ratio:16/9;
     box-shadow:0 10px 40px rgba(0,0,0,.5);margin-bottom:10px;}
@@ -1587,6 +1633,14 @@ def tv_page():
     justify-content:center;color:#8c87b8;gap:10px;text-align:center;padding:20px;}
   .now-playing{color:#fff;font-size:16px;font-weight:600;margin:0 0 20px;min-height:22px;}
   .now-playing span{color:#7c5cff;}
+  .viewer-count{position:absolute;top:12px;right:12px;display:flex;align-items:center;gap:5px;
+    background:rgba(0,0,0,.55);backdrop-filter:blur(4px);color:#fff;font-size:12px;font-weight:600;
+    padding:5px 10px 5px 8px;border-radius:999px;z-index:2;display:none;}
+  .viewer-count .dot{width:6px;height:6px;border-radius:50%;background:#4ade80;flex:0 0 auto;
+    animation:pulse-dot 1.6s ease-in-out infinite;}
+  @keyframes pulse-dot{0%,100%{opacity:1;}50%{opacity:.35;}}
+  .ch-row .ch-viewers{color:#7c86b8;font-size:11px;margin-top:2px;display:flex;align-items:center;gap:4px;}
+  .ch-row .ch-viewers .dot{width:5px;height:5px;border-radius:50%;background:#4ade80;flex:0 0 auto;}
 
   .cat-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;}
   .tv-search{width:100%;box-sizing:border-box;padding:10px 14px;margin-bottom:12px;border-radius:10px;
@@ -1621,6 +1675,7 @@ def tv_page():
   /* Mobil: ustunlar tepa-past bo'lib joylashadi, kanallar ro'yxati pleyer ostida */
   @media (max-width: 860px){
     .tv-layout{flex-direction:column;}
+    .tv-main{position:static;}
     .tv-sidebar{width:100%;flex:1 1 auto;order:2;transition:max-height .22s ease,opacity .18s ease,margin .22s ease;
       max-height:1200px;}
     .tv-sidebar.collapsed{max-height:0;width:100%;flex:1 1 auto;margin:0;}
@@ -1656,6 +1711,7 @@ def tv_page():
     <div class="tv-main">
       <div class="player-box">
         <span class="live-badge" id="liveBadge">● JONLI</span>
+        <span class="viewer-count" id="viewerCount"><span class="dot"></span><span id="viewerCountNum">0</span></span>
         <video id="tvVideo" controls playsinline></video>
         <iframe id="tvFrame" style="display:none;" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>
         <div class="player-empty" id="playerEmpty">
@@ -1669,22 +1725,60 @@ def tv_page():
 </div>
 
 <script>
-let CHANNELS = [], curCat = "Hammasi", hls = null, activeId = null;
+let CHANNELS = [], curCat = "Hammasi", hls = null, activeId = null, VIEWERS = {};
 const video = document.getElementById('tvVideo');
 const empty = document.getElementById('playerEmpty');
 const liveBadge = document.getElementById('liveBadge');
 const nowPlaying = document.getElementById('nowPlaying');
+const viewerCountBox = document.getElementById('viewerCount');
+const viewerCountNum = document.getElementById('viewerCountNum');
 
 function esc(s){return (s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+
+/* Baza kategoriyalari ba'zan "Culture;Music;Religious" kabi qo'shilgan holatda keladi —
+   ko'rsatish uchun birinchi ma'noli bo'lakni olamiz va tanish nomlarga moslashtiramiz. */
+const CAT_LABELS = {
+  'undefined':'Umumiy', '':'Umumiy', 'general':'Umumiy', 'public':'Umumiy',
+  'news':'Yangiliklar', 'sport':'Sport', 'sports':'Sport', 'kids':'Bolalar',
+  'family':'Oilaviy', 'music':'Musiqa', 'movies':'Kino', 'entertainment':'Ko\\'ngilochar',
+  'documentary':'Hujjatli', 'culture':'Madaniyat', 'classic':'Klassik',
+  'religious':'Diniy', 'lifestyle':'Turmush tarzi', 'animation':'Multfilm'
+};
+function primaryCategory(raw){
+  const first = (raw||'').split(';')[0].trim().toLowerCase();
+  if (CAT_LABELS[first]) return CAT_LABELS[first];
+  return first ? first.charAt(0).toUpperCase()+first.slice(1) : 'Umumiy';
+}
 
 const frame = document.getElementById('tvFrame');
 
 function scrollPlayerIntoViewIfNeeded(){
+  if (window.innerWidth > 860) return; // desktopda pleyer sticky, joyidan qo'zg'almaydi
   const box = document.querySelector('.player-box');
   const rect = box.getBoundingClientRect();
   if (rect.top < 0 || rect.bottom > window.innerHeight){
     box.scrollIntoView({behavior:'smooth', block:'start'});
   }
+}
+
+function fmtViewers(n){
+  if (n >= 1000) return (n/1000).toFixed(1).replace('.0','') + 'ming';
+  return String(n);
+}
+
+function updateViewerBadges(){
+  const cur = VIEWERS[String(activeId)] || 0;
+  if (activeId){
+    viewerCountBox.style.display = 'flex';
+    viewerCountNum.textContent = fmtViewers(cur);
+  } else {
+    viewerCountBox.style.display = 'none';
+  }
+  document.querySelectorAll('.ch-row').forEach(row=>{
+    const n = VIEWERS[row.dataset.id] || 0;
+    const el = row.querySelector('.ch-viewers-num');
+    if (el) el.textContent = fmtViewers(n) + ' tomoshada';
+  });
 }
 
 function play(ch){
@@ -1693,6 +1787,7 @@ function play(ch){
   nowPlaying.innerHTML = '▶ <span>' + esc(ch.name) + '</span>';
   empty.style.display = 'none';
   liveBadge.style.display = 'block';
+  updateViewerBadges();
   if (hls){ hls.destroy(); hls = null; }
   video.pause(); video.removeAttribute('src'); video.load();
   frame.src = ''; frame.style.display = 'none'; video.style.display = 'block';
@@ -1704,6 +1799,7 @@ function play(ch){
     frame.style.display = 'block';
     frame.src = embed;
     scrollPlayerIntoViewIfNeeded();
+    sendHeartbeat();
     return;
   }
 
@@ -1720,13 +1816,14 @@ function play(ch){
     video.src = url; video.play().catch(()=>{});
   }
   scrollPlayerIntoViewIfNeeded();
+  sendHeartbeat();
 }
 
 function render(){
-  const cats = ["Hammasi", ...Array.from(new Set(CHANNELS.map(c=>c.category||"Umumiy")))];
+  const cats = ["Hammasi", ...Array.from(new Set(CHANNELS.map(c=>primaryCategory(c.category)))).sort((a,b)=>a.localeCompare(b,'uz'))];
   document.getElementById('catRow').innerHTML = cats.map(c=>
     `<div class="cat ${c===curCat?'active':''}" onclick="setCat('${esc(c)}')">${esc(c)}</div>`).join('');
-  let list = curCat==="Hammasi" ? CHANNELS : CHANNELS.filter(c=>(c.category||"Umumiy")===curCat);
+  let list = curCat==="Hammasi" ? CHANNELS : CHANNELS.filter(c=>primaryCategory(c.category)===curCat);
   const q = (document.getElementById('chSearchInput').value || '').trim().toLowerCase();
   if (q) list = list.filter(c => (c.name||'').toLowerCase().includes(q));
   const listEl = document.getElementById('chList');
@@ -1738,14 +1835,38 @@ function render(){
     const logo = c.logo_url
       ? `<img class="ch-logo" src="${esc(c.logo_url)}" alt="" onerror="this.outerHTML='<div class=\\'ch-logo ph\\'>📺</div>'">`
       : `<div class="ch-logo ph">📺</div>`;
+    const n = VIEWERS[String(c.id)] || 0;
     return `<div class="ch-row ${c.id===activeId?'active':''}" data-id="${c.id}" onclick='play(${JSON.stringify(c).replace(/'/g,"&#39;")})'>
-      ${logo}<div class="ch-info"><div class="ch-name">${esc(c.name)}${c.source_type==='youtube'?' <span style="color:#ff4444;font-size:10px;">▶</span>':''}</div><div class="ch-cat">${esc(c.category||'Umumiy')}</div></div></div>`;
+      ${logo}<div class="ch-info"><div class="ch-name">${esc(c.name)}${c.source_type==='youtube'?' <span style="color:#ff4444;font-size:10px;">▶</span>':''}</div>
+      <div class="ch-cat">${esc(primaryCategory(c.category))}</div>
+      <div class="ch-viewers"><span class="dot"></span><span class="ch-viewers-num">${fmtViewers(n)} tomoshada</span></div></div></div>`;
   }).join('');
 }
 function setCat(c){ curCat=c; render(); }
 function onSearchInput(){ render(); }
 
-/* ── Sidebar (kanallar ro'yxati) ko'rsatish / yashirish ── */
+/* ── Tomoshabinlar soni: haqiqiy heartbeat asosida ── */
+function getSessionId(){
+  try{
+    let id = localStorage.getItem('tvSessionId');
+    if (!id){ id = (crypto.randomUUID ? crypto.randomUUID() : ('s'+Date.now()+Math.random())); localStorage.setItem('tvSessionId', id); }
+    return id;
+  }catch(e){ return 's'+Date.now()+Math.random(); }
+}
+const SESSION_ID = getSessionId();
+function sendHeartbeat(){
+  if (!activeId) return;
+  fetch('/api/tv/heartbeat', {method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({channel_id: activeId, session_id: SESSION_ID})}).catch(()=>{});
+}
+function loadViewerCounts(){
+  fetch('/api/tv/viewers').then(r=>r.json()).then(d=>{ VIEWERS = d.viewers || {}; updateViewerBadges(); }).catch(()=>{});
+}
+setInterval(sendHeartbeat, 20000);
+setInterval(loadViewerCounts, 15000);
+loadViewerCounts();
+
+/* ── Sidebar (kanallar ro'yxati) ko'rsatish / yashirish — pleyer joyida qoladi ── */
 const sidebar = document.getElementById('tvSidebar');
 const toggleLabel = document.getElementById('sidebarToggleLabel');
 const SIDEBAR_KEY = 'tvSidebarOpen';
