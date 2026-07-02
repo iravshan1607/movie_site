@@ -1448,6 +1448,33 @@ def _looks_like_garbage_name(name):
         return True
     return False
 
+def _extract_extinf_name(line):
+    """#EXTINF qatoridan kanal nomini ajratib oladi.
+    Format: #EXTINF:-1 attr="val" attr2="val2",Kanal Nomi
+    Nom har doim OXIRGI qo'shtirnoqdan keyingi qismda keladi (attributlar ichidagi
+    vergullar — masalan tvg-name="A, B" — ichida bo'lishi mumkin bo'lgani uchun,
+    oddiy 'birinchi/oxirgi vergul' qidiruvi noto'g'ri natija berishi mumkin)."""
+    last_quote = line.rfind('"')
+    if last_quote != -1:
+        tail = line[last_quote + 1:]
+        comma = tail.find(',')
+        if comma != -1:
+            name = tail[comma + 1:].strip()
+            if name:
+                return name
+    else:
+        # Qo'shtirnoq umuman yo'q — oddiy #EXTINF:-1,Kanal Nomi format
+        comma = line.find(',')
+        if comma != -1:
+            name = line[comma + 1:].strip()
+            if name:
+                return name
+    # Nom topilmadi (bo'sh yoki format boshqacha) — tvg-name atributiga tayanamiz
+    m_tvgname = _re.search(r'tvg-name="([^"]*)"', line)
+    if m_tvgname and m_tvgname.group(1).strip():
+        return m_tvgname.group(1).strip()
+    return ""
+
 def _parse_m3u(text):
     """M3U/M3U8 matnini [{name, logo, category, url}, ...] ro'yxatiga aylantiradi.
     Faqat #EXTINF qatoridan bevosita keyin keladigan http(s) URL qatorlarini kanal deb oladi —
@@ -1462,9 +1489,8 @@ def _parse_m3u(text):
         if line.startswith("#EXTINF"):
             m_logo = _re.search(r'tvg-logo="([^"]*)"', line)
             m_cat = _re.search(r'group-title="([^"]*)"', line)
-            m_name = _re.search(r',(.+)$', line)
-            raw_name = m_name.group(1).strip() if m_name else "Nomsiz kanal"
-            clean_name = _clean_channel_name(raw_name)
+            raw_name = _extract_extinf_name(line)
+            clean_name = _clean_channel_name(raw_name) if raw_name else ""
             pending = {
                 "name": clean_name if clean_name and not _looks_like_garbage_name(clean_name) else "Nomsiz kanal",
                 "logo": m_logo.group(1) if m_logo else "",
