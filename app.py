@@ -1569,6 +1569,10 @@ def tv_page():
   .now-playing{color:#fff;font-size:16px;font-weight:600;margin:0 0 20px;min-height:22px;}
   .now-playing span{color:#7c5cff;}
   .cat-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;}
+  .tv-search{width:100%;box-sizing:border-box;padding:11px 15px;margin-bottom:16px;border-radius:10px;
+    background:#1b1840;border:1px solid #252154;color:#fff;font-size:14px;outline:none;}
+  .tv-search:focus{border-color:#7c5cff;}
+  .tv-search::placeholder{color:#8c87b8;}
   .cat{padding:7px 15px;border-radius:999px;background:#1b1840;border:1px solid #252154;
     color:#b8b4d8;font-size:13px;cursor:pointer;user-select:none;}
   .cat.active{background:#7c5cff;border-color:#7c5cff;color:#fff;font-weight:600;}
@@ -1606,6 +1610,7 @@ def tv_page():
   <p class="now-playing" id="nowPlaying"></p>
 
   <div class="cat-row" id="catRow"></div>
+  <input id="chSearchInput" class="tv-search" type="text" placeholder="🔍 Kanal qidirish..." oninput="onSearchInput()">
   <div class="ch-grid" id="chGrid"></div>
   <div class="tv-empty" id="tvEmpty" style="display:none;">
     Hozircha telekanallar qo'shilmagan. Tez orada! 📡
@@ -1623,6 +1628,14 @@ function esc(s){return (s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>'
 
 const frame = document.getElementById('tvFrame');
 
+function scrollPlayerIntoViewIfNeeded(){
+  const box = document.querySelector('.player-box');
+  const rect = box.getBoundingClientRect();
+  if (rect.top < 0 || rect.bottom > window.innerHeight){
+    box.scrollIntoView({behavior:'smooth', block:'start'});
+  }
+}
+
 function play(ch){
   activeId = ch.id;
   document.querySelectorAll('.ch').forEach(e=>e.classList.toggle('active', +e.dataset.id===ch.id));
@@ -1639,7 +1652,7 @@ function play(ch){
     video.style.display = 'none';
     frame.style.display = 'block';
     frame.src = embed;
-    window.scrollTo({top:0, behavior:'smooth'});
+    scrollPlayerIntoViewIfNeeded();
     return;
   }
 
@@ -1655,15 +1668,22 @@ function play(ch){
   } else {
     video.src = url; video.play().catch(()=>{});
   }
-  window.scrollTo({top:0, behavior:'smooth'});
+  scrollPlayerIntoViewIfNeeded();
 }
 
 function render(){
   const cats = ["Hammasi", ...Array.from(new Set(CHANNELS.map(c=>c.category||"Umumiy")))];
   document.getElementById('catRow').innerHTML = cats.map(c=>
     `<div class="cat ${c===curCat?'active':''}" onclick="setCat('${esc(c)}')">${esc(c)}</div>`).join('');
-  const list = curCat==="Hammasi" ? CHANNELS : CHANNELS.filter(c=>(c.category||"Umumiy")===curCat);
-  document.getElementById('chGrid').innerHTML = list.map(c=>{
+  let list = curCat==="Hammasi" ? CHANNELS : CHANNELS.filter(c=>(c.category||"Umumiy")===curCat);
+  const q = (document.getElementById('chSearchInput').value || '').trim().toLowerCase();
+  if (q) list = list.filter(c => (c.name||'').toLowerCase().includes(q));
+  const grid = document.getElementById('chGrid');
+  if (!list.length){
+    grid.innerHTML = '<div style="grid-column:1/-1;color:#8c87b8;text-align:center;padding:30px;">Mos kanal topilmadi.</div>';
+    return;
+  }
+  grid.innerHTML = list.map(c=>{
     const logo = c.logo_url
       ? `<img class="ch-logo" src="${esc(c.logo_url)}" alt="" onerror="this.outerHTML='<div class=\\'ch-logo ph\\'>📺</div>'">`
       : `<div class="ch-logo ph">📺</div>`;
@@ -1672,6 +1692,7 @@ function render(){
   }).join('');
 }
 function setCat(c){ curCat=c; render(); }
+function onSearchInput(){ render(); }
 
 fetch('/api/channels').then(r=>r.json()).then(d=>{
   CHANNELS = d.channels || [];

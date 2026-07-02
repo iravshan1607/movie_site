@@ -479,8 +479,8 @@ textarea { resize:vertical; min-height:80px; }
         <div id="importMsg" style="font-size:12.5px;margin-top:8px;color:var(--dim);"></div>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px;">
-        <input id="chSearch" placeholder="🔍 Kanal qidirish..." oninput="renderChannelList()" style="flex:2;min-width:160px;padding:9px 12px;font-size:13px;">
-        <select id="chCatFilter" onchange="renderChannelList()" style="flex:1;min-width:130px;padding:9px 12px;font-size:13px;">
+        <input id="chSearch" placeholder="🔍 Kanal qidirish..." oninput="window._tvPage=1;renderChannelList()" style="flex:2;min-width:160px;padding:9px 12px;font-size:13px;">
+        <select id="chCatFilter" onchange="window._tvPage=1;renderChannelList()" style="flex:1;min-width:130px;padding:9px 12px;font-size:13px;">
           <option value="">Barcha kategoriyalar</option>
         </select>
       </div>
@@ -493,6 +493,7 @@ textarea { resize:vertical; min-height:80px; }
         <button onclick="deleteAllChannels()" style="padding:7px 12px;font-size:12px;background:rgba(255,50,50,0.15);border:1px solid rgba(255,50,50,0.5);color:#ff6a6a;border-radius:7px;font-family:inherit;cursor:pointer;">🗑 Barchasini o'chirish</button>
       </div>
       <div id="tvList" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px;"></div>
+      <div id="tvPagination"></div>
       </div>
     </div>
   </div>
@@ -1092,6 +1093,7 @@ async function loadChannels() {
     renderChannelList();
   } catch(e) { tvMsg('Tarmoq xatosi', false); }
 }
+const CH_PAGE_SIZE = 60;
 function renderChannelList() {
   const items = window._tvCache || [];
   const q = (document.getElementById('chSearch').value || '').trim().toLowerCase();
@@ -1104,15 +1106,22 @@ function renderChannelList() {
   document.getElementById('tvCount').textContent = items.length ? '(' + items.length + ')' : '';
   document.getElementById('tvCountModal').textContent = items.length ? '(' + items.length + (filtered.length !== items.length ? ' / ' + filtered.length + ' ko\'rsatilmoqda' : '') + ')' : '';
   const box = document.getElementById('tvList');
-  if (!items.length) { box.innerHTML = '<div style="grid-column:1/-1;color:var(--dim);font-size:13px;">Hozircha kanal yo\'q. Yuqoridan qo\'shing.</div>'; updateSelectedCount(); return; }
-  if (!filtered.length) { box.innerHTML = '<div style="grid-column:1/-1;color:var(--dim);font-size:13px;">Mos kanal topilmadi.</div>'; updateSelectedCount(); return; }
+  if (!items.length) { box.innerHTML = '<div style="grid-column:1/-1;color:var(--dim);font-size:13px;">Hozircha kanal yo\'q. Yuqoridan qo\'shing.</div>'; document.getElementById('tvPagination').innerHTML=''; updateSelectedCount(); return; }
+  if (!filtered.length) { box.innerHTML = '<div style="grid-column:1/-1;color:var(--dim);font-size:13px;">Mos kanal topilmadi.</div>'; document.getElementById('tvPagination').innerHTML=''; updateSelectedCount(); return; }
   if (!window._tvSelected) window._tvSelected = new Set();
-  box.innerHTML = filtered.map(c => `
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / CH_PAGE_SIZE));
+  if (!window._tvPage || window._tvPage > totalPages) window._tvPage = 1;
+  const page = window._tvPage;
+  const start = (page - 1) * CH_PAGE_SIZE;
+  const pageItems = filtered.slice(start, start + CH_PAGE_SIZE);
+
+  box.innerHTML = pageItems.map(c => `
     <div style="display:flex;flex-direction:column;gap:8px;padding:12px;border:1px solid var(--line);border-radius:10px;background:rgba(255,255,255,0.02);${c.is_active?'':'opacity:.55;'}">
       <div style="display:flex;gap:10px;align-items:center;min-width:0;">
         <input type="checkbox" class="chSelectBox" data-id="${c.id}" ${window._tvSelected.has(c.id)?'checked':''} onchange="onChannelCheckChange(${c.id}, this.checked)" style="flex:0 0 auto;width:16px;height:16px;cursor:pointer;">
-        ${c.logo_url ? `<img src="${esc(c.logo_url)}" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" style="width:38px;height:38px;object-fit:contain;border-radius:8px;background:#0d0b22;flex:0 0 auto;">` : ''}
-        <div style="width:38px;height:38px;border-radius:8px;background:#0d0b22;display:${c.logo_url?'none':'flex'};align-items:center;justify-content:center;flex:0 0 auto;font-size:16px;">📺</div>
+        ${c.logo_url ? `<img src="${esc(c.logo_url)}" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" style="width:56px;height:56px;object-fit:contain;border-radius:9px;background:#0d0b22;flex:0 0 auto;">` : ''}
+        <div style="width:56px;height:56px;border-radius:9px;background:#0d0b22;display:${c.logo_url?'none':'flex'};align-items:center;justify-content:center;flex:0 0 auto;font-size:22px;">📺</div>
         <div style="flex:1;min-width:0;">
           <div title="${esc(c.name)}" style="font-size:13.5px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;${c.is_active?'':'text-decoration:line-through;'}">${esc(c.name)}</div>
           <div style="font-size:11px;color:var(--dim);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(c.category)}${c.source_type==='youtube'?' · ▶️':' · 📡'}${c.stream_url?'':' · ⚠️'}</div>
@@ -1125,6 +1134,30 @@ function renderChannelList() {
       </div>
     </div>`).join('');
   updateSelectedCount();
+  renderTvPagination(totalPages, page, filtered.length);
+}
+function renderTvPagination(totalPages, page, totalCount) {
+  const pag = document.getElementById('tvPagination');
+  if (totalPages <= 1) { pag.innerHTML = ''; return; }
+  let buttons = '';
+  const mkBtn = (label, targetPage, disabled, active) => `<button onclick="goToTvPage(${targetPage})" ${disabled?'disabled':''} style="min-width:32px;padding:6px 10px;font-size:12px;border-radius:7px;font-family:inherit;cursor:${disabled?'default':'pointer'};background:${active?'#7c5cff':'rgba(255,255,255,0.05)'};border:1px solid ${active?'#7c5cff':'var(--line)'};color:${active?'#fff':disabled?'var(--dim)':'#e8e6f5'};opacity:${disabled?'.5':'1'};">${label}</button>`;
+  buttons += mkBtn('‹', page - 1, page === 1, false);
+  const windowSize = 2;
+  for (let p = 1; p <= totalPages; p++) {
+    if (p === 1 || p === totalPages || (p >= page - windowSize && p <= page + windowSize)) {
+      buttons += mkBtn(p, p, false, p === page);
+    } else if (p === page - windowSize - 1 || p === page + windowSize + 1) {
+      buttons += `<span style="color:var(--dim);padding:0 4px;">…</span>`;
+    }
+  }
+  buttons += mkBtn('›', page + 1, page === totalPages, false);
+  pag.innerHTML = `<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;justify-content:center;margin-top:14px;">${buttons}</div>
+    <div style="text-align:center;font-size:11.5px;color:var(--dim);margin-top:6px;">Sahifa ${page} / ${totalPages} — jami ${totalCount} ta kanal</div>`;
+}
+function goToTvPage(p) {
+  window._tvPage = p;
+  renderChannelList();
+  document.getElementById('tvBody').scrollTo({top:0, behavior:'smooth'});
 }
 function onChannelCheckChange(id, checked) {
   if (!window._tvSelected) window._tvSelected = new Set();
