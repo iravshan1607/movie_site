@@ -6,8 +6,8 @@
    - Adaptiv: rasm bo'lsa rasm bilan, bo'lmasa toza matn.
    - To'liq himoyalangan: istalgan xato saytga ta'sir qilmaydi. */
 (function () {
-  var FIRST_DELAY_MS = 12000;   // kirgandan keyin birinchi marta (~12 soniya)
-  var REPEAT_MS      = 180000;  // keyin har ~3 daqiqada qaytadan
+  var FIRST_DELAY_MS = 15000;   // kirgandan keyin birinchi marta (~12 soniya)
+  var REPEAT_MS      = 300000;  // keyin har ~3 daqiqada qaytadan
   var LOCK_SECONDS   = 5;       // X necha soniya yopiq tursin
 
   var isOpen = false;
