@@ -450,7 +450,29 @@ textarea { resize:vertical; min-height:80px; }
         </div>
       </div>
       <div id="tvAdminMsg" style="font-size:13px;margin:4px 0 12px;min-height:16px;"></div>
-      <div id="tvList"></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
+        <button onclick="cleanupChannels()" style="padding:8px 14px;font-size:12.5px;background:rgba(255,200,90,0.12);border:1px solid rgba(255,200,90,0.4);color:#ffcf5a;border-radius:8px;font-family:inherit;cursor:pointer;">🧹 Nom/logo tozalash</button>
+        <button onclick="toggleImportBox()" style="padding:8px 14px;font-size:12.5px;background:rgba(120,255,150,0.12);border:1px solid rgba(120,255,150,0.4);color:#7dffa0;border-radius:8px;font-family:inherit;cursor:pointer;">⬇️ M3U import</button>
+      </div>
+      <div id="importBox" style="display:none;padding:12px;border:1px solid var(--line);border-radius:10px;margin-bottom:12px;background:rgba(255,255,255,0.02);">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <input id="importUrl" placeholder="M3U havola (masalan https://iptv-org.github.io/iptv/countries/uz.m3u)" style="flex:2;min-width:220px;padding:9px 12px;font-size:13px;">
+          <input id="importCatFilter" placeholder="Kategoriya filtri (ixtiyoriy)" style="flex:1;min-width:130px;padding:9px 12px;font-size:13px;">
+          <select id="importSourceType" style="flex:0 0 auto;padding:9px 12px;font-size:13px;">
+            <option value="hls">📡 HLS</option>
+            <option value="youtube">▶️ YouTube</option>
+          </select>
+          <button onclick="runImportM3u()" id="importBtn" style="flex:0 0 auto;padding:9px 16px;font-size:13px;">Import qilish</button>
+        </div>
+        <div id="importMsg" style="font-size:12.5px;margin-top:8px;color:var(--dim);"></div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px;">
+        <input id="chSearch" placeholder="🔍 Kanal qidirish..." oninput="renderChannelList()" style="flex:2;min-width:160px;padding:9px 12px;font-size:13px;">
+        <select id="chCatFilter" onchange="renderChannelList()" style="flex:1;min-width:130px;padding:9px 12px;font-size:13px;">
+          <option value="">Barcha kategoriyalar</option>
+        </select>
+      </div>
+      <div id="tvList" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px;"></div>
     </div>
   </div>
 
@@ -977,6 +999,53 @@ function resetChannelForm() {
   document.getElementById('chCancelBtn').style.display = 'none';
   updateStreamPlaceholder();
 }
+function toggleImportBox() {
+  const box = document.getElementById('importBox');
+  box.style.display = box.style.display === 'none' ? '' : 'none';
+}
+async function cleanupChannels() {
+  if (!confirm('Barcha kanal nomlaridagi (1080p) kabi belgilarni olib tashlab, bo\'sh logolarni avtomatik topib to\'ldirilsinmi?')) return;
+  tvMsg('Tozalanmoqda...', true);
+  try {
+    const r = await fetch('/api/admin/channels/cleanup', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ password: PASS })
+    });
+    const d = await r.json();
+    if (d.ok) { tvMsg(`✅ Tozalandi: ${d.fixed_names} nom, ${d.fixed_logos} logo tuzatildi.`, true); loadChannels(); }
+    else tvMsg(d.error || 'Xato', false);
+  } catch(e) { tvMsg('Tarmoq xatosi', false); }
+}
+async function runImportM3u() {
+  const url = document.getElementById('importUrl').value.trim();
+  if (!url) { document.getElementById('importMsg').textContent = 'M3U havolani kiriting'; return; }
+  const btn = document.getElementById('importBtn');
+  btn.disabled = true; btn.textContent = 'Yuklanmoqda...';
+  document.getElementById('importMsg').textContent = '';
+  try {
+    const r = await fetch('/api/admin/channels/import_m3u', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        password: PASS,
+        m3u_url: url,
+        category_filter: document.getElementById('importCatFilter').value.trim(),
+        source_type: document.getElementById('importSourceType').value,
+        skip_existing: true
+      })
+    });
+    const d = await r.json();
+    if (d.ok) {
+      document.getElementById('importMsg').innerHTML = `✅ Qo'shildi: ${d.added}, o'tkazib yuborildi: ${d.skipped}, xato: ${d.failed} (jami topildi: ${d.total_parsed})`;
+      loadChannels();
+    } else {
+      document.getElementById('importMsg').textContent = '❌ ' + (d.error || 'Xato');
+    }
+  } catch(e) {
+    document.getElementById('importMsg').textContent = '❌ Tarmoq xatosi';
+  } finally {
+    btn.disabled = false; btn.textContent = 'Import qilish';
+  }
+}
 async function loadChannels() {
   try {
     const r = await fetch('/api/admin/channels/list', {
@@ -984,23 +1053,44 @@ async function loadChannels() {
       body: JSON.stringify({ password: PASS })
     });
     const d = await r.json();
-    const items = d.items || [];
-    document.getElementById('tvCount').textContent = items.length ? '('+items.length+')' : '';
-    const box = document.getElementById('tvList');
-    if (!items.length) { box.innerHTML = '<div style="color:var(--dim);font-size:13px;">Hozircha kanal yo\'q. Yuqoridan qo\'shing.</div>'; return; }
-    box.innerHTML = items.map(c => `
-      <div style="display:flex;gap:12px;align-items:center;padding:11px 0;border-top:1px solid var(--line);">
-        ${c.logo_url ? `<img src="${esc(c.logo_url)}" alt="" style="width:44px;height:44px;object-fit:contain;border-radius:8px;background:#0d0b22;flex:0 0 auto;">` : '<div style="width:44px;height:44px;border-radius:8px;background:#0d0b22;display:flex;align-items:center;justify-content:center;flex:0 0 auto;">📺</div>'}
-        <div style="flex:1;min-width:0;">
-          <div style="font-size:14px;${c.is_active?'':'opacity:.5;text-decoration:line-through;'}">${esc(c.name)}</div>
-          <div style="font-size:12px;color:var(--dim);margin-top:2px;">${esc(c.category)}${c.source_type==='youtube'?' · ▶️ YouTube':' · 📡 HLS'}${c.stream_url?'':' · ⚠️ havola yo\'q'}${c.is_active?'':' · ⏸ faolsiz'}</div>
-        </div>
-        <button onclick="editChannel(${c.id})" style="flex:0 0 auto;padding:7px 12px;background:rgba(90,209,255,0.12);border:1px solid rgba(90,209,255,0.4);color:#5ad1ff;border-radius:8px;font-family:inherit;font-size:12px;cursor:pointer;">✏️</button>
-        <button onclick="toggleChannelActive(${c.id})" style="flex:0 0 auto;padding:7px 12px;background:rgba(124,92,255,0.12);border:1px solid rgba(124,92,255,0.4);color:#b69bff;border-radius:8px;font-family:inherit;font-size:12px;cursor:pointer;">${c.is_active?'⏸':'▶'}</button>
-        <button onclick="delChannel(${c.id})" style="flex:0 0 auto;padding:7px 12px;background:rgba(255,90,90,0.12);border:1px solid rgba(255,90,90,0.4);color:#ff8a8a;border-radius:8px;font-family:inherit;font-size:12px;cursor:pointer;">🗑</button>
-      </div>`).join('');
-    window._tvCache = items;
+    window._tvCache = d.items || [];
+    const cats = Array.from(new Set(window._tvCache.map(c => c.category || 'Umumiy'))).sort();
+    const catSel = document.getElementById('chCatFilter');
+    const prevVal = catSel.value;
+    catSel.innerHTML = '<option value="">Barcha kategoriyalar</option>' + cats.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
+    catSel.value = cats.includes(prevVal) ? prevVal : '';
+    renderChannelList();
   } catch(e) { tvMsg('Tarmoq xatosi', false); }
+}
+function renderChannelList() {
+  const items = window._tvCache || [];
+  const q = (document.getElementById('chSearch').value || '').trim().toLowerCase();
+  const catFilter = document.getElementById('chCatFilter').value;
+  const filtered = items.filter(c => {
+    if (catFilter && (c.category || 'Umumiy') !== catFilter) return false;
+    if (q && !(c.name || '').toLowerCase().includes(q)) return false;
+    return true;
+  });
+  document.getElementById('tvCount').textContent = items.length ? '(' + items.length + (filtered.length !== items.length ? ' / ' + filtered.length + ' ko\'rsatilmoqda' : '') + ')' : '';
+  const box = document.getElementById('tvList');
+  if (!items.length) { box.innerHTML = '<div style="grid-column:1/-1;color:var(--dim);font-size:13px;">Hozircha kanal yo\'q. Yuqoridan qo\'shing.</div>'; return; }
+  if (!filtered.length) { box.innerHTML = '<div style="grid-column:1/-1;color:var(--dim);font-size:13px;">Mos kanal topilmadi.</div>'; return; }
+  box.innerHTML = filtered.map(c => `
+    <div style="display:flex;flex-direction:column;gap:8px;padding:12px;border:1px solid var(--line);border-radius:10px;background:rgba(255,255,255,0.02);${c.is_active?'':'opacity:.55;'}">
+      <div style="display:flex;gap:10px;align-items:center;min-width:0;">
+        ${c.logo_url ? `<img src="${esc(c.logo_url)}" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" style="width:38px;height:38px;object-fit:contain;border-radius:8px;background:#0d0b22;flex:0 0 auto;">` : ''}
+        <div style="width:38px;height:38px;border-radius:8px;background:#0d0b22;display:${c.logo_url?'none':'flex'};align-items:center;justify-content:center;flex:0 0 auto;font-size:16px;">📺</div>
+        <div style="flex:1;min-width:0;">
+          <div title="${esc(c.name)}" style="font-size:13.5px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;${c.is_active?'':'text-decoration:line-through;'}">${esc(c.name)}</div>
+          <div style="font-size:11px;color:var(--dim);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(c.category)}${c.source_type==='youtube'?' · ▶️':' · 📡'}${c.stream_url?'':' · ⚠️'}</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:6px;">
+        <button onclick="editChannel(${c.id})" style="flex:1;padding:6px 0;background:rgba(90,209,255,0.12);border:1px solid rgba(90,209,255,0.4);color:#5ad1ff;border-radius:7px;font-family:inherit;font-size:12px;cursor:pointer;">✏️</button>
+        <button onclick="toggleChannelActive(${c.id})" style="flex:1;padding:6px 0;background:rgba(124,92,255,0.12);border:1px solid rgba(124,92,255,0.4);color:#b69bff;border-radius:7px;font-family:inherit;font-size:12px;cursor:pointer;">${c.is_active?'⏸':'▶'}</button>
+        <button onclick="delChannel(${c.id})" style="flex:1;padding:6px 0;background:rgba(255,90,90,0.12);border:1px solid rgba(255,90,90,0.4);color:#ff8a8a;border-radius:7px;font-family:inherit;font-size:12px;cursor:pointer;">🗑</button>
+      </div>
+    </div>`).join('');
 }
 function editChannel(id) {
   const c = (window._tvCache||[]).find(x => x.id === id);
