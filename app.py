@@ -1554,12 +1554,31 @@ def tv_page():
 <link rel="shortcut icon" href="/favicon.ico">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.13/hls.min.js"></script>
 <style>
-  .tv-wrap{max-width:1200px;margin:0 auto;padding:16px 16px 60px;}
+  *{box-sizing:border-box;}
+  .tv-wrap{max-width:1440px;margin:0 auto;padding:16px 16px 60px;}
   .tv-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;}
   .tv-top .logo img{height:30px;display:block;}
   .tv-top a.home{color:#8c87b8;text-decoration:none;font-size:14px;}
   .tv-wrap h1{font-size:26px;margin:6px 0 4px;color:#fff;}
   .tv-sub{color:#b8b4d8;font-size:14px;margin:0 0 18px;}
+
+  .sidebar-toggle-btn{display:flex;align-items:center;gap:8px;background:#1b1840;border:1px solid #252154;
+    color:#fff;font-size:13px;font-weight:600;padding:9px 14px;border-radius:10px;cursor:pointer;
+    white-space:nowrap;margin-bottom:14px;transition:border-color .15s,background .15s;}
+  .sidebar-toggle-btn:hover{border-color:#7c5cff;background:#211d4d;}
+  .sidebar-toggle-btn .bars{width:16px;height:12px;position:relative;flex:0 0 auto;}
+  .sidebar-toggle-btn .bars span{display:block;height:2px;background:#b8b4d8;border-radius:2px;position:absolute;left:0;right:0;}
+  .sidebar-toggle-btn .bars span:nth-child(1){top:0;}
+  .sidebar-toggle-btn .bars span:nth-child(2){top:5px;}
+  .sidebar-toggle-btn .bars span:nth-child(3){top:10px;}
+
+  /* Layout: chap tomonda kanallar, o'ngda pleyer */
+  .tv-layout{display:flex;gap:20px;align-items:flex-start;}
+  .tv-sidebar{flex:0 0 300px;width:300px;overflow:hidden;transition:width .22s ease,flex-basis .22s ease,
+    opacity .18s ease,margin .22s ease;opacity:1;}
+  .tv-sidebar.collapsed{flex:0 0 0;width:0;opacity:0;pointer-events:none;}
+  .tv-main{flex:1 1 0%;min-width:0;}
+
   .player-box{background:#000;border-radius:14px;overflow:hidden;position:relative;aspect-ratio:16/9;
     box-shadow:0 10px 40px rgba(0,0,0,.5);margin-bottom:10px;}
   .player-box video{width:100%;height:100%;display:block;background:#000;}
@@ -1568,26 +1587,46 @@ def tv_page():
     justify-content:center;color:#8c87b8;gap:10px;text-align:center;padding:20px;}
   .now-playing{color:#fff;font-size:16px;font-weight:600;margin:0 0 20px;min-height:22px;}
   .now-playing span{color:#7c5cff;}
-  .cat-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;}
-  .tv-search{width:100%;box-sizing:border-box;padding:11px 15px;margin-bottom:16px;border-radius:10px;
+
+  .cat-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;}
+  .tv-search{width:100%;box-sizing:border-box;padding:10px 14px;margin-bottom:12px;border-radius:10px;
     background:#1b1840;border:1px solid #252154;color:#fff;font-size:14px;outline:none;}
   .tv-search:focus{border-color:#7c5cff;}
   .tv-search::placeholder{color:#8c87b8;}
-  .cat{padding:7px 15px;border-radius:999px;background:#1b1840;border:1px solid #252154;
-    color:#b8b4d8;font-size:13px;cursor:pointer;user-select:none;}
+  .cat{padding:6px 13px;border-radius:999px;background:#1b1840;border:1px solid #252154;
+    color:#b8b4d8;font-size:12px;cursor:pointer;user-select:none;white-space:nowrap;}
   .cat.active{background:#7c5cff;border-color:#7c5cff;color:#fff;font-weight:600;}
-  .ch-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;}
-  .ch{background:#1b1840;border:1px solid #252154;border-radius:12px;padding:14px 10px;cursor:pointer;
-    text-align:center;transition:transform .15s, border-color .15s;}
-  .ch:hover{transform:translateY(-3px);border-color:#7c5cff;}
-  .ch.active{border-color:#7c5cff;box-shadow:0 0 0 2px rgba(124,92,255,.4) inset;}
-  .ch-logo{width:64px;height:64px;object-fit:contain;margin:0 auto 8px;display:block;border-radius:8px;background:#0d0b22;}
-  .ch-logo.ph{display:flex;align-items:center;justify-content:center;font-size:24px;color:#7c5cff;}
-  .ch-name{color:#fff;font-size:13px;font-weight:500;line-height:1.3;}
-  .ch-cat{color:#8c87b8;font-size:11px;margin-top:2px;}
+
+  .ch-sidebar-title{color:#8c87b8;font-size:12px;font-weight:700;text-transform:uppercase;
+    letter-spacing:.5px;margin:2px 0 10px;}
+  .ch-list{display:flex;flex-direction:column;gap:6px;max-height:calc(100vh - 260px);min-height:200px;
+    overflow-y:auto;padding-right:4px;}
+  .ch-list::-webkit-scrollbar{width:6px;}
+  .ch-list::-webkit-scrollbar-thumb{background:#252154;border-radius:6px;}
+  .ch-row{display:flex;align-items:center;gap:10px;background:#1b1840;border:1px solid #252154;
+    border-radius:10px;padding:8px;cursor:pointer;transition:border-color .15s,background .15s;}
+  .ch-row:hover{border-color:#7c5cff;}
+  .ch-row.active{border-color:#7c5cff;background:rgba(124,92,255,.14);box-shadow:0 0 0 1px rgba(124,92,255,.4) inset;}
+  .ch-row .ch-logo{width:44px;height:44px;flex:0 0 auto;object-fit:contain;border-radius:8px;background:#0d0b22;}
+  .ch-row .ch-logo.ph{display:flex;align-items:center;justify-content:center;font-size:19px;color:#7c5cff;}
+  .ch-row .ch-info{min-width:0;flex:1 1 auto;}
+  .ch-row .ch-name{color:#fff;font-size:13px;font-weight:500;line-height:1.3;white-space:nowrap;
+    overflow:hidden;text-overflow:ellipsis;}
+  .ch-row .ch-cat{color:#8c87b8;font-size:11px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+
   .tv-empty{color:#b8b4d8;text-align:center;padding:50px 20px;}
   .live-badge{position:absolute;top:12px;left:12px;background:#e5484d;color:#fff;font-size:11px;
     font-weight:700;padding:3px 9px;border-radius:6px;letter-spacing:.5px;z-index:2;display:none;}
+
+  /* Mobil: ustunlar tepa-past bo'lib joylashadi, kanallar ro'yxati pleyer ostida */
+  @media (max-width: 860px){
+    .tv-layout{flex-direction:column;}
+    .tv-sidebar{width:100%;flex:1 1 auto;order:2;transition:max-height .22s ease,opacity .18s ease,margin .22s ease;
+      max-height:1200px;}
+    .tv-sidebar.collapsed{max-height:0;width:100%;flex:1 1 auto;margin:0;}
+    .tv-main{order:1;}
+    .ch-list{max-height:60vh;}
+  }
 </style>
 </head><body>
 <div class="tv-wrap">
@@ -1598,22 +1637,34 @@ def tv_page():
   <h1>📺 Telekanallar</h1>
   <p class="tv-sub">Jonli efir — yangiliklar, sport va boshqa kanallar onlayn.</p>
 
-  <div class="player-box">
-    <span class="live-badge" id="liveBadge">● JONLI</span>
-    <video id="tvVideo" controls playsinline></video>
-    <iframe id="tvFrame" style="display:none;" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>
-    <div class="player-empty" id="playerEmpty">
-      <div style="font-size:42px;">📺</div>
-      <div>Ko'rish uchun pastdan kanal tanlang</div>
-    </div>
-  </div>
-  <p class="now-playing" id="nowPlaying"></p>
+  <button class="sidebar-toggle-btn" id="sidebarToggleBtn" onclick="toggleSidebar()">
+    <span class="bars"><span></span><span></span><span></span></span>
+    <span id="sidebarToggleLabel">Kanallarni yashirish</span>
+  </button>
 
-  <div class="cat-row" id="catRow"></div>
-  <input id="chSearchInput" class="tv-search" type="text" placeholder="🔍 Kanal qidirish..." oninput="onSearchInput()">
-  <div class="ch-grid" id="chGrid"></div>
-  <div class="tv-empty" id="tvEmpty" style="display:none;">
-    Hozircha telekanallar qo'shilmagan. Tez orada! 📡
+  <div class="tv-layout">
+    <aside class="tv-sidebar" id="tvSidebar">
+      <div class="ch-sidebar-title">Kanallar</div>
+      <div class="cat-row" id="catRow"></div>
+      <input id="chSearchInput" class="tv-search" type="text" placeholder="🔍 Kanal qidirish..." oninput="onSearchInput()">
+      <div class="ch-list" id="chList"></div>
+      <div class="tv-empty" id="tvEmpty" style="display:none;">
+        Hozircha telekanallar qo'shilmagan. Tez orada! 📡
+      </div>
+    </aside>
+
+    <div class="tv-main">
+      <div class="player-box">
+        <span class="live-badge" id="liveBadge">● JONLI</span>
+        <video id="tvVideo" controls playsinline></video>
+        <iframe id="tvFrame" style="display:none;" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>
+        <div class="player-empty" id="playerEmpty">
+          <div style="font-size:42px;">📺</div>
+          <div>Ko'rish uchun chapdan kanal tanlang</div>
+        </div>
+      </div>
+      <p class="now-playing" id="nowPlaying"></p>
+    </div>
   </div>
 </div>
 
@@ -1638,7 +1689,7 @@ function scrollPlayerIntoViewIfNeeded(){
 
 function play(ch){
   activeId = ch.id;
-  document.querySelectorAll('.ch').forEach(e=>e.classList.toggle('active', +e.dataset.id===ch.id));
+  document.querySelectorAll('.ch-row').forEach(e=>e.classList.toggle('active', +e.dataset.id===ch.id));
   nowPlaying.innerHTML = '▶ <span>' + esc(ch.name) + '</span>';
   empty.style.display = 'none';
   liveBadge.style.display = 'block';
@@ -1678,21 +1729,45 @@ function render(){
   let list = curCat==="Hammasi" ? CHANNELS : CHANNELS.filter(c=>(c.category||"Umumiy")===curCat);
   const q = (document.getElementById('chSearchInput').value || '').trim().toLowerCase();
   if (q) list = list.filter(c => (c.name||'').toLowerCase().includes(q));
-  const grid = document.getElementById('chGrid');
+  const listEl = document.getElementById('chList');
   if (!list.length){
-    grid.innerHTML = '<div style="grid-column:1/-1;color:#8c87b8;text-align:center;padding:30px;">Mos kanal topilmadi.</div>';
+    listEl.innerHTML = '<div style="color:#8c87b8;text-align:center;padding:30px 10px;">Mos kanal topilmadi.</div>';
     return;
   }
-  grid.innerHTML = list.map(c=>{
+  listEl.innerHTML = list.map(c=>{
     const logo = c.logo_url
       ? `<img class="ch-logo" src="${esc(c.logo_url)}" alt="" onerror="this.outerHTML='<div class=\\'ch-logo ph\\'>📺</div>'">`
       : `<div class="ch-logo ph">📺</div>`;
-    return `<div class="ch ${c.id===activeId?'active':''}" data-id="${c.id}" onclick='play(${JSON.stringify(c).replace(/'/g,"&#39;")})'>
-      ${logo}<div class="ch-name">${esc(c.name)}${c.source_type==='youtube'?' <span style="color:#ff4444;font-size:10px;">▶</span>':''}</div><div class="ch-cat">${esc(c.category||'Umumiy')}</div></div>`;
+    return `<div class="ch-row ${c.id===activeId?'active':''}" data-id="${c.id}" onclick='play(${JSON.stringify(c).replace(/'/g,"&#39;")})'>
+      ${logo}<div class="ch-info"><div class="ch-name">${esc(c.name)}${c.source_type==='youtube'?' <span style="color:#ff4444;font-size:10px;">▶</span>':''}</div><div class="ch-cat">${esc(c.category||'Umumiy')}</div></div></div>`;
   }).join('');
 }
 function setCat(c){ curCat=c; render(); }
 function onSearchInput(){ render(); }
+
+/* ── Sidebar (kanallar ro'yxati) ko'rsatish / yashirish ── */
+const sidebar = document.getElementById('tvSidebar');
+const toggleLabel = document.getElementById('sidebarToggleLabel');
+const SIDEBAR_KEY = 'tvSidebarOpen';
+
+function applySidebarState(open){
+  sidebar.classList.toggle('collapsed', !open);
+  toggleLabel.textContent = open ? 'Kanallarni yashirish' : 'Kanallarni ko\\'rsatish';
+}
+function toggleSidebar(){
+  const open = sidebar.classList.contains('collapsed');
+  applySidebarState(open);
+  try{ localStorage.setItem(SIDEBAR_KEY, open ? '1' : '0'); }catch(e){}
+}
+(function initSidebar(){
+  let open = true;
+  try{
+    const saved = localStorage.getItem(SIDEBAR_KEY);
+    if (saved !== null) open = saved === '1';
+    else if (window.innerWidth <= 860) open = false; // mobilda avvaliga pleyer kattaroq bo'lsin
+  }catch(e){ if (window.innerWidth <= 860) open = false; }
+  applySidebarState(open);
+})();
 
 fetch('/api/channels').then(r=>r.json()).then(d=>{
   CHANNELS = d.channels || [];
