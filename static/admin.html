@@ -462,21 +462,28 @@ textarea { resize:vertical; min-height:80px; }
         </div>
       </div>
       <div id="tvAdminMsg" style="font-size:13px;margin:4px 0 12px;min-height:16px;"></div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
-        <button onclick="cleanupChannels()" style="padding:8px 14px;font-size:12.5px;background:rgba(255,200,90,0.12);border:1px solid rgba(255,200,90,0.4);color:#ffcf5a;border-radius:8px;font-family:inherit;cursor:pointer;">🧹 Nom/logo tozalash</button>
-        <button onclick="toggleImportBox()" style="padding:8px 14px;font-size:12.5px;background:rgba(120,255,150,0.12);border:1px solid rgba(120,255,150,0.4);color:#7dffa0;border-radius:8px;font-family:inherit;cursor:pointer;">⬇️ M3U import</button>
-      </div>
-      <div id="importBox" style="display:none;padding:12px;border:1px solid var(--line);border-radius:10px;margin-bottom:12px;background:rgba(255,255,255,0.02);">
-        <div style="display:flex;gap:8px;flex-wrap:wrap;">
-          <input id="importUrl" placeholder="M3U havola (masalan https://iptv-org.github.io/iptv/countries/uz.m3u)" style="flex:2;min-width:220px;padding:9px 12px;font-size:13px;">
-          <input id="importCatFilter" placeholder="Kategoriya filtri (ixtiyoriy)" style="flex:1;min-width:130px;padding:9px 12px;font-size:13px;">
-          <select id="importSourceType" style="flex:0 0 auto;padding:9px 12px;font-size:13px;">
-            <option value="hls">📡 HLS</option>
-            <option value="youtube">▶️ YouTube</option>
-          </select>
-          <button onclick="runImportM3u()" id="importBtn" style="flex:0 0 auto;padding:9px 16px;font-size:13px;">Import qilish</button>
+      <div style="margin-bottom:12px;">
+        <button onclick="toggleToolsBox()" id="tvToolsToggleBtn" style="padding:8px 14px;font-size:12.5px;background:rgba(255,255,255,0.05);border:1px solid var(--line);color:var(--dim);border-radius:8px;font-family:inherit;cursor:pointer;display:flex;align-items:center;gap:6px;">
+          <span id="tvToolsToggleIcon">▸</span> Qo'shimcha vositalar (tozalash / import)
+        </button>
+        <div id="tvToolsBox" style="display:none;margin-top:10px;">
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
+            <button onclick="cleanupChannels()" style="padding:8px 14px;font-size:12.5px;background:rgba(255,200,90,0.12);border:1px solid rgba(255,200,90,0.4);color:#ffcf5a;border-radius:8px;font-family:inherit;cursor:pointer;">🧹 Nom/logo tozalash</button>
+            <button onclick="toggleImportBox()" style="padding:8px 14px;font-size:12.5px;background:rgba(120,255,150,0.12);border:1px solid rgba(120,255,150,0.4);color:#7dffa0;border-radius:8px;font-family:inherit;cursor:pointer;">⬇️ M3U import</button>
+          </div>
+          <div id="importBox" style="display:none;padding:12px;border:1px solid var(--line);border-radius:10px;margin-bottom:0;background:rgba(255,255,255,0.02);">
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <input id="importUrl" placeholder="M3U havola (masalan https://iptv-org.github.io/iptv/countries/uz.m3u)" style="flex:2;min-width:220px;padding:9px 12px;font-size:13px;">
+              <input id="importCatFilter" placeholder="Kategoriya filtri (ixtiyoriy)" style="flex:1;min-width:130px;padding:9px 12px;font-size:13px;">
+              <select id="importSourceType" style="flex:0 0 auto;padding:9px 12px;font-size:13px;">
+                <option value="hls">📡 HLS</option>
+                <option value="youtube">▶️ YouTube</option>
+              </select>
+              <button onclick="runImportM3u()" id="importBtn" style="flex:0 0 auto;padding:9px 16px;font-size:13px;">Import qilish</button>
+            </div>
+            <div id="importMsg" style="font-size:12.5px;margin-top:8px;color:var(--dim);"></div>
+          </div>
         </div>
-        <div id="importMsg" style="font-size:12.5px;margin-top:8px;color:var(--dim);"></div>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px;">
         <input id="chSearch" placeholder="🔍 Kanal qidirish..." oninput="window._tvPage=1;renderChannelList()" style="flex:2;min-width:160px;padding:9px 12px;font-size:13px;">
@@ -1024,6 +1031,13 @@ function resetChannelForm() {
   document.getElementById('chSaveBtn').textContent = '+ Saqlash';
   document.getElementById('chCancelBtn').style.display = 'none';
   updateStreamPlaceholder();
+}
+function toggleToolsBox() {
+  const box = document.getElementById('tvToolsBox');
+  const icon = document.getElementById('tvToolsToggleIcon');
+  const open = box.style.display === 'none';
+  box.style.display = open ? '' : 'none';
+  icon.textContent = open ? '▾' : '▸';
 }
 function toggleImportBox() {
   const box = document.getElementById('importBox');
