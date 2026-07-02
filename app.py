@@ -1693,11 +1693,6 @@ def tv_page():
   .live-badge{position:absolute;top:12px;left:12px;background:#e5484d;color:#fff;font-size:11px;
     font-weight:700;padding:3px 9px;border-radius:6px;letter-spacing:.5px;z-index:2;display:none;}
 
-  .fs-btn{position:absolute;bottom:52px;right:10px;z-index:3;display:flex;align-items:center;
-    justify-content:center;width:36px;height:36px;border-radius:8px;background:rgba(0,0,0,.55);
-    backdrop-filter:blur(4px);border:1px solid rgba(255,255,255,.15);color:#fff;cursor:pointer;}
-  .fs-btn:hover{background:rgba(124,92,255,.5);}
-  .fs-btn svg{width:18px;height:18px;}
   .player-box:fullscreen{aspect-ratio:auto;border-radius:0;}
   .player-box:-webkit-full-screen{aspect-ratio:auto;border-radius:0;}
   .player-box:fullscreen video, .player-box:fullscreen iframe{width:100%;height:100%;}
@@ -1749,10 +1744,6 @@ def tv_page():
           <div style="font-size:42px;">📺</div>
           <div>Ko'rish uchun chapdan kanal tanlang</div>
         </div>
-        <button class="fs-btn" id="fsBtn" onclick="toggleFullscreen()" aria-label="To'liq ekran" title="To'liq ekran">
-          <svg id="fsIconExpand" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1-2 2h-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
-          <svg id="fsIconCollapse" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none;"><path d="M9 3v3a2 2 0 0 1-2 2H4M15 3v3a2 2 0 0 0 2 2h3M9 21v-3a2 2 0 0 0-2-2H4M15 21v-3a2 2 0 0 1 2-2h3"/></svg>
-        </button>
       </div>
       <p class="now-playing" id="nowPlaying"></p>
       __TV_AD_SLOT__
@@ -1798,39 +1789,6 @@ function primaryCategory(raw){
 }
 
 const frame = document.getElementById('tvFrame');
-
-/* ── To'liq ekran ── */
-const fsIconExpand = document.getElementById('fsIconExpand');
-const fsIconCollapse = document.getElementById('fsIconCollapse');
-function isFullscreen(){
-  return !!(document.fullscreenElement || document.webkitFullscreenElement);
-}
-function toggleFullscreen(){
-  const box = document.querySelector('.player-box');
-  if (!isFullscreen()){
-    const target = (video.style.display !== 'none') ? box : box; // .player-box qamrab oladi (video + iframe)
-    if (target.requestFullscreen) {
-      target.requestFullscreen().catch(()=>{
-        // Ba'zi brauzerlarda div fullscreen ishlamaydi — video/iframe elementiga to'g'ridan urinib ko'ramiz
-        if (video.style.display !== 'none' && video.requestFullscreen) video.requestFullscreen().catch(()=>{});
-        else if (video.style.display !== 'none' && video.webkitEnterFullscreen) video.webkitEnterFullscreen();
-        else if (frame.style.display !== 'none' && frame.requestFullscreen) frame.requestFullscreen().catch(()=>{});
-      });
-    }
-    else if (box.webkitRequestFullscreen) box.webkitRequestFullscreen();
-    else if (video.style.display !== 'none' && video.webkitEnterFullscreen) video.webkitEnterFullscreen(); // iOS Safari
-  } else {
-    if (document.exitFullscreen) document.exitFullscreen();
-    else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
-  }
-}
-function syncFsIcon(){
-  const on = isFullscreen();
-  fsIconExpand.style.display = on ? 'none' : '';
-  fsIconCollapse.style.display = on ? '' : 'none';
-}
-document.addEventListener('fullscreenchange', syncFsIcon);
-document.addEventListener('webkitfullscreenchange', syncFsIcon);
 
 function scrollPlayerIntoViewIfNeeded(){
   if (window.innerWidth > 860) return; // desktopda pleyer sticky, joyidan qo'zg'almaydi
