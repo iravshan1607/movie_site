@@ -256,6 +256,7 @@ def init_db():
             cur.execute("ALTER TABLE movies ADD COLUMN IF NOT EXISTS country TEXT")
             cur.execute("ALTER TABLE movies ADD COLUMN IF NOT EXISTS duration INTEGER")
             cur.execute("ALTER TABLE movies ADD COLUMN IF NOT EXISTS age_rating TEXT")
+            cur.execute("ALTER TABLE movies ADD COLUMN IF NOT EXISTS tmdb_rating NUMERIC")
             # Fon effektlari sozlamalari uchun kalit-qiymat jadvali
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS site_settings (
@@ -469,8 +470,8 @@ def api_movies():
         where = []
         params = []
         if q:
-            where.append("(title ILIKE %s OR description ILIKE %s)")
-            params += [f"%{q}%", f"%{q}%"]
+            where.append("(title ILIKE %s OR description ILIKE %s OR actors ILIKE %s OR director ILIKE %s)")
+            params += [f"%{q}%", f"%{q}%", f"%{q}%", f"%{q}%"]
         if ctype and ctype != "all":
             where.append("COALESCE(content_type,'movie') = %s")
             params.append(ctype)
@@ -543,7 +544,7 @@ def api_movie(mid):
                 SELECT id, title, genre, year, language, quality, description,
                        COALESCE(content_type,'movie'), poster_id,
                        COALESCE(views,0), rating, poster_url, trailer, original_title,
-                       director, actors, country, duration, age_rating
+                       director, actors, country, duration, age_rating, tmdb_rating
                 FROM movies WHERE id=%s
             """, (mid,))
             r = cur.fetchone()
@@ -564,6 +565,7 @@ def api_movie(mid):
             "country": (r[16] or "") if len(r) > 16 else "",
             "duration": r[17] if len(r) > 17 else None,
             "age_rating": (r[18] or "") if len(r) > 18 else "",
+            "tmdb_rating": float(r[19]) if len(r) > 19 and r[19] else None,
         }})
     except Exception as e:
         return jsonify({"found": False, "error": str(e)}), 500
@@ -2171,7 +2173,24 @@ def sitemap():
         parts.append(f"<url><loc>{base}/kategoriya/{ct}</loc>"
                      "<changefreq>daily</changefreq><priority>0.7</priority></url>")
     parts.append(f"<url><loc>{base}/top</loc><changefreq>daily</changefreq><priority>0.7</priority></url>")
+    parts.append(f"<url><loc>{base}/trend</loc><changefreq>daily</changefreq><priority>0.7</priority></url>")
     parts.append(f"<url><loc>{base}/tv</loc><changefreq>daily</changefreq><priority>0.7</priority></url>")
+    try:
+        with get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT DISTINCT country FROM movies WHERE country IS NOT NULL AND country <> ''")
+            for (c,) in cur.fetchall()[:40]:
+                for part in str(c).split(","):
+                    name = part.strip()
+                    if name:
+                        parts.append(f"<url><loc>{base}/davlat/{quote(name)}</loc>"
+                                     "<changefreq>weekly</changefreq><priority>0.5</priority></url>")
+            cur.execute("SELECT DISTINCT year FROM movies WHERE year IS NOT NULL ORDER BY year DESC LIMIT 40")
+            for (y,) in cur.fetchall():
+                parts.append(f"<url><loc>{base}/yil/{y}</loc>"
+                             "<changefreq>weekly</changefreq><priority>0.5</priority></url>")
+    except Exception as ex:
+        log.warning("sitemap country/year: %s", ex)
     try:
         with get_conn() as conn:
             cur = conn.cursor()
@@ -2260,7 +2279,7 @@ def movie_page(mid):
                 SELECT id, title, genre, year, language, quality, description,
                        COALESCE(content_type,'movie'), poster_id, poster_url, trailer,
                        COALESCE(is_premium, FALSE), original_title,
-                       director, actors, country, duration, age_rating
+                       director, actors, country, duration, age_rating, tmdb_rating
                 FROM movies WHERE id=%s
             """, (mid,))
             r = cur.fetchone()
@@ -2295,6 +2314,7 @@ def movie_page(mid):
     country = (r[15] or "").strip() if len(r) > 15 else ""
     duration = r[16] if len(r) > 16 else None
     age_rating = (r[17] or "").strip() if len(r) > 17 else ""
+    tmdb_rating = float(r[18]) if len(r) > 18 and r[18] else None
     prem_badge = ('<span style="display:inline-block;background:linear-gradient(90deg,#f7d046,#e0950b);'
                   'color:#231803;font-size:13px;font-weight:700;padding:5px 14px;border-radius:20px;'
                   'margin-top:12px;">💎 Premium</span>') if is_prem else ''
@@ -2468,6 +2488,11 @@ def movie_page(mid):
         )
     else:
         rating_html = ''
+    tmdb_badge = (
+        f'<span style="display:inline-flex;align-items:center;gap:5px;background:rgba(90,209,255,0.12);'
+        f'border:1px solid rgba(90,209,255,0.4);color:#5ad1ff;font-size:13px;font-weight:600;'
+        f'padding:5px 12px;border-radius:20px;margin:6px 0 0;">TMDB ★ {tmdb_rating}</span>'
+    ) if tmdb_rating else ''
     page = f"""<!DOCTYPE html>
 <html lang="uz">
 <head>
@@ -2515,6 +2540,7 @@ def movie_page(mid):
         <p style="color:#cbb8f0; margin:12px 0 0; font-size:16px;">{type_uz}{f' · {year}' if year else ''}{f' · {e(genre)}' if genre else ''}{f' · {e(country)}' if country else ''}{f' · {duration} daq' if duration else ''}{f' · {e(age_rating)}' if age_rating else ''}</p>
         {f'<p style="color:#a99ee0; margin:10px 0 0; font-size:14.5px;"><b>Rejissyor:</b> {e(director)}</p>' if director else ''}
         {f'<p style="color:#a99ee0; margin:4px 0 0; font-size:14.5px;"><b>Aktyorlar:</b> {e(actors)}</p>' if actors else ''}
+        {tmdb_badge}
         {prem_badge}
         {rating_html}
         <p style="line-height:1.75; color:#dcdcea; margin:18px 0 20px; font-size:15.5px; max-width:680px;">{e(desc)}</p>
@@ -2585,12 +2611,16 @@ def _page_window(cur, total):
         out.append(p); prev = p
     return out
 
-def _list_movies_seo(ctype=None, genre=None, rated=False, sort="new", page=1, per=24):
+def _list_movies_seo(ctype=None, genre=None, country=None, year=None, rated=False, sort="new", page=1, per=24):
     where, params = [], []
     if ctype:
         where.append("COALESCE(content_type,'movie') = %s"); params.append(ctype)
     if genre:
         where.append("genre ILIKE %s"); params.append(f"%{genre}%")
+    if country:
+        where.append("country ILIKE %s"); params.append(f"%{country}%")
+    if year:
+        where.append("year = %s"); params.append(year)
     if rated:
         where.append("rating IS NOT NULL AND rating > 0")
     wsql = ("WHERE " + " AND ".join(where)) if where else ""
@@ -2752,6 +2782,35 @@ def seo_top():
     rows, total = _list_movies_seo(rated=True, sort="rating", page=page)
     return _render_listing("Eng yaxshilar", "Reyting bo'yicha eng zo'r kinolar —",
                            rows, total, page, 24, "/top", "Eng yaxshilar")
+
+@app.route("/trend")
+def seo_trend():
+    try: page = max(1, int(request.args.get("page", 1)))
+    except Exception: page = 1
+    rows, total = _list_movies_seo(sort="popular", page=page)
+    return _render_listing("Mashhur kinolar", "Eng ko'p tomosha qilingan kinolar —",
+                           rows, total, page, 24, "/trend", "Mashhur kinolar")
+
+@app.route("/davlat/<path:country>")
+def seo_country(country):
+    country = (country or "").strip()[:60]
+    if not country:
+        return redirect("/")
+    try: page = max(1, int(request.args.get("page", 1)))
+    except Exception: page = 1
+    rows, total = _list_movies_seo(country=country, sort="new", page=page)
+    return _render_listing(f"{country} kinolari", f"«{country}» davlatida ishlab chiqarilgan kinolar —",
+                           rows, total, page, 24, f"/davlat/{quote(country)}", country)
+
+@app.route("/yil/<int:year>")
+def seo_year(year):
+    if year < 1900 or year > 2100:
+        return redirect("/")
+    try: page = max(1, int(request.args.get("page", 1)))
+    except Exception: page = 1
+    rows, total = _list_movies_seo(year=year, sort="new", page=page)
+    return _render_listing(f"{year}-yil kinolari", f"{year} yilda chiqqan kinolar va seriallar —",
+                           rows, total, page, 24, f"/yil/{year}", str(year))
 
 # ══════════════════ ADMIN ══════════════════
 def _check(d):
@@ -3084,6 +3143,10 @@ def admin_edit():
         duration = int(d.get("duration")) if d.get("duration") else None
     except Exception:
         duration = None
+    try:
+        tmdb_rating = float(d.get("tmdb_rating")) if d.get("tmdb_rating") else None
+    except Exception:
+        tmdb_rating = None
     # Treyler: YouTube havola yoki ID → faqat ID saqlaymiz (toza)
     trailer_id = _yt_id(d.get("trailer") or "")
     try:
@@ -3092,7 +3155,8 @@ def admin_edit():
             cur.execute("""
                 UPDATE movies SET title=%s, genre=%s, year=%s, language=%s,
                        quality=%s, content_type=%s, description=%s, poster_url=%s, trailer=%s,
-                       original_title=%s, director=%s, actors=%s, country=%s, duration=%s, age_rating=%s
+                       original_title=%s, director=%s, actors=%s, country=%s, duration=%s, age_rating=%s,
+                       tmdb_rating=%s
                 WHERE id=%s
             """, (title, (d.get("genre") or "").strip(), year,
                   (d.get("language") or "").strip(), (d.get("quality") or "").strip(),
@@ -3103,7 +3167,7 @@ def admin_edit():
                   (d.get("director") or "").strip(),
                   (d.get("actors") or "").strip(),
                   (d.get("country") or "").strip(),
-                  duration, (d.get("age_rating") or "").strip(),
+                  duration, (d.get("age_rating") or "").strip(), tmdb_rating,
                   int(mid)))
             conn.commit()
         return jsonify({"ok": True})
@@ -3122,7 +3186,7 @@ def admin_get():
             cur.execute("""
                 SELECT id, title, genre, year, language, quality,
                        COALESCE(content_type,'movie'), description, poster_url, trailer,
-                       original_title, director, actors, country, duration, age_rating
+                       original_title, director, actors, country, duration, age_rating, tmdb_rating
                 FROM movies WHERE id=%s
             """, (int(d.get("id")),))
             r = cur.fetchone()
@@ -3134,6 +3198,7 @@ def admin_get():
             "description": r[7] or "", "poster_url": r[8] or "", "trailer": r[9] or "",
             "original_title": r[10] or "", "director": r[11] or "", "actors": r[12] or "",
             "country": r[13] or "", "duration": r[14] or "", "age_rating": r[15] or "",
+            "tmdb_rating": float(r[16]) if r[16] else "",
         }})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
