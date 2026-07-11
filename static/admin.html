@@ -560,6 +560,28 @@ textarea { resize:vertical; min-height:80px; }
     <span class="lbl">🏷️ Asl nomi (ixtiyoriy, sarlavha ostida ko'rinadi)</span>
     <input id="eOriginalTitle" placeholder="Masalan: Tri metra nad urovnem neba" style="margin-bottom:10px;">
 
+    <!-- REJISSYOR VA AKTYORLAR -->
+    <span class="lbl">🎬 Rejissyor</span>
+    <input id="eDirector" placeholder="Masalan: Christopher Nolan" style="margin-bottom:10px;">
+    <span class="lbl">🎭 Aktyorlar</span>
+    <input id="eActors" placeholder="Vergul bilan ajrating: Ism Familiya, Ism Familiya" style="margin-bottom:10px;">
+
+    <!-- DAVLAT, DAVOMIYLIGI, YOSH CHEGARASI -->
+    <div style="display:flex;gap:10px;margin-bottom:10px;">
+      <div style="flex:1;">
+        <span class="lbl">🌍 Davlat</span>
+        <input id="eCountry" placeholder="Masalan: Ispaniya">
+      </div>
+      <div style="flex:1;">
+        <span class="lbl">⏱️ Davomiyligi (daq)</span>
+        <input id="eDuration" type="number" placeholder="Masalan: 108">
+      </div>
+      <div style="flex:1;">
+        <span class="lbl">🔞 Yosh chegarasi</span>
+        <input id="eAgeRating" placeholder="Masalan: 16+">
+      </div>
+    </div>
+
     <div style="display:flex;gap:8px;margin:-2px 0 10px;">
       <button onclick="tmdbSearch()" id="tmdbBtn" style="display:flex;align-items:center;gap:7px;padding:9px 14px;background:rgba(90,209,255,0.12);border:1px solid rgba(90,209,255,0.4);border-radius:10px;color:#5ad1ff;font-family:inherit;font-size:13px;cursor:pointer;">
         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
@@ -1457,6 +1479,11 @@ async function openEdit(id) {
   document.getElementById('eId').value      = m.id;
   document.getElementById('eTitle').value   = m.title;
   document.getElementById('eOriginalTitle').value = m.original_title || '';
+  document.getElementById('eDirector').value = m.director || '';
+  document.getElementById('eActors').value  = m.actors || '';
+  document.getElementById('eCountry').value = m.country || '';
+  document.getElementById('eDuration').value = m.duration || '';
+  document.getElementById('eAgeRating').value = m.age_rating || '';
   document.getElementById('eGenre').value   = m.genre;
   document.getElementById('eYear').value    = m.year;
   document.getElementById('eLang').value    = m.language;
@@ -1540,6 +1567,11 @@ async function saveEdit() {
       id:           document.getElementById('eId').value,
       title,
       original_title: document.getElementById('eOriginalTitle').value.trim(),
+      director:     document.getElementById('eDirector').value.trim(),
+      actors:       document.getElementById('eActors').value.trim(),
+      country:      document.getElementById('eCountry').value.trim(),
+      duration:     document.getElementById('eDuration').value,
+      age_rating:   document.getElementById('eAgeRating').value.trim(),
       genre:        document.getElementById('eGenre').value.trim(),
       year:         document.getElementById('eYear').value,
       language:     document.getElementById('eLang').value.trim(),
@@ -1632,6 +1664,19 @@ function tmdbPick(i) {
       if (d.trailer && !trEl.value.trim()) trEl.value = 'https://youtu.be/' + d.trailer;
       trEl.placeholder = 'https://youtu.be/... (TMDB\'dan avtomatik to\'ladi)';
     }).catch(function(){ trEl.placeholder = 'https://youtu.be/...'; });
+  }
+  // Rejissyor, aktyorlar, davlat, davomiylik, yosh chegarasi — TMDB'dan avtomatik olamiz (faqat bo'sh bo'lsa)
+  if (m.tmdb_id) {
+    fetch('/api/admin/tmdb-details', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ password: PASS, tmdb_id: m.tmdb_id, media_type: m.media_type })
+    }).then(function(r){return r.json();}).then(function(d){
+      fillIfEmpty('eDirector', d.director);
+      fillIfEmpty('eActors', d.actors);
+      fillIfEmpty('eCountry', d.country);
+      fillIfEmpty('eDuration', d.duration);
+      fillIfEmpty('eAgeRating', d.age_rating);
+    }).catch(function(){});
   }
 }
 function esc(s) { return String(s==null?'':s).replace(/[<>&"]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c])); }
