@@ -1004,6 +1004,7 @@ async function openMovie(id){
           ${p?`<img class="mm-poster" src="${p}" onerror="this.outerHTML='<div class=\\'mm-poster ph\\'>🎬</div>'">`:`<div class="mm-poster ph">🎬</div>`}
           <div class="mm-info">
             <h2>${esc(m.title)}</h2>
+            ${m.original_title?`<div class="mm-original-title">${esc(m.original_title)}</div>`:''}
             <div class="mm-tags">
               <span class="mm-tag r">${typeLabel[m.type]||'Kino'}</span>
               ${m.year?`<span class="mm-tag">${m.year}</span>`:''}

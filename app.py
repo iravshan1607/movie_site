@@ -248,6 +248,8 @@ def init_db():
             cur.execute("ALTER TABLE movies ADD COLUMN IF NOT EXISTS poster_url TEXT")
             cur.execute("ALTER TABLE movies ADD COLUMN IF NOT EXISTS trailer TEXT")
             cur.execute("ALTER TABLE movies ADD COLUMN IF NOT EXISTS is_premium BOOLEAN DEFAULT FALSE")
+            # Asl nomi / boshqa tildagi nomi — sarlavha ostida ko'rsatiladi (masalan: "Tri metra nad urovnem neba")
+            cur.execute("ALTER TABLE movies ADD COLUMN IF NOT EXISTS original_title TEXT")
             # Fon effektlari sozlamalari uchun kalit-qiymat jadvali
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS site_settings (
@@ -534,7 +536,7 @@ def api_movie(mid):
             cur.execute("""
                 SELECT id, title, genre, year, language, quality, description,
                        COALESCE(content_type,'movie'), poster_id,
-                       COALESCE(views,0), rating, poster_url, trailer
+                       COALESCE(views,0), rating, poster_url, trailer, original_title
                 FROM movies WHERE id=%s
             """, (mid,))
             r = cur.fetchone()
@@ -549,6 +551,7 @@ def api_movie(mid):
             "type": r[7], "has_poster": bool(r[8]), "poster_url": r[11] or "",
             "views": r[9], "rating": float(r[10]) if r[10] else None,
             "trailer": (r[12] or "") if len(r) > 12 else "",
+            "original_title": (r[13] or "") if len(r) > 13 else "",
         }})
     except Exception as e:
         return jsonify({"found": False, "error": str(e)}), 500
@@ -2837,11 +2840,13 @@ def admin_tmdb():
             if mt not in ("movie", "tv"):
                 continue
             title = it.get("title") or it.get("name") or ""
+            orig_title = it.get("original_title") or it.get("original_name") or ""
             date = it.get("release_date") or it.get("first_air_date") or ""
             poster = it.get("poster_path")
             genres = [_TMDB_GENRES.get(g, "") for g in it.get("genre_ids", [])]
             out.append({
                 "title": title,
+                "original_title": orig_title if orig_title != title else "",
                 "year": date[:4] if date else "",
                 "type": "series" if mt == "tv" else "movie",
                 "poster_url": f"/api/timg/w500{poster}" if poster else "",
@@ -2983,13 +2988,15 @@ def admin_edit():
             cur = conn.cursor()
             cur.execute("""
                 UPDATE movies SET title=%s, genre=%s, year=%s, language=%s,
-                       quality=%s, content_type=%s, description=%s, poster_url=%s, trailer=%s
+                       quality=%s, content_type=%s, description=%s, poster_url=%s, trailer=%s,
+                       original_title=%s
                 WHERE id=%s
             """, (title, (d.get("genre") or "").strip(), year,
                   (d.get("language") or "").strip(), (d.get("quality") or "").strip(),
                   (d.get("content_type") or "movie").strip(),
                   (d.get("description") or "").strip(),
-                  (d.get("poster_url") or "").strip(), trailer_id, int(mid)))
+                  (d.get("poster_url") or "").strip(), trailer_id,
+                  (d.get("original_title") or "").strip(), int(mid)))
             conn.commit()
         return jsonify({"ok": True})
     except Exception as e:
@@ -3006,7 +3013,8 @@ def admin_get():
             cur = conn.cursor()
             cur.execute("""
                 SELECT id, title, genre, year, language, quality,
-                       COALESCE(content_type,'movie'), description, poster_url, trailer
+                       COALESCE(content_type,'movie'), description, poster_url, trailer,
+                       original_title
                 FROM movies WHERE id=%s
             """, (int(d.get("id")),))
             r = cur.fetchone()
@@ -3016,6 +3024,7 @@ def admin_get():
             "id": r[0], "title": r[1], "genre": r[2] or "", "year": r[3] or "",
             "language": r[4] or "", "quality": r[5] or "", "type": r[6],
             "description": r[7] or "", "poster_url": r[8] or "", "trailer": r[9] or "",
+            "original_title": r[10] or "",
         }})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
