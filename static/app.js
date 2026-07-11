@@ -1014,6 +1014,7 @@ async function openMovie(id){
               ${m.duration?`<span class="mm-tag">${m.duration} daq</span>`:''}
               ${m.age_rating?`<span class="mm-tag">${esc(m.age_rating)}</span>`:''}
               ${m.rating?`<span class="mm-tag">★ ${m.rating}</span>`:''}
+              ${m.tmdb_rating?`<span class="mm-tag tmdb">TMDB ★ ${m.tmdb_rating}</span>`:''}
             </div>
           </div>
         </div>
@@ -1026,8 +1027,8 @@ async function openMovie(id){
           <div class="mm-play">▶</div>
           <span class="mm-trailer-lbl">🎬 Treyler</span>
         </div>`:''}
-        ${m.director?`<div class="mm-crew"><b>Rejissyor:</b> ${esc(m.director)}</div>`:''}
-        ${m.actors?`<div class="mm-crew"><b>Aktyorlar:</b> ${esc(m.actors)}</div>`:''}
+        ${m.director?`<div class="mm-crew"><b>Rejissyor:</b> ${personChips(m.director)}</div>`:''}
+        ${m.actors?`<div class="mm-crew"><b>Aktyorlar:</b> ${personChips(m.actors)}</div>`:''}
         ${m.description?`<p class="mm-desc">${esc(m.description)}</p>`:'<p class="mm-desc" style="opacity:0.5">Tavsif yo\'q.</p>'}
         <a href="${botLink}" target="_blank" class="mm-watch">
           ${isSeries?'📺 To\'liq qismlarni botda ko\'rish':'🎬 To\'liqini botda ko\'rish / yuklab olish'}
@@ -1065,6 +1066,20 @@ function similarHtml(m){
   return `<div class="similar-row"><h4>🎯 O'xshash kinolar</h4><div class="similar-cards">${cards}</div></div>`;
 }
 function closeMovie(){ document.getElementById('movieModal').classList.remove('open'); document.body.style.overflow=''; }
+// Rejissyor/aktyor ismini bosilganda — shu ism bo'yicha qidiruvga o'tadi
+function personChips(str){
+  if (!str) return '';
+  return str.split(',').map(function(n){
+    n = n.trim(); if (!n) return '';
+    return '<span class="mm-person" onclick="personSearch(\''+n.replace(/'/g,"\\'")+'\')">'+esc(n)+'</span>';
+  }).join('');
+}
+function personSearch(name){
+  closeMovie();
+  openSearch();
+  document.getElementById('searchInput').value = name;
+  doSearch();
+}
 document.addEventListener('keydown', e=>{ if(e.key==='Escape'){ closeShareSheet(); closeMovie(); closeSearch(); closeMenu(); } });
 
 // ── Ulashish — "Do'stga yuborish" (Telegram / nusxa) ─────────────────────────
