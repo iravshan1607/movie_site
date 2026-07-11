@@ -803,6 +803,10 @@
   .mm-original-title { font-style:italic; color:var(--text-muted); font-size:15px; margin:-2px 0 10px; }
   .mm-crew { color:var(--text-muted); font-size:13px; margin:0 0 6px; line-height:1.5; }
   .mm-crew b { color:#fff; font-weight:600; }
+  .mm-person { cursor:pointer; text-decoration:underline; text-decoration-style:dotted; text-underline-offset:2px; }
+  .mm-person:hover { color:#5ad1ff; }
+  .mm-person:not(:last-child)::after { content:","; text-decoration:none; margin-right:3px; color:var(--text-muted); }
+  .mm-tag.tmdb { background:rgba(90,209,255,0.15); color:#5ad1ff; }
   .mm-tags { display:flex; gap:8px; flex-wrap:wrap; }
   .mm-tag { font-size:11px; padding:3px 9px; background:rgba(255,255,255,0.12); border-radius:4px; color:#fff; }
   .mm-tag.r { background:var(--red); }
