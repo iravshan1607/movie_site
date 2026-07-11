@@ -250,6 +250,12 @@ def init_db():
             cur.execute("ALTER TABLE movies ADD COLUMN IF NOT EXISTS is_premium BOOLEAN DEFAULT FALSE")
             # Asl nomi / boshqa tildagi nomi — sarlavha ostida ko'rsatiladi (masalan: "Tri metra nad urovnem neba")
             cur.execute("ALTER TABLE movies ADD COLUMN IF NOT EXISTS original_title TEXT")
+            # Qo'shimcha ma'lumotlar — rejissyor, aktyorlar, davlat, davomiylik, yosh chegarasi
+            cur.execute("ALTER TABLE movies ADD COLUMN IF NOT EXISTS director TEXT")
+            cur.execute("ALTER TABLE movies ADD COLUMN IF NOT EXISTS actors TEXT")
+            cur.execute("ALTER TABLE movies ADD COLUMN IF NOT EXISTS country TEXT")
+            cur.execute("ALTER TABLE movies ADD COLUMN IF NOT EXISTS duration INTEGER")
+            cur.execute("ALTER TABLE movies ADD COLUMN IF NOT EXISTS age_rating TEXT")
             # Fon effektlari sozlamalari uchun kalit-qiymat jadvali
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS site_settings (
@@ -536,7 +542,8 @@ def api_movie(mid):
             cur.execute("""
                 SELECT id, title, genre, year, language, quality, description,
                        COALESCE(content_type,'movie'), poster_id,
-                       COALESCE(views,0), rating, poster_url, trailer, original_title
+                       COALESCE(views,0), rating, poster_url, trailer, original_title,
+                       director, actors, country, duration, age_rating
                 FROM movies WHERE id=%s
             """, (mid,))
             r = cur.fetchone()
@@ -552,6 +559,11 @@ def api_movie(mid):
             "views": r[9], "rating": float(r[10]) if r[10] else None,
             "trailer": (r[12] or "") if len(r) > 12 else "",
             "original_title": (r[13] or "") if len(r) > 13 else "",
+            "director": (r[14] or "") if len(r) > 14 else "",
+            "actors": (r[15] or "") if len(r) > 15 else "",
+            "country": (r[16] or "") if len(r) > 16 else "",
+            "duration": r[17] if len(r) > 17 else None,
+            "age_rating": (r[18] or "") if len(r) > 18 else "",
         }})
     except Exception as e:
         return jsonify({"found": False, "error": str(e)}), 500
@@ -2247,7 +2259,8 @@ def movie_page(mid):
             cur.execute("""
                 SELECT id, title, genre, year, language, quality, description,
                        COALESCE(content_type,'movie'), poster_id, poster_url, trailer,
-                       COALESCE(is_premium, FALSE), original_title
+                       COALESCE(is_premium, FALSE), original_title,
+                       director, actors, country, duration, age_rating
                 FROM movies WHERE id=%s
             """, (mid,))
             r = cur.fetchone()
@@ -2277,6 +2290,11 @@ def movie_page(mid):
     type_uz = {"movie":"Kino","series":"Serial","anime":"Anime","cartoon":"Multfilm"}.get(ctype,"Kino")
     is_prem = bool(r[11]) if len(r) > 11 else False
     orig_title = (r[12] or "").strip() if len(r) > 12 else ""
+    director = (r[13] or "").strip() if len(r) > 13 else ""
+    actors = (r[14] or "").strip() if len(r) > 14 else ""
+    country = (r[15] or "").strip() if len(r) > 15 else ""
+    duration = r[16] if len(r) > 16 else None
+    age_rating = (r[17] or "").strip() if len(r) > 17 else ""
     prem_badge = ('<span style="display:inline-block;background:linear-gradient(90deg,#f7d046,#e0950b);'
                   'color:#231803;font-size:13px;font-weight:700;padding:5px 14px;border-radius:20px;'
                   'margin-top:12px;">💎 Premium</span>') if is_prem else ''
@@ -2351,6 +2369,16 @@ def movie_page(mid):
     if abs_poster: ld["image"] = abs_poster
     if genre: ld["genre"] = [g.strip() for g in genre.split(",") if g.strip()]
     if orig_title: ld["alternateName"] = orig_title
+    if director:
+        ld["director"] = [{"@type": "Person", "name": nm.strip()} for nm in director.split(",") if nm.strip()]
+    if actors:
+        ld["actor"] = [{"@type": "Person", "name": nm.strip()} for nm in actors.split(",") if nm.strip()]
+    if country:
+        ld["countryOfOrigin"] = [{"@type": "Country", "name": c.strip()} for c in country.split(",") if c.strip()]
+    if duration:
+        try: ld["duration"] = f"PT{int(duration)}M"
+        except Exception: pass
+    if age_rating: ld["contentRating"] = age_rating
     if year:
         try: ld["dateCreated"] = str(int(year))
         except Exception: pass
@@ -2454,7 +2482,7 @@ def movie_page(mid):
 <meta name="google-site-verification" content="NWyfq_vRf53C8JMiGFZ8xL666JbpZg4NJAfKzabPoik" />
 <title>{e(page_title)}</title>
 <meta name="description" content="{e(desc)}">
-<meta name="keywords" content="{e(title)}, {e(orig_title) + ', ' if orig_title else ''}{e(genre)}, o'zbek tilida, uzbek tilida, {year}, onlayn kino, tarjima">
+<meta name="keywords" content="{e(title)}, {e(orig_title) + ', ' if orig_title else ''}{e(genre)}, {e(actors) + ', ' if actors else ''}{e(director) + ', ' if director else ''}o'zbek tilida, uzbek tilida, {year}, onlayn kino, tarjima">
 <link rel="canonical" href="{e(BASE_URL)}/kino/{mid}">
 <meta property="og:type" content="video.movie">
 <meta property="og:title" content="{e(title)}">
@@ -2484,7 +2512,9 @@ def movie_page(mid):
       <div style="flex:1; min-width:300px;">
         <h1 style="font-family:Bebas Neue,sans-serif; font-size:48px; letter-spacing:1px; line-height:1.02; margin:0;">{e(title)}</h1>
         {f'<p style="font-style:italic; color:#b8b4d8; margin:6px 0 0; font-size:16px;">{e(orig_title)}</p>' if orig_title else ''}
-        <p style="color:#cbb8f0; margin:12px 0 0; font-size:16px;">{type_uz}{f' · {year}' if year else ''}{f' · {e(genre)}' if genre else ''}</p>
+        <p style="color:#cbb8f0; margin:12px 0 0; font-size:16px;">{type_uz}{f' · {year}' if year else ''}{f' · {e(genre)}' if genre else ''}{f' · {e(country)}' if country else ''}{f' · {duration} daq' if duration else ''}{f' · {e(age_rating)}' if age_rating else ''}</p>
+        {f'<p style="color:#a99ee0; margin:10px 0 0; font-size:14.5px;"><b>Rejissyor:</b> {e(director)}</p>' if director else ''}
+        {f'<p style="color:#a99ee0; margin:4px 0 0; font-size:14.5px;"><b>Aktyorlar:</b> {e(actors)}</p>' if actors else ''}
         {prem_badge}
         {rating_html}
         <p style="line-height:1.75; color:#dcdcea; margin:18px 0 20px; font-size:15.5px; max-width:680px;">{e(desc)}</p>
@@ -2916,6 +2946,72 @@ def admin_tmdb_trailer():
         log.warning("tmdb-trailer: %s", e)
         return jsonify({"trailer": ""})
 
+# ── TMDB to'liq ma'lumot — rejissyor, aktyorlar, davlat, davomiylik, yosh chegarasi ──
+@app.route("/api/admin/tmdb-details", methods=["POST"])
+def admin_tmdb_details():
+    d = request.get_json() or {}
+    if not _check(d):
+        return jsonify({"error": "ruxsat yo'q"}), 403
+    empty = {"director": "", "actors": "", "country": "", "duration": "", "age_rating": ""}
+    if not (TMDB_TOKEN or TMDB_KEY):
+        return jsonify(empty)
+    tmdb_id = d.get("tmdb_id")
+    media = "tv" if d.get("media_type") == "tv" else "movie"
+    if not tmdb_id:
+        return jsonify(empty)
+    try:
+        append = "credits,release_dates" if media == "movie" else "credits,content_ratings"
+        data = _tmdb_get(f"/{media}/{int(tmdb_id)}", {"language": "ru-RU", "append_to_response": append})
+
+        # Rejissyor / director yoki serial ijodkori
+        crew = (data.get("credits") or {}).get("crew", [])
+        if media == "movie":
+            director = ", ".join([c.get("name", "") for c in crew if c.get("job") == "Director"][:2])
+        else:
+            director = ", ".join([c.get("name", "") for c in data.get("created_by", [])][:2])
+
+        # Bosh aktyorlar (birinchi 5 tasi)
+        cast = (data.get("credits") or {}).get("cast", [])
+        actors = ", ".join([c.get("name", "") for c in cast[:5] if c.get("name")])
+
+        # Davlat
+        countries = data.get("production_countries") or []
+        if not countries and data.get("origin_country"):
+            countries = [{"name": c} for c in data.get("origin_country", [])]
+        country = ", ".join([c.get("name", "") for c in countries[:2] if c.get("name")])
+
+        # Davomiyligi (daqiqa)
+        if media == "movie":
+            duration = data.get("runtime") or ""
+        else:
+            rt = data.get("episode_run_time") or []
+            duration = rt[0] if rt else ""
+
+        # Yosh chegarasi
+        age_rating = ""
+        if media == "movie":
+            for c in (data.get("release_dates") or {}).get("results", []):
+                if c.get("iso_3166_1") in ("RU", "US"):
+                    rds = c.get("release_dates", [])
+                    if rds and rds[0].get("certification"):
+                        age_rating = rds[0]["certification"]
+                        if c.get("iso_3166_1") == "US":
+                            break
+        else:
+            for c in (data.get("content_ratings") or {}).get("results", []):
+                if c.get("iso_3166_1") in ("RU", "US") and c.get("rating"):
+                    age_rating = c["rating"]
+                    if c.get("iso_3166_1") == "US":
+                        break
+
+        return jsonify({
+            "director": director, "actors": actors, "country": country,
+            "duration": duration, "age_rating": age_rating,
+        })
+    except Exception as e:
+        log.warning("tmdb-details: %s", e)
+        return jsonify(empty)
+
 # ── TMDB rasm proksi (image.tmdb.org bloklangan bo'lsa, server orqali uzatadi) ──
 @app.route("/api/timg/<size>/<path:fname>")
 def tmdb_img(size, fname):
@@ -2984,6 +3080,10 @@ def admin_edit():
         year = int(d.get("year")) if d.get("year") else None
     except Exception:
         year = None
+    try:
+        duration = int(d.get("duration")) if d.get("duration") else None
+    except Exception:
+        duration = None
     # Treyler: YouTube havola yoki ID → faqat ID saqlaymiz (toza)
     trailer_id = _yt_id(d.get("trailer") or "")
     try:
@@ -2992,14 +3092,19 @@ def admin_edit():
             cur.execute("""
                 UPDATE movies SET title=%s, genre=%s, year=%s, language=%s,
                        quality=%s, content_type=%s, description=%s, poster_url=%s, trailer=%s,
-                       original_title=%s
+                       original_title=%s, director=%s, actors=%s, country=%s, duration=%s, age_rating=%s
                 WHERE id=%s
             """, (title, (d.get("genre") or "").strip(), year,
                   (d.get("language") or "").strip(), (d.get("quality") or "").strip(),
                   (d.get("content_type") or "movie").strip(),
                   (d.get("description") or "").strip(),
                   (d.get("poster_url") or "").strip(), trailer_id,
-                  (d.get("original_title") or "").strip(), int(mid)))
+                  (d.get("original_title") or "").strip(),
+                  (d.get("director") or "").strip(),
+                  (d.get("actors") or "").strip(),
+                  (d.get("country") or "").strip(),
+                  duration, (d.get("age_rating") or "").strip(),
+                  int(mid)))
             conn.commit()
         return jsonify({"ok": True})
     except Exception as e:
@@ -3017,7 +3122,7 @@ def admin_get():
             cur.execute("""
                 SELECT id, title, genre, year, language, quality,
                        COALESCE(content_type,'movie'), description, poster_url, trailer,
-                       original_title
+                       original_title, director, actors, country, duration, age_rating
                 FROM movies WHERE id=%s
             """, (int(d.get("id")),))
             r = cur.fetchone()
@@ -3027,7 +3132,8 @@ def admin_get():
             "id": r[0], "title": r[1], "genre": r[2] or "", "year": r[3] or "",
             "language": r[4] or "", "quality": r[5] or "", "type": r[6],
             "description": r[7] or "", "poster_url": r[8] or "", "trailer": r[9] or "",
-            "original_title": r[10] or "",
+            "original_title": r[10] or "", "director": r[11] or "", "actors": r[12] or "",
+            "country": r[13] or "", "duration": r[14] or "", "age_rating": r[15] or "",
         }})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
