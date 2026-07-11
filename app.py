@@ -2247,7 +2247,7 @@ def movie_page(mid):
             cur.execute("""
                 SELECT id, title, genre, year, language, quality, description,
                        COALESCE(content_type,'movie'), poster_id, poster_url, trailer,
-                       COALESCE(is_premium, FALSE)
+                       COALESCE(is_premium, FALSE), original_title
                 FROM movies WHERE id=%s
             """, (mid,))
             r = cur.fetchone()
@@ -2276,6 +2276,7 @@ def movie_page(mid):
     quality = r[5] or ""
     type_uz = {"movie":"Kino","series":"Serial","anime":"Anime","cartoon":"Multfilm"}.get(ctype,"Kino")
     is_prem = bool(r[11]) if len(r) > 11 else False
+    orig_title = (r[12] or "").strip() if len(r) > 12 else ""
     prem_badge = ('<span style="display:inline-block;background:linear-gradient(90deg,#f7d046,#e0950b);'
                   'color:#231803;font-size:13px;font-weight:700;padding:5px 14px;border-radius:20px;'
                   'margin-top:12px;">💎 Premium</span>') if is_prem else ''
@@ -2349,6 +2350,7 @@ def movie_page(mid):
     }
     if abs_poster: ld["image"] = abs_poster
     if genre: ld["genre"] = [g.strip() for g in genre.split(",") if g.strip()]
+    if orig_title: ld["alternateName"] = orig_title
     if year:
         try: ld["dateCreated"] = str(int(year))
         except Exception: pass
@@ -2452,7 +2454,7 @@ def movie_page(mid):
 <meta name="google-site-verification" content="NWyfq_vRf53C8JMiGFZ8xL666JbpZg4NJAfKzabPoik" />
 <title>{e(page_title)}</title>
 <meta name="description" content="{e(desc)}">
-<meta name="keywords" content="{e(title)}, {e(genre)}, o'zbek tilida, uzbek tilida, {year}, onlayn kino, tarjima">
+<meta name="keywords" content="{e(title)}, {e(orig_title) + ', ' if orig_title else ''}{e(genre)}, o'zbek tilida, uzbek tilida, {year}, onlayn kino, tarjima">
 <link rel="canonical" href="{e(BASE_URL)}/kino/{mid}">
 <meta property="og:type" content="video.movie">
 <meta property="og:title" content="{e(title)}">
@@ -2481,6 +2483,7 @@ def movie_page(mid):
       {f'<img src="{e(poster)}" alt="{e(title)}" style="width:200px; aspect-ratio:2/3; object-fit:cover; border-radius:12px; display:block; box-shadow:0 16px 50px rgba(0,0,0,0.7); flex:0 0 auto;">' if poster else ''}
       <div style="flex:1; min-width:300px;">
         <h1 style="font-family:Bebas Neue,sans-serif; font-size:48px; letter-spacing:1px; line-height:1.02; margin:0;">{e(title)}</h1>
+        {f'<p style="font-style:italic; color:#b8b4d8; margin:6px 0 0; font-size:16px;">{e(orig_title)}</p>' if orig_title else ''}
         <p style="color:#cbb8f0; margin:12px 0 0; font-size:16px;">{type_uz}{f' · {year}' if year else ''}{f' · {e(genre)}' if genre else ''}</p>
         {prem_badge}
         {rating_html}
