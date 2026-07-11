@@ -1010,6 +1010,9 @@ async function openMovie(id){
               ${m.year?`<span class="mm-tag">${m.year}</span>`:''}
               ${m.quality?`<span class="mm-tag">${esc(m.quality)}</span>`:''}
               ${m.language?`<span class="mm-tag">${esc(m.language)}</span>`:''}
+              ${m.country?`<span class="mm-tag">${esc(m.country)}</span>`:''}
+              ${m.duration?`<span class="mm-tag">${m.duration} daq</span>`:''}
+              ${m.age_rating?`<span class="mm-tag">${esc(m.age_rating)}</span>`:''}
               ${m.rating?`<span class="mm-tag">★ ${m.rating}</span>`:''}
             </div>
           </div>
@@ -1023,6 +1026,8 @@ async function openMovie(id){
           <div class="mm-play">▶</div>
           <span class="mm-trailer-lbl">🎬 Treyler</span>
         </div>`:''}
+        ${m.director?`<div class="mm-crew"><b>Rejissyor:</b> ${esc(m.director)}</div>`:''}
+        ${m.actors?`<div class="mm-crew"><b>Aktyorlar:</b> ${esc(m.actors)}</div>`:''}
         ${m.description?`<p class="mm-desc">${esc(m.description)}</p>`:'<p class="mm-desc" style="opacity:0.5">Tavsif yo\'q.</p>'}
         <a href="${botLink}" target="_blank" class="mm-watch">
           ${isSeries?'📺 To\'liq qismlarni botda ko\'rish':'🎬 To\'liqini botda ko\'rish / yuklab olish'}
