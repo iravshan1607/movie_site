@@ -1169,22 +1169,21 @@
   .tg-notice button:hover { background: rgba(255,255,255,0.1); color: #fff; }
   @media (max-width: 600px) { .tg-notice { font-size: 13px; padding: 11px 13px; } }
 
-/* Karta reyting belgisi */
-.card-rate {
+/* Karta belgilari (reyting, premium, til) — bir-birining ustiga tushmasin deb ustunga tizilgan */
+.card-badges {
   position: absolute; top: 8px; left: 8px; z-index: 3;
-  background: rgba(0,0,0,0.72); color: #ffc107;
+  display: flex; flex-direction: column; align-items: flex-start; gap: 6px;
+}
+.card-rate, .card-langs, .card-prem {
   font-size: 12px; font-weight: 700;
   padding: 3px 8px; border-radius: 20px;
-  backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px); white-space: nowrap;
 }
-
-/* Bir nechta til versiyasi mavjudligini bildiruvchi belgi */
-.card-langs {
-  position: absolute; bottom: 8px; left: 8px; z-index: 3;
-  background: rgba(0,0,0,0.72); color: #8ec9ff;
-  font-size: 11px; font-weight: 700;
-  padding: 3px 8px; border-radius: 20px;
-  backdrop-filter: blur(2px);
+.card-rate { background: rgba(0,0,0,0.72); color: #ffc107; }
+.card-langs { background: rgba(0,0,0,0.72); color: #8ec9ff; font-size: 11px; }
+.card-prem {
+  background: linear-gradient(90deg,#f7d046,#e0950b); color: #231803;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
 }
 
 /* "Yuqoriga" tugmasi */
