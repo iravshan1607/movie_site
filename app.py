@@ -603,26 +603,68 @@ def api_movies():
             "title": "title ASC",
         }.get(sort, "created_at DESC NULLS LAST, id DESC")
         wsql = (" WHERE " + " AND ".join(where)) if where else ""
+        # "ids" bilan aniq id'lar so'ralganda (masalan sevimlilar) guruhlashsiz, aynan shu
+        # yozuvlarni qaytaramiz — foydalanuvchi aynan shu tilni saqlagan bo'lishi mumkin.
+        skip_group = bool(ids)
         with get_conn() as conn:
             cur = conn.cursor()
-            cur.execute(f"SELECT COUNT(*) FROM movies{wsql}", params)
-            total = cur.fetchone()[0]
-            cur.execute(f"""
-                SELECT id, title, genre, year, language, quality,
-                       COALESCE(content_type,'movie'), poster_id,
-                       COALESCE(views,0), rating, poster_url,
-                       COALESCE(is_premium, FALSE)
-                FROM movies{wsql}
-                ORDER BY {order}
-                LIMIT %s OFFSET %s
-            """, params + [per, offset])
-            rows = cur.fetchall()
+            if skip_group:
+                cur.execute(f"SELECT COUNT(*) FROM movies{wsql}", params)
+                total = cur.fetchone()[0]
+                cur.execute(f"""
+                    SELECT id, title, genre, year, language, quality,
+                           COALESCE(content_type,'movie'), poster_id,
+                           COALESCE(views,0), rating, poster_url,
+                           COALESCE(is_premium, FALSE), lang_group
+                    FROM movies{wsql}
+                    ORDER BY {order}
+                    LIMIT %s OFFSET %s
+                """, params + [per, offset])
+                rows = cur.fetchall()
+            else:
+                # Bir xil lang_group'dagi til versiyalari — bitta kartochkaga birlashtiriladi.
+                # Guruh ichida O'zbek tilidagi versiya ustuvor (kartochka shu asosida ko'rsatiladi).
+                cur.execute(f"SELECT COUNT(DISTINCT lang_group) FROM movies{wsql}", params)
+                total = cur.fetchone()[0]
+                cur.execute(f"""
+                    SELECT id, title, genre, year, language, quality,
+                           content_type, poster_id, views, rating, poster_url,
+                           is_premium, lang_group
+                    FROM (
+                        SELECT DISTINCT ON (lang_group)
+                            id, title, genre, year, language, quality,
+                            COALESCE(content_type,'movie') AS content_type, poster_id,
+                            COALESCE(views,0) AS views, rating, poster_url,
+                            COALESCE(is_premium, FALSE) AS is_premium,
+                            lang_group, created_at
+                        FROM movies{wsql}
+                        ORDER BY lang_group,
+                            CASE WHEN language ILIKE '%zbek%' THEN 0 ELSE 1 END,
+                            id ASC
+                    ) picked
+                    ORDER BY {order}
+                    LIMIT %s OFFSET %s
+                """, params + [per, offset])
+                rows = cur.fetchall()
+
+            # Ko'rinayotgan kartochkalarning har biri uchun guruhdagi barcha tillarni yig'amiz
+            lang_groups = list({r[12] for r in rows if r[12]})
+            langs_map = {}
+            if lang_groups:
+                ph = ",".join(["%s"] * len(lang_groups))
+                cur.execute(f"SELECT lang_group, language FROM movies WHERE lang_group IN ({ph})", lang_groups)
+                for gr, lg in cur.fetchall():
+                    lg = (lg or "").strip()
+                    lst = langs_map.setdefault(gr, [])
+                    if lg and lg not in lst:
+                        lst.append(lg)
         movies = [{
             "id": r[0], "title": r[1], "genre": r[2] or "", "year": r[3],
             "language": r[4] or "", "quality": r[5] or "", "type": r[6],
             "has_poster": bool(r[7]), "poster_url": r[10] or "",
             "views": r[8], "rating": float(r[9]) if r[9] else None,
             "is_premium": bool(r[11]),
+            "languages": langs_map.get(r[12], [r[4]] if r[4] else []),
         } for r in rows]
         return jsonify({"movies": movies, "total": total, "page": page,
                         "pages": (total + per - 1) // per})
