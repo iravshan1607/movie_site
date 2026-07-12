@@ -810,6 +810,12 @@
   .mm-tags { display:flex; gap:8px; flex-wrap:wrap; }
   .mm-tag { font-size:11px; padding:3px 9px; background:rgba(255,255,255,0.12); border-radius:4px; color:#fff; }
   .mm-tag.r { background:var(--red); }
+  .mm-lang-switch { display:flex; gap:8px; flex-wrap:wrap; margin-top:12px; }
+  .mm-lang-btn { font-size:12px; padding:6px 14px; border-radius:20px; border:1px solid rgba(255,255,255,0.25);
+    background:rgba(255,255,255,0.08); color:#fff; cursor:pointer; transition:background .15s,border-color .15s; }
+  .mm-lang-btn:hover:not(:disabled) { background:rgba(255,255,255,0.18); }
+  .mm-lang-btn.active { background:var(--red); border-color:var(--red); cursor:default; font-weight:600; }
+  .mm-lang-btn:disabled { cursor:default; }
   .mm-body { padding:24px; }
   .mm-trailer { position:relative; width:100%; aspect-ratio:16/9; border-radius:10px; overflow:hidden; cursor:pointer; margin-bottom:18px; background:#000; }
   .mm-trailer img { width:100%; height:100%; object-fit:cover; display:block; opacity:0.85; transition:opacity 0.2s; }
