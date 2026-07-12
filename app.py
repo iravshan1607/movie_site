@@ -3029,6 +3029,52 @@ def _tmdb_load_genres():
     except Exception as e:
         log.warning("tmdb genres: %s", e)
 
+# ── Statistika kartasiga bosilganda — tegishli kontent ro'yxati ──
+_STAT_DETAIL_QUERIES = {
+    "no_poster": ("Postersiz kontent", """SELECT id, title, COALESCE(views,0) FROM movies
+        WHERE (poster_url IS NULL OR poster_url='') AND (poster_id IS NULL OR poster_id='')
+        ORDER BY id DESC LIMIT 200"""),
+    "no_views": ("Ko'rishsiz kontent", """SELECT id, title, COALESCE(views,0) FROM movies
+        WHERE COALESCE(views,0)=0 ORDER BY id DESC LIMIT 200"""),
+    "no_rating": ("Reytingsiz kontent", """SELECT id, title, COALESCE(views,0) FROM movies
+        WHERE rating IS NULL ORDER BY id DESC LIMIT 200"""),
+    "premium_total": ("Premium kontent", """SELECT id, title, COALESCE(views,0) FROM movies
+        WHERE is_premium=TRUE ORDER BY id DESC LIMIT 200"""),
+    "added_today": ("Bugun qo'shilgan", """SELECT id, title, COALESCE(views,0) FROM movies
+        WHERE created_at >= CURRENT_DATE ORDER BY created_at DESC LIMIT 200"""),
+    "added_7d": ("So'nggi 7 kunda qo'shilgan", """SELECT id, title, COALESCE(views,0) FROM movies
+        WHERE created_at >= NOW() - INTERVAL '7 days' ORDER BY created_at DESC LIMIT 200"""),
+    "added_30d": ("So'nggi 30 kunda qo'shilgan", """SELECT id, title, COALESCE(views,0) FROM movies
+        WHERE created_at >= NOW() - INTERVAL '30 days' ORDER BY created_at DESC LIMIT 200"""),
+    "total": ("Barcha kontent", """SELECT id, title, COALESCE(views,0) FROM movies
+        ORDER BY id DESC LIMIT 200"""),
+    "type_movie": ("Kinolar", """SELECT id, title, COALESCE(views,0) FROM movies
+        WHERE COALESCE(content_type,'movie')='movie' ORDER BY id DESC LIMIT 200"""),
+    "type_series": ("Seriallar", """SELECT id, title, COALESCE(views,0) FROM movies
+        WHERE content_type='series' ORDER BY id DESC LIMIT 200"""),
+    "type_anime": ("Animelar", """SELECT id, title, COALESCE(views,0) FROM movies
+        WHERE content_type='anime' ORDER BY id DESC LIMIT 200"""),
+}
+
+@app.route("/api/admin/stats/detail", methods=["POST"])
+def admin_stats_detail():
+    d = request.get_json() or {}
+    if not _check(d):
+        return jsonify({"error": "ruxsat yo'q"}), 403
+    key = (d.get("key") or "").strip()
+    info = _STAT_DETAIL_QUERIES.get(key)
+    if not info:
+        return jsonify({"error": "noma'lum kalit"}), 400
+    label, sql = info
+    try:
+        with get_conn() as conn:
+            cur = conn.cursor()
+            rows = _safe_query(cur, sql)
+        items = [{"id": r[0], "title": r[1], "views": r[2]} for r in rows]
+        return jsonify({"label": label, "items": items, "count": len(items)})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @app.route("/api/admin/tmdb", methods=["POST"])
 def admin_tmdb():
     d = request.get_json() or {}
