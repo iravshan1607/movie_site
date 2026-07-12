@@ -39,7 +39,7 @@ const typeLabel = { movie: 'Kino', series: 'Serial', anime: 'Anime', cartoon: 'M
 // Fake poster ranglari (poster bo'lmasa)
 const palettes = ['c1','c2','c3','c4','c5','c6','c7','c8','c9','c10'];
 
-function esc(s){ return String(s==null?'':s).replace(/[<>&"]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c])); }
+function esc(s){ return String(s==null?'':s).replace(/[<>&"']/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[c])); }
 function pal(id){ return palettes[id % palettes.length]; }
 
 // Qisqa suzuvchi xabar (toast) — masalan spam himoyasi ogohlantirishi

@@ -177,6 +177,10 @@ def _login_register_fail(ip):
             cur = conn.cursor()
             try:
                 cur.execute("INSERT INTO admin_login_fails (ip) VALUES (%s)", (ip,))
+                # Jadval cheksiz o'smasligi uchun — eski (15 daqiqadan o'tgan)
+                # yozuvlarni shu yerda ham tozalab boramiz (arzon, chunki
+                # allaqachon DB'ga yozayotgan so'rov ichida).
+                cur.execute("DELETE FROM admin_login_fails WHERE created_at < NOW() - INTERVAL '15 minutes'")
                 conn.commit()
                 return
             except Exception:
