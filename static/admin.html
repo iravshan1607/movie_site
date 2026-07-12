@@ -309,7 +309,22 @@ textarea { resize:vertical; min-height:80px; }
   </div>
 
   <!-- STATISTIKA -->
-  <div id="statsRow" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:18px;"></div>
+  <div class="box" id="statsPanel" style="padding:0;margin-bottom:18px;border:1px solid rgba(157,123,255,0.25);border-radius:14px;overflow:hidden;">
+    <div onclick="toggleStats()" style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:15px 20px;cursor:pointer;user-select:none;">
+      <div style="font-size:17px;font-weight:600;display:flex;align-items:center;gap:9px;">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#5ad1ff" stroke-width="2"><path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/></svg>
+        <span>Statistika</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <button onclick="event.stopPropagation();loadStats();" style="padding:6px 12px;background:rgba(90,209,255,0.12);border:1px solid rgba(90,209,255,0.35);color:#5ad1ff;border-radius:8px;font-family:inherit;font-size:12px;cursor:pointer;">↻ Yangilash</button>
+        <span id="statsChevron" style="font-size:18px;color:var(--dim);transition:transform .2s;">▸</span>
+      </div>
+    </div>
+    <div id="statsBody" style="display:none;padding:0 20px 20px;">
+      <div id="statsRow" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:14px;"></div>
+      <div id="statsExtra"></div>
+    </div>
+  </div>
 
   <!-- FON EFFEKTLARI -->
   <div class="box" id="fxPanel" style="padding:0;margin-bottom:18px;border:1px solid rgba(157,123,255,0.25);border-radius:14px;overflow:hidden;">
@@ -687,36 +702,169 @@ async function adminLogout(){
 }
 
 // ── STATISTIKA ──
+var STATS_LOADED = false;
+function toggleStats() {
+  var body = document.getElementById('statsBody');
+  var chev = document.getElementById('statsChevron');
+  var open = body.style.display !== 'none';
+  body.style.display = open ? 'none' : 'block';
+  chev.style.transform = open ? 'rotate(0deg)' : 'rotate(90deg)';
+  if (!open && !STATS_LOADED) loadStats();
+}
+function fmt(n){ return (n||0).toLocaleString('ru-RU'); }
+function statCard(label, val, color, icon) {
+  return '<div style="background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:13px 15px;">'
+    + '<div style="font-size:12px;color:var(--dim);margin-bottom:4px;">'+(icon?icon+' ':'')+label+'</div>'
+    + '<div style="font-size:22px;font-weight:700;color:'+(color||'#fff')+';">'+val+'</div></div>';
+}
+function statBlock(title, innerHtml) {
+  return '<div style="background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:12px;">'
+    + '<div style="font-size:13px;font-weight:600;color:var(--dim);margin-bottom:10px;">'+title+'</div>'
+    + innerHtml + '</div>';
+}
+function barRow(label, count, max, color) {
+  var pct = max > 0 ? Math.max(4, Math.round((count/max)*100)) : 0;
+  return '<div style="margin-bottom:7px;">'
+    + '<div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:3px;">'
+    + '<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:70%;">'+esc(String(label))+'</span>'
+    + '<span style="color:'+(color||'#9d7bff')+';flex-shrink:0;">'+fmt(count)+'</span></div>'
+    + '<div style="height:6px;background:rgba(255,255,255,0.06);border-radius:4px;overflow:hidden;">'
+    + '<div style="height:100%;width:'+pct+'%;background:'+(color||'#9d7bff')+';border-radius:4px;"></div></div></div>';
+}
+function listRow(label, value, valueColor) {
+  return '<div style="display:flex;justify-content:space-between;font-size:13px;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.04);">'
+    + '<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:70%;">'+esc(String(label))+'</span>'
+    + '<span style="color:'+(valueColor||'#5ad1ff')+';flex-shrink:0;margin-left:10px;">'+value+'</span></div>';
+}
+function miniBarChart(days) {
+  if (!days || !days.length) return '<div style="font-size:12px;color:var(--dim);">Ma\'lumot yo\'q</div>';
+  var max = Math.max.apply(null, days.map(function(d){return d.count;}), 1);
+  return '<div style="display:flex;align-items:flex-end;gap:4px;height:70px;">'
+    + days.map(function(d){
+        var h = Math.max(4, Math.round((d.count/max)*64));
+        var dt = d.date.slice(5).split('-').reverse().join('.');
+        return '<div title="'+d.date+': '+d.count+'" style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;">'
+          + '<div style="width:100%;max-width:22px;height:'+h+'px;background:linear-gradient(180deg,#9d7bff,#5ad1ff);border-radius:3px 3px 0 0;"></div>'
+          + '<div style="font-size:9px;color:var(--dim);margin-top:3px;white-space:nowrap;">'+dt+'</div></div>';
+      }).join('')
+    + '</div>';
+}
+
 async function loadStats() {
+  var row = document.getElementById('statsRow');
+  var extra = document.getElementById('statsExtra');
+  row.innerHTML = '<div style="grid-column:1/-1;font-size:13px;color:var(--dim);">Yuklanmoqda…</div>';
+  extra.innerHTML = '';
   try {
     var r = await fetch('/api/admin/stats', {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ password: PASS })
     });
     var s = await r.json();
-    if (s.error) return;
+    if (s.error) { row.innerHTML = '<div style="grid-column:1/-1;color:#f87171;font-size:13px;">Xato: '+esc(s.error)+'</div>'; return; }
+    STATS_LOADED = true;
     var bt = s.by_type || {};
-    function card(label, val, color) {
-      return '<div style="background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:13px 15px;">'
-        + '<div style="font-size:12px;color:var(--dim);margin-bottom:4px;">'+label+'</div>'
-        + '<div style="font-size:22px;font-weight:700;color:'+(color||'#fff')+';">'+val+'</div></div>';
-    }
-    function fmt(n){ return (n||0).toLocaleString('ru-RU'); }
-    var html = card('Jami kontent', fmt(s.total), '#9d7bff')
-      + card('Jami ko\'rishlar', fmt(s.total_views), '#5ad1ff')
-      + card('Kino', fmt(bt.movie||0))
-      + card('Serial', fmt(bt.series||0))
-      + card('Anime', fmt(bt.anime||0))
-      + card('Postersiz', fmt(s.no_poster), s.no_poster>0?'#ffc940':'#fff');
-    document.getElementById('statsRow').innerHTML = html;
+
+    // ── Asosiy kartalar ──
+    row.innerHTML =
+        statCard('Jami kontent', fmt(s.total), '#9d7bff')
+      + statCard('Jami ko\'rishlar', fmt(s.total_views), '#5ad1ff')
+      + statCard('O\'rtacha ko\'rish', fmt(s.avg_views))
+      + statCard('Kino', fmt(bt.movie||0))
+      + statCard('Serial', fmt(bt.series||0))
+      + statCard('Anime', fmt(bt.anime||0))
+      + statCard('Premium', fmt(s.premium_total), '#ffd166')
+      + statCard('Postersiz', fmt(s.no_poster), s.no_poster>0?'#ffc940':'#fff')
+      + statCard('Ko\'rishsiz', fmt(s.no_views), s.no_views>0?'#ffc940':'#fff')
+      + statCard('Bugun qo\'shildi', fmt(s.added_today), '#5ad1ff')
+      + statCard('So\'nggi 7 kun', fmt(s.added_7d), '#5ad1ff')
+      + statCard('So\'nggi 30 kun', fmt(s.added_30d), '#5ad1ff');
+
+    var html = '';
+
+    // ── 14 kunlik qo'shilish grafigi ──
+    html += statBlock('📈 So\'nggi 14 kun — qo\'shilgan kontent', miniBarChart(s.by_day));
+
+    // ── Ikki ustunli grid: chap va o'ng ──
+    html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;">';
+
+    // Top ko'rilgan
     if (s.top && s.top.length) {
-      var topHtml = '<div style="grid-column:1/-1;background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:13px 16px;">'
-        + '<div style="font-size:12px;color:var(--dim);margin-bottom:8px;">Eng ko\'p ko\'rilgan</div>'
-        + s.top.map(function(t){ return '<div style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0;"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(t.title)+'</span><span style="color:#5ad1ff;flex-shrink:0;margin-left:10px;">'+fmt(t.views)+' 👁</span></div>'; }).join('')
-        + '</div>';
-      document.getElementById('statsRow').innerHTML += topHtml;
+      html += statBlock('🔥 Eng ko\'p ko\'rilgan (top 10)',
+        s.top.map(function(t){ return listRow(t.title, fmt(t.views)+' 👁'); }).join(''));
     }
-  } catch(e) {}
+
+    // Eng yuqori reyting
+    if (s.top_rated && s.top_rated.length) {
+      html += statBlock('⭐ Eng yuqori reyting',
+        s.top_rated.map(function(t){ return listRow(t.title, t.rating.toFixed(1)+' ⭐', '#ffd166'); }).join('')
+        + '<div style="margin-top:8px;font-size:12px;color:var(--dim);">O\'rtacha reyting: <b style="color:#ffd166;">'+s.avg_rating+'</b> · Reytingsiz: <b>'+fmt(s.no_rating)+'</b></div>');
+    }
+
+    // Janr bo'yicha
+    if (s.by_genre && s.by_genre.length) {
+      var maxG = Math.max.apply(null, s.by_genre.map(function(g){return g.count;}));
+      html += statBlock('🎭 Janrlar bo\'yicha', s.by_genre.map(function(g){ return barRow(g.name, g.count, maxG, '#9d7bff'); }).join(''));
+    }
+
+    // Yil bo'yicha
+    if (s.by_year && s.by_year.length) {
+      var maxY = Math.max.apply(null, s.by_year.map(function(y){return y.count;}));
+      html += statBlock('📅 Yillar bo\'yicha', s.by_year.map(function(y){ return barRow(y.year, y.count, maxY, '#5ad1ff'); }).join(''));
+    }
+
+    // Sifat bo'yicha
+    if (s.by_quality && s.by_quality.length) {
+      var maxQ = Math.max.apply(null, s.by_quality.map(function(q){return q.count;}));
+      html += statBlock('🎞 Sifat bo\'yicha', s.by_quality.map(function(q){ return barRow(q.name, q.count, maxQ, '#22d3ee'); }).join(''));
+    }
+
+    // Til bo'yicha
+    if (s.by_language && s.by_language.length) {
+      var maxL = Math.max.apply(null, s.by_language.map(function(l){return l.count;}));
+      html += statBlock('🗣 Til bo\'yicha', s.by_language.map(function(l){ return barRow(l.name, l.count, maxL, '#a78bfa'); }).join(''));
+    }
+
+    // Davlat bo'yicha
+    if (s.by_country && s.by_country.length) {
+      var maxC = Math.max.apply(null, s.by_country.map(function(c){return c.count;}));
+      html += statBlock('🌍 Davlat bo\'yicha', s.by_country.map(function(c){ return barRow(c.name, c.count, maxC, '#34d399'); }).join(''));
+    }
+
+    // Izohlar
+    html += statBlock('💬 Izohlar',
+        listRow('Jami izoh', fmt(s.reviews_total))
+      + listRow('So\'nggi 7 kun', fmt(s.reviews_7d))
+      + listRow('Faol foydalanuvchi (7 kun)', fmt(s.active_users_7d))
+      + (s.top_reviewed && s.top_reviewed.length ? '<div style="margin-top:8px;font-size:11.5px;color:var(--dim);">Eng ko\'p muhokama qilingan:</div>'
+          + s.top_reviewed.map(function(t){ return listRow(t.title||('#'+t.movie_id), t.count); }).join('') : ''));
+
+    // Sevimlilar
+    html += statBlock('❤️ Sevimlilar',
+        listRow('Jami saqlangan', fmt(s.favorites_total))
+      + (s.most_favorited && s.most_favorited.length ? '<div style="margin-top:8px;font-size:11.5px;color:var(--dim);">Eng ko\'p sevimliga qo\'shilgan:</div>'
+          + s.most_favorited.map(function(t){ return listRow(t.title, t.count, '#f87171'); }).join('') : ''));
+
+    // Tez orada / so'rovlar
+    html += statBlock('🕒 "Tez orada" so\'rovlar',
+        listRow('Kutilmoqda (pending)', fmt(s.upcoming_pending))
+      + listRow('Tez orada (soon)', fmt(s.upcoming_soon))
+      + listRow('Chiqarilgan (released)', fmt(s.upcoming_released))
+      + (s.top_requested && s.top_requested.length ? '<div style="margin-top:8px;font-size:11.5px;color:var(--dim);">Eng ko\'p so\'ralgan:</div>'
+          + s.top_requested.map(function(t){ return listRow(t.title, t.subs+' obunachi'); }).join('') : ''));
+
+    // Bildirishnoma / reklama / TV
+    html += statBlock('🔔 Tizim',
+        listRow('Bildirishnomalar (jami)', fmt(s.notifications_total))
+      + listRow('O\'qilmagan', fmt(s.notifications_unread))
+      + listRow('Reklamalar (jami / faol)', fmt(s.ads_total)+' / '+fmt(s.ads_active))
+      + listRow('TV kanallar (jami / faol)', fmt(s.channels_total)+' / '+fmt(s.channels_active))
+      + listRow('Ma\'lum foydalanuvchilar', fmt(s.known_users)));
+
+    html += '</div>'; // grid yopish
+
+    extra.innerHTML = html;
+  } catch(e) { row.innerHTML = '<div style="grid-column:1/-1;color:#f87171;font-size:13px;">Statistikani yuklab bo\'lmadi</div>'; }
 }
 
 // ── FON EFFEKTLARI ──
