@@ -35,6 +35,16 @@ export BOT_TOKEN="..."
 python app.py
 ```
 
+## ✅ Testlar
+
+Har bir deploy'dan oldin oddiy smoke-testlarni ishga tushirish tavsiya etiladi
+(DB'siz ham ishlaydi, faqat app qulab tushmasligini va asosiy auth mantiqini tekshiradi):
+
+```bash
+pip install -r requirements-dev.txt
+pytest tests/ -v
+```
+
 ## 📁 Loyiha tuzilmasi
 
 ```
@@ -42,7 +52,10 @@ movie_site/
 ├── app.py              # Asosiy backend (Flask)
 ├── main.py             # Entry point
 ├── Procfile            # Railway/Gunicorn ishga tushirish
-├── requirements.txt    # Python kutubxonalar
+├── requirements.txt    # Python kutubxonalar (production)
+├── requirements-dev.txt # + pytest (faqat lokal/CI test uchun)
+├── tests/
+│   └── test_smoke.py   # Deploy oldidan tekshiruv (DB'siz ham ishlaydi)
 ├── nixpacks.toml       # Railway build konfiguratsiyasi
 ├── Dockerfile          # Docker konfiguratsiyasi
 └── static/
