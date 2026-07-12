@@ -3553,7 +3553,8 @@ def admin_list():
                     SELECT id, title, genre, year, language, quality,
                            COALESCE(content_type,'movie'), COALESCE(views,0),
                            COALESCE(poster_url,''),
-                           CASE WHEN poster_id IS NOT NULL AND poster_id != '' THEN 1 ELSE 0 END
+                           CASE WHEN poster_id IS NOT NULL AND poster_id != '' THEN 1 ELSE 0 END,
+                           COALESCE(is_premium, FALSE)
                     FROM movies WHERE title ILIKE %s
                     ORDER BY created_at DESC LIMIT 200
                 """, (f"%{q}%",))
@@ -3562,16 +3563,39 @@ def admin_list():
                     SELECT id, title, genre, year, language, quality,
                            COALESCE(content_type,'movie'), COALESCE(views,0),
                            COALESCE(poster_url,''),
-                           CASE WHEN poster_id IS NOT NULL AND poster_id != '' THEN 1 ELSE 0 END
+                           CASE WHEN poster_id IS NOT NULL AND poster_id != '' THEN 1 ELSE 0 END,
+                           COALESCE(is_premium, FALSE)
                     FROM movies ORDER BY created_at DESC LIMIT 200
                 """)
             rows = cur.fetchall()
         movies = [{
             "id": r[0], "title": r[1], "genre": r[2] or "", "year": r[3],
             "language": r[4] or "", "quality": r[5] or "", "type": r[6], "views": r[7],
-            "poster_url": r[8] or "", "has_poster": bool(r[9]),
+            "poster_url": r[8] or "", "has_poster": bool(r[9]), "is_premium": bool(r[10]),
         } for r in rows]
         return jsonify({"movies": movies})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/admin/premium/toggle", methods=["POST"])
+def admin_premium_toggle():
+    """Kino uchun premium belgisini yoqadi/o'chiradi (bitta bosish bilan, to'liq tahrirlashsiz).
+    Body: {password, id, is_premium: true/false}"""
+    d = request.get_json() or {}
+    if not _check(d):
+        return jsonify({"error": "ruxsat yo'q"}), 403
+    try:
+        mid = int(d.get("id"))
+    except Exception:
+        return jsonify({"error": "id kerak"}), 400
+    val = bool(d.get("is_premium"))
+    try:
+        with get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("UPDATE movies SET is_premium=%s WHERE id=%s", (val, mid))
+            conn.commit()
+        _log_admin("premium_toggle", mid, "yoqildi" if val else "o'chirildi")
+        return jsonify({"ok": True, "is_premium": val})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
