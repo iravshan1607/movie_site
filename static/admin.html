@@ -392,6 +392,33 @@ button:disabled { cursor: default; filter: none; }
   #listContainer { grid-template-columns:repeat(2,1fr) !important; gap:8px; }
   .mcard-poster, .mcard-poster-ph { height:145px; }
 }
+
+/* ══════════════ MOBIL PASTKI TAB-MENYU ══════════════ */
+.mtab-bar { display:none; }
+@media (max-width:600px) {
+  .mtab-bar {
+    display:flex; position:fixed; left:0; right:0; bottom:0; z-index:500;
+    background:rgba(18,16,42,0.92); backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px);
+    border-top:1px solid rgba(157,123,255,0.22);
+    padding:6px 4px calc(6px + env(safe-area-inset-bottom,0px));
+    box-shadow:0 -6px 24px rgba(0,0,0,0.35);
+  }
+  .mtab-btn {
+    flex:1; display:flex; flex-direction:column; align-items:center; gap:2px;
+    background:none; border:none; color:var(--dim); font-family:inherit;
+    font-size:10.5px; padding:6px 2px; border-radius:10px; cursor:pointer;
+  }
+  .mtab-btn .mtab-ic { font-size:19px; line-height:1; }
+  .mtab-btn.active { color:#fff; background:rgba(124,92,255,0.16); }
+  .mtab-btn.active .mtab-ic { filter:drop-shadow(0 0 6px rgba(157,123,255,0.7)); }
+
+  /* Tab bo'limlarini yashirish/ko'rsatish (faqat mobil rejimda) */
+  .mtab-sec { display:none; }
+  .mtab-sec.mtab-active { display:block; }
+
+  /* Pastki menyu tagida qolib ketmasligi uchun bo'sh joy */
+  .main { padding-bottom:78px; }
+}
 </style>
 </head>
 <body>
@@ -427,7 +454,7 @@ button:disabled { cursor: default; filter: none; }
   </div>
 
   <!-- STATISTIKA -->
-  <div class="box" id="statsPanel" style="padding:0;margin-bottom:18px;border:1px solid rgba(157,123,255,0.25);border-radius:14px;overflow:hidden;">
+  <div class="box mtab-sec" data-tab="stats" id="statsPanel" style="padding:0;margin-bottom:18px;border:1px solid rgba(157,123,255,0.25);border-radius:14px;overflow:hidden;">
     <div onclick="toggleStats()" style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:15px 20px;cursor:pointer;user-select:none;">
       <div style="font-size:17px;font-weight:600;display:flex;align-items:center;gap:9px;">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#5ad1ff" stroke-width="2"><path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/></svg>
@@ -463,7 +490,7 @@ button:disabled { cursor: default; filter: none; }
   </div>
 
   <!-- FON EFFEKTLARI -->
-  <div class="box" id="fxPanel" style="padding:0;margin-bottom:18px;border:1px solid rgba(157,123,255,0.25);border-radius:14px;overflow:hidden;">
+  <div class="box mtab-sec" data-tab="settings" id="fxPanel" style="padding:0;margin-bottom:18px;border:1px solid rgba(157,123,255,0.25);border-radius:14px;overflow:hidden;">
     <div onclick="toggleFx()" style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:15px 20px;cursor:pointer;user-select:none;">
       <div style="font-size:17px;font-weight:600;display:flex;align-items:center;gap:9px;">
         <svg width="22" height="22" viewBox="0 0 64 64" aria-hidden="true"><defs><linearGradient id="mR" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#9d7bff"/><stop offset="1" stop-color="#22d3ee"/></linearGradient><linearGradient id="mP" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#b69bff"/><stop offset="1" stop-color="#5ad1ff"/></linearGradient></defs><circle cx="32" cy="32" r="24" fill="#100e26"/><circle cx="32" cy="32" r="24" fill="none" stroke="url(#mR)" stroke-width="4"/><polygon points="26,22 45,32 26,42" fill="url(#mP)"/></svg>
@@ -491,7 +518,7 @@ button:disabled { cursor: default; filter: none; }
   </div>
 
   <!-- TEZ ORADA (kutilayotgan kinolar) -->
-  <div class="box" id="soonPanel" style="padding:0;margin-bottom:18px;border:1px solid rgba(124,92,255,0.28);border-radius:14px;overflow:hidden;">
+  <div class="box mtab-sec" data-tab="manage" id="soonPanel" style="padding:0;margin-bottom:18px;border:1px solid rgba(124,92,255,0.28);border-radius:14px;overflow:hidden;">
     <div onclick="toggleSoon()" style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:15px 20px;cursor:pointer;user-select:none;">
       <div style="font-size:17px;font-weight:600;display:flex;align-items:center;gap:9px;">
         <span style="font-size:20px;">🔜</span>
@@ -518,7 +545,7 @@ button:disabled { cursor: default; filter: none; }
   </div>
 
   <!-- REKLAMA (sayt + bot) -->
-  <div class="box" id="adsPanel" style="padding:0;margin-bottom:18px;border:1px solid rgba(90,209,255,0.28);border-radius:14px;overflow:hidden;">
+  <div class="box mtab-sec" data-tab="manage" id="adsPanel" style="padding:0;margin-bottom:18px;border:1px solid rgba(90,209,255,0.28);border-radius:14px;overflow:hidden;">
     <div onclick="toggleAds()" style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:15px 20px;cursor:pointer;user-select:none;">
       <div style="font-size:17px;font-weight:600;display:flex;align-items:center;gap:9px;">
         <span style="font-size:20px;">📢</span>
@@ -578,7 +605,7 @@ button:disabled { cursor: default; filter: none; }
   </div>
 
   <!-- TELEKANALLAR -->
-  <div class="box" id="tvPanel" style="padding:0;margin-bottom:18px;border:1px solid rgba(124,92,255,0.3);border-radius:14px;overflow:hidden;">
+  <div class="box mtab-sec" data-tab="manage" id="tvPanel" style="padding:0;margin-bottom:18px;border:1px solid rgba(124,92,255,0.3);border-radius:14px;overflow:hidden;">
     <div onclick="openTvModal()" style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:15px 20px;cursor:pointer;user-select:none;">
       <div style="font-size:17px;font-weight:600;display:flex;align-items:center;gap:9px;">
         <span style="font-size:20px;">📺</span>
@@ -678,6 +705,7 @@ button:disabled { cursor: default; filter: none; }
   </div>
 
   <!-- QIDIRUV -->
+  <div class="mtab-sec" data-tab="movies">
   <div class="search-row">
     <input id="searchInput" placeholder="Serial yoki kino nomini yozing..." onkeydown="if(event.key==='Enter')search()">
     <select id="typeFilter" onchange="search()">
@@ -691,6 +719,23 @@ button:disabled { cursor: default; filter: none; }
   </div>
   <div class="count" id="countText"></div>
   <div id="listContainer"></div>
+  </div>
+</div>
+
+<!-- MOBIL PASTKI MENYU -->
+<div id="mtabBar" class="mtab-bar">
+  <button class="mtab-btn active" data-tab="movies" onclick="mtabSwitch('movies')">
+    <span class="mtab-ic">🎬</span><span>Kinolar</span>
+  </button>
+  <button class="mtab-btn" data-tab="stats" onclick="mtabSwitch('stats')">
+    <span class="mtab-ic">📊</span><span>Statistika</span>
+  </button>
+  <button class="mtab-btn" data-tab="manage" onclick="mtabSwitch('manage')">
+    <span class="mtab-ic">🗂</span><span>Boshqaruv</span>
+  </button>
+  <button class="mtab-btn" data-tab="settings" onclick="mtabSwitch('settings')">
+    <span class="mtab-ic">⚙️</span><span>Sozlama</span>
+  </button>
 </div>
 
 <!-- TAHRIRLASH MODALI -->
@@ -833,6 +878,28 @@ function enterPanel(){
   loadFx();
   loadStats();
   loadSoon();
+  mtabInit();
+}
+
+// ── MOBIL PASTKI TAB-MENYU ──
+// Faqat kichik ekranlarda ishlaydi (CSS orqali .mtab-bar shu holatda ko'rinadi).
+// Kompyuterda bo'limlar hammasi bir vaqtda, oddiy tartibda ko'rinaveradi.
+function mtabInit(){
+  mtabSwitch('movies');
+}
+function mtabSwitch(tab){
+  document.querySelectorAll('.mtab-sec').forEach(function(el){
+    el.classList.toggle('mtab-active', el.getAttribute('data-tab') === tab);
+  });
+  document.querySelectorAll('.mtab-btn').forEach(function(btn){
+    btn.classList.toggle('active', btn.getAttribute('data-tab') === tab);
+  });
+  // Statistika tabiga birinchi marta kirilganda ma'lumotni avtomatik ochamiz (qulaylik uchun)
+  if (tab === 'stats') {
+    var body = document.getElementById('statsBody');
+    if (body && body.style.display === 'none') toggleStats();
+  }
+  window.scrollTo(0, 0);
 }
 // Sahifa ochilganda — sessiya hali kuchda bo'lsa, qayta login so'ramaymiz
 async function checkSession(){
