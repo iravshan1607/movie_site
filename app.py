@@ -914,6 +914,7 @@ def _touch_user(uid, name=None, username=None):
         log.warning("touch_user: %s", e)
 
 @app.route("/api/tg-login", methods=["POST"])
+@rate_limit(max_requests=20, window=60)
 def tg_login():
     data = request.get_json(silent=True) or {}
     clean = {k: str(v) for k, v in data.items() if v is not None}
@@ -1115,8 +1116,12 @@ def api_reviews_del(rid):
             cur = conn.cursor()
             # Faqat o'z izohini o'chira oladi
             cur.execute("DELETE FROM reviews WHERE id=%s AND user_id=%s", (rid, uid))
-            # Asosiy izoh o'chsa, unga yozilgan javoblar ham o'chadi (thread tugaydi)
-            cur.execute("DELETE FROM reviews WHERE parent_id=%s", (rid,))
+            deleted = cur.rowcount
+            # Asosiy izoh HAQIQATDA shu foydalanuvchi tomonidan o'chirilgan bo'lsagina,
+            # unga yozilgan javoblarni ham o'chiramiz (aks holda begona izoh/javoblarni
+            # o'chirishga urinish orqali boshqa foydalanuvchi thread'ini buzish mumkin edi).
+            if deleted:
+                cur.execute("DELETE FROM reviews WHERE parent_id=%s", (rid,))
             conn.commit()
         return jsonify({"ok": True})
     except Exception as e:
