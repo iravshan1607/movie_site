@@ -306,6 +306,78 @@ button:disabled { cursor: default; filter: none; }
 .fx-toggle input{width:18px;height:18px;accent-color:#9d7bff;cursor:pointer;}
 .fxi{display:inline-flex;width:20px;height:20px;flex:0 0 20px;}
 .fxi svg{width:20px;height:20px;}
+
+/* ══════════════ MOBIL (telefon) ══════════════ */
+@media (max-width:600px) {
+  .main { padding:14px 12px 32px; }
+  .topbar { flex-wrap:wrap; gap:8px; }
+  .topbar h1 { font-size:17px; gap:8px; }
+  .topbar h1 img { height:30px; }
+  .topbar a { display:none; }               /* "Saytni ochish" havolasi joy tejash uchun yashiriladi */
+  .topbar button { margin-left:auto !important; padding:8px 14px !important; font-size:12.5px !important; }
+
+  /* Kino kartochkalari — 2 ustun, kichikroq */
+  #listContainer { grid-template-columns:repeat(2,1fr) !important; gap:10px; }
+  .mcard-poster, .mcard-poster-ph { height:160px; }
+  .mcard-title { font-size:12.5px; }
+  .mcard-meta { font-size:10px; }
+
+  /* Hover bilan chiqadigan yon tugmalar telefonda ishlamaydi —
+     doim ko'rinadigan, kartochka ustida joylashgan tugmalarga aylantiramiz */
+  .mcard-side {
+    position:absolute !important; inset:6px 6px auto auto !important; top:6px !important; left:auto !important;
+    margin-left:0 !important; width:auto !important; height:auto !important; overflow:visible !important;
+    background:none !important; border:none !important; border-radius:0 !important; box-shadow:none !important;
+    flex-direction:row !important; gap:6px !important;
+  }
+  .mcard-side button {
+    width:32px; height:32px; min-width:32px;
+    background:rgba(10,8,24,0.75) !important; backdrop-filter:blur(4px);
+  }
+  .mcard-side svg { width:15px; height:15px; }
+  .mcard-wrap:hover .mcard { border-top-right-radius:14px !important; border-bottom-right-radius:14px !important; }
+
+  /* Qidiruv qatori — vertikal ustma-ust */
+  .search-row { flex-direction:column; }
+  .search-row input, .search-row select, .search-row button { width:100%; min-width:0; }
+
+  /* Statistika kartalari — 2 ustun */
+  #statsRow { grid-template-columns:repeat(2,1fr) !important; }
+  .stats-topbar-row, [style*="justify-content:space-between"] { flex-wrap:wrap; }
+
+  /* Tahrirlash / login modal — ekran chetlarigacha, kichikroq padding */
+  .modal { padding:18px; max-width:100%; border-radius:14px; }
+  .row2 { grid-template-columns:1fr; gap:0; }
+  .login-wrap { margin:60px auto; padding:16px; }
+
+  /* Kino ma'lumot maydonlari (davlat/davomiylik/yosh/tmdb) — 2 ustun bo'lib qolsin */
+  .modal div[style*="display:flex;gap:10px"] { flex-wrap:wrap; }
+  .modal div[style*="display:flex;gap:10px"] > div { flex:1 1 45% !important; min-width:120px; }
+
+  /* Til qidiruv natijalari ro'yxati kengroq bo'lsin */
+  #eLangResults { max-height:180px; }
+
+  /* Ro'yxat ko'rinishidagi qator (row) — kichikroq */
+  .row { padding:11px 12px; gap:8px; }
+  .row-title { font-size:13.5px; }
+  .row-btns button { width:34px; height:34px; font-size:14px; }
+
+  /* TV kanal modal ichidagi forma maydonlari to'liq kenglikda */
+  #tvBody input, #tvBody select { min-width:0 !important; flex:1 1 100% !important; }
+  #tvBody div[style*="display:flex;gap:8px"] { flex-direction:column; }
+  #tvBody div[style*="display:flex;gap:10px;flex-wrap:wrap;align-items:center"] { flex-direction:row; flex-wrap:wrap; }
+
+  /* Sahifalash tugmalari kichikroq, ko'proq mos sig'ishi uchun */
+  .pagination button { min-width:32px; height:32px; font-size:12.5px; }
+
+  /* Comet effektlari mobil batareyani tejash uchun kamroq/o'chirilgan */
+  .comet.c4, .comet.c5 { display:none; }
+}
+
+@media (max-width:380px) {
+  #listContainer { grid-template-columns:repeat(2,1fr) !important; gap:8px; }
+  .mcard-poster, .mcard-poster-ph { height:145px; }
+}
 </style>
 </head>
 <body>
