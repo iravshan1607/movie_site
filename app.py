@@ -631,6 +631,37 @@ def api_movies():
         return jsonify({"movies": [], "total": 0, "error": str(e)})
 
 # ── Bitta kino ──
+@app.route("/api/admin/lang/list", methods=["POST"])
+def admin_lang_list():
+    """Berilgan kinoning lang_group'idagi barcha til versiyalarini qaytaradi.
+    Ko'rishlar sonini OSHIRMAYDI (admin panel uchun, /api/movie/<id> dan farqli).
+    Body: {password, id}"""
+    d = request.get_json() or {}
+    if not _check(d):
+        return jsonify({"error": "ruxsat yo'q"}), 403
+    try:
+        mid = int(d.get("id"))
+    except Exception:
+        return jsonify({"error": "id kerak"}), 400
+    try:
+        with get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT lang_group FROM movies WHERE id=%s", (mid,))
+            r = cur.fetchone()
+            if not r:
+                return jsonify({"error": "Topilmadi"}), 404
+            group = r[0]
+            langs = []
+            if group:
+                cur.execute("""
+                    SELECT id, language FROM movies
+                    WHERE lang_group=%s ORDER BY language
+                """, (group,))
+                langs = [{"id": lr[0], "language": lr[1] or ""} for lr in cur.fetchall()]
+        return jsonify({"languages": langs})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @app.route("/api/movie/<int:mid>")
 @rate_limit(max_requests=60, window=60)
 def api_movie(mid):
