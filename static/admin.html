@@ -682,9 +682,12 @@ button:disabled { cursor: default; filter: none; }
     <!-- TIL VERSIYALARINI BOG'LASH -->
     <span class="lbl">🌐 Boshqa til versiyalari</span>
     <div id="eLangList" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;"></div>
-    <div style="display:flex;gap:8px;margin-bottom:14px;">
-      <input id="eLangOtherId" type="number" placeholder="Bog'lanadigan kino ID raqami" style="flex:1;">
-      <button onclick="linkLang()" style="padding:9px 14px;background:rgba(90,209,255,0.12);border:1px solid rgba(90,209,255,0.4);border-radius:10px;color:#5ad1ff;font-family:inherit;font-size:13px;cursor:pointer;white-space:nowrap;">🔗 Bog'lash</button>
+    <div style="position:relative;margin-bottom:14px;">
+      <input id="eLangSearch" type="text" placeholder="Kino nomini yozing..." autocomplete="off"
+             oninput="langSearchInput()" style="width:100%;">
+      <div id="eLangResults" style="display:none;position:absolute;left:0;right:0;top:calc(100% + 4px);
+           background:var(--card,#1a1a1a);border:1px solid var(--line);border-radius:10px;
+           max-height:220px;overflow-y:auto;z-index:20;"></div>
     </div>
 
     <span class="lbl">Turi</span>
@@ -1827,18 +1830,56 @@ async function loadLangList(id) {
   }
 }
 
-async function linkLang() {
+async function linkLang(otherId) {
   const id = parseInt(document.getElementById('eId').value);
-  const otherId = parseInt(document.getElementById('eLangOtherId').value);
-  if (!otherId) { alert('Bog\'lanadigan kino ID raqamini kiriting'); return; }
+  if (!otherId) { return; }
   const r = await fetch('/api/admin/lang/link', {
     method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({ password: PASS, id, other_id: otherId })
   });
   const d = await r.json();
   if (d.error) { alert(d.error); return; }
-  document.getElementById('eLangOtherId').value = '';
+  document.getElementById('eLangSearch').value = '';
+  document.getElementById('eLangResults').style.display = 'none';
   loadLangList(id);
+}
+
+let _langSearchTimer = null;
+function langSearchInput() {
+  const box = document.getElementById('eLangResults');
+  const q = document.getElementById('eLangSearch').value.trim();
+  clearTimeout(_langSearchTimer);
+  if (!q) { box.style.display = 'none'; box.innerHTML = ''; return; }
+  _langSearchTimer = setTimeout(() => runLangSearch(q), 250);
+}
+
+async function runLangSearch(q) {
+  const box = document.getElementById('eLangResults');
+  const myId = parseInt(document.getElementById('eId').value);
+  box.style.display = 'block';
+  box.innerHTML = '<div style="padding:10px;font-size:12.5px;color:var(--dim);">Qidirilmoqda...</div>';
+  try {
+    const r = await fetch('/api/admin/list', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ password: PASS, q })
+    });
+    const d = await r.json();
+    const items = (d.movies || []).filter(m => m.id !== myId).slice(0, 20);
+    if (!items.length) {
+      box.innerHTML = '<div style="padding:10px;font-size:12.5px;color:var(--dim);">Hech narsa topilmadi</div>';
+      return;
+    }
+    box.innerHTML = items.map(m => `
+      <div onclick="linkLang(${m.id})"
+           style="padding:9px 12px;font-size:13px;cursor:pointer;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:8px;"
+           onmouseover="this.style.background='rgba(255,255,255,0.06)'" onmouseout="this.style.background=''">
+        <span>${esc(m.title)}</span>
+        <span style="color:var(--dim);white-space:nowrap;">${m.language || ''} · #${m.id}</span>
+      </div>
+    `).join('');
+  } catch (e) {
+    box.innerHTML = '<div style="padding:10px;font-size:12.5px;color:#ff6b6b;">Xatolik</div>';
+  }
 }
 
 async function unlinkLang(id) {
@@ -2037,6 +2078,11 @@ function tmdbPick(i) {
 }
 function esc(s) { return String(s==null?'':s).replace(/[<>&"]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c])); }
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+document.addEventListener('click', e => {
+  const box = document.getElementById('eLangResults');
+  const input = document.getElementById('eLangSearch');
+  if (box && input && !box.contains(e.target) && e.target !== input) box.style.display = 'none';
+});
 
 // ── Galaxy click effekti — bosilganda yulduzchalar sachraydi ──
 document.addEventListener('click', e => {
