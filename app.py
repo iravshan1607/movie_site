@@ -92,6 +92,15 @@ import gzip as _gzip   # javoblarni siqish uchun (qo'shimcha kutubxona kerak ema
 
 # ── Oddiy rate-limit (xotirada, tashqi kutubxonasiz) ──────────────────────────
 # Public GET endpointlarni botlab spam qilishdan himoya qiladi.
+# MUHIM: bu ataylab xotirada qoldirilgan (DB'ga ko'chirilmagan), chunki bu yerda
+# har GET so'rovda (soniyasiga o'nlab bo'lishi mumkin) DB'ga borish performance'ni
+# yomonlashtiradi — bu himoya "yengil spam to'sig'i", xavfsizlik jihatidan kritik
+# emas (admin login kabi emas, u DB-asosli qilingan, yuqoriga qarang).
+# Cheklov: agar Railway'da bir nechta gunicorn worker ishga tushirilsa (Procfile:
+# --workers 2), har bir worker o'z alohida hisobini yuritadi — ya'ni amaliy limit
+# workerlar soniga ko'paytiriladi (masalan 60/daq real holatda ~120/daq bo'lishi
+# mumkin). Bu odatda muammo emas, lekin agar qattiqroq limit kerak bo'lsa,
+# Redis (masalan Railway Redis plugin) qo'shib shu yerni shunga almashtiring.
 _rl_lock = threading.Lock()
 _rl_hits = defaultdict(deque)   # key -> so'nggi so'rov vaqtlari
 
