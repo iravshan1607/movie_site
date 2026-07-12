@@ -330,6 +330,11 @@ def init_db():
         "ALTER TABLE movies ADD COLUMN IF NOT EXISTS duration INTEGER",
         "ALTER TABLE movies ADD COLUMN IF NOT EXISTS age_rating TEXT",
         "ALTER TABLE movies ADD COLUMN IF NOT EXISTS tmdb_rating NUMERIC",
+        "ALTER TABLE movies ADD COLUMN IF NOT EXISTS lang_group TEXT",
+        "CREATE INDEX IF NOT EXISTS idx_movies_lang_group ON movies(lang_group)",
+        # Mavjud kinolarga (guruhsiz) — har biriga o'zining ID'siga teng noyob guruh beriladi.
+        # Shu tufayli kelajakda ularga boshqa til versiyasini bog'lash mumkin bo'ladi.
+        "UPDATE movies SET lang_group = 'm' || id::text WHERE lang_group IS NULL OR lang_group = ''",
         """CREATE TABLE IF NOT EXISTS site_settings (
                 key   TEXT PRIMARY KEY,
                 value TEXT
@@ -636,13 +641,20 @@ def api_movie(mid):
                 SELECT id, title, genre, year, language, quality, description,
                        COALESCE(content_type,'movie'), poster_id,
                        COALESCE(views,0), rating, poster_url, trailer, original_title,
-                       director, actors, country, duration, age_rating, tmdb_rating
+                       director, actors, country, duration, age_rating, tmdb_rating, lang_group
                 FROM movies WHERE id=%s
             """, (mid,))
             r = cur.fetchone()
             if r:
                 cur.execute("UPDATE movies SET views = COALESCE(views,0)+1 WHERE id=%s", (mid,))
                 conn.commit()
+            langs = []
+            if r and r[20]:
+                cur.execute("""
+                    SELECT id, language FROM movies
+                    WHERE lang_group=%s ORDER BY language
+                """, (r[20],))
+                langs = [{"id": lr[0], "language": lr[1] or ""} for lr in cur.fetchall()]
         if not r:
             return jsonify({"found": False}), 404
         return jsonify({"found": True, "movie": {
@@ -658,6 +670,8 @@ def api_movie(mid):
             "duration": r[17] if len(r) > 17 else None,
             "age_rating": (r[18] or "") if len(r) > 18 else "",
             "tmdb_rating": float(r[19]) if len(r) > 19 and r[19] else None,
+            "lang_group": r[20] or "",
+            "languages": langs,   # shu kinoning boshqa til versiyalari (o'zi ham kiradi)
         }})
     except Exception as e:
         return jsonify({"found": False, "error": str(e)}), 500
@@ -3620,6 +3634,65 @@ def admin_delete():
             cur.execute("DELETE FROM movies WHERE id=%s", (mid,))
             conn.commit()
         _log_admin("delete_movie", mid, title)
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# ── Til versiyalarini bog'lash (lang_group) ────────────────────────────────
+@app.route("/api/admin/lang/link", methods=["POST"])
+def admin_lang_link():
+    """Ikkita mavjud kino yozuvini bir xil lang_group'ga bog'laydi —
+    shu orqali ular saytda bitta kinoning turli til variantlari sifatida ko'rinadi.
+    Body: {password, id, other_id}"""
+    d = request.get_json() or {}
+    if not _check(d):
+        return jsonify({"error": "ruxsat yo'q"}), 403
+    try:
+        mid = int(d.get("id"))
+        other_id = int(d.get("other_id"))
+    except Exception:
+        return jsonify({"error": "id va other_id kerak"}), 400
+    if mid == other_id:
+        return jsonify({"error": "Bir xil kinoni o'ziga bog'lab bo'lmaydi"}), 400
+    try:
+        with get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT lang_group, title FROM movies WHERE id=%s", (mid,))
+            r1 = cur.fetchone()
+            cur.execute("SELECT lang_group, title FROM movies WHERE id=%s", (other_id,))
+            r2 = cur.fetchone()
+            if not r1 or not r2:
+                return jsonify({"error": "Kino(lar) topilmadi"}), 404
+            group = r1[0] or ("m" + str(mid))
+            # other_id shu guruhga qo'shiladi — uning eski guruhidagi boshqa a'zolar
+            # (bo'lsa) ortda qolib ketmasligi uchun, avval o'sha guruhdagi barchani ko'chiramiz.
+            old_group = r2[0] or ("m" + str(other_id))
+            cur.execute("UPDATE movies SET lang_group=%s WHERE lang_group=%s OR id=%s",
+                        (group, old_group, other_id))
+            cur.execute("UPDATE movies SET lang_group=%s WHERE id=%s", (group, mid))
+            conn.commit()
+        _log_admin("lang_link", mid, f"{r1[1]} <-> {r2[1]} ({other_id})")
+        return jsonify({"ok": True, "lang_group": group})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/admin/lang/unlink", methods=["POST"])
+def admin_lang_unlink():
+    """Kinoni o'z lang_group'idan chiqarib, alohida (o'z ID'siga teng) guruhga qaytaradi.
+    Body: {password, id}"""
+    d = request.get_json() or {}
+    if not _check(d):
+        return jsonify({"error": "ruxsat yo'q"}), 403
+    try:
+        mid = int(d.get("id"))
+    except Exception:
+        return jsonify({"error": "id kerak"}), 400
+    try:
+        with get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("UPDATE movies SET lang_group=%s WHERE id=%s", ("m" + str(mid), mid))
+            conn.commit()
+        _log_admin("lang_unlink", mid, "")
         return jsonify({"ok": True})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
