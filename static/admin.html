@@ -158,6 +158,20 @@ textarea { resize:vertical; min-height:80px; }
   box-shadow:0 16px 42px rgba(124,92,255,0.5);
   border-top-right-radius:0; border-bottom-right-radius:0;
 }
+#statsRefreshBtn:hover { transform:translateY(-1px); box-shadow:0 4px 16px rgba(157,123,255,0.28); border-color:rgba(157,123,255,0.65); }
+#statsRefreshBtn:active { transform:translateY(0) scale(0.97); }
+#statsRefreshBtn.spinning #statsRefreshIcon { animation: statsSpin .7s linear infinite; }
+@keyframes statsSpin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+.stat-card-clickable { cursor:pointer; transition:transform .15s, border-color .15s, box-shadow .15s; }
+.stat-card-clickable:hover { transform:translateY(-2px); border-color:rgba(157,123,255,0.5); box-shadow:0 6px 18px rgba(90,60,200,0.22); }
+.stat-card-clickable:active { transform:translateY(0) scale(0.98); }
+@keyframes statFadeIn { from{opacity:0; transform:translateY(6px)} to{opacity:1; transform:translateY(0)} }
+.stat-fade { animation: statFadeIn .35s ease both; }
+#statDetailOverlay { position:fixed; inset:0; background:rgba(8,6,20,0.72); backdrop-filter:blur(4px); z-index:9999; display:flex; align-items:center; justify-content:center; opacity:0; pointer-events:none; transition:opacity .2s; }
+#statDetailOverlay.open { opacity:1; pointer-events:auto; }
+#statDetailModal { background:var(--bg2,#161129); border:1px solid rgba(157,123,255,0.3); border-radius:16px; width:min(520px,92vw); max-height:80vh; display:flex; flex-direction:column; transform:scale(.96); transition:transform .2s; box-shadow:0 20px 60px rgba(0,0,0,0.5); }
+#statDetailOverlay.open #statDetailModal { transform:scale(1); }
+
 @keyframes mcardIn {
   from { opacity:0; transform:translateY(22px) scale(0.95); }
   to { opacity:1; transform:translateY(0) scale(1); }
@@ -316,13 +330,27 @@ textarea { resize:vertical; min-height:80px; }
         <span>Statistika</span>
       </div>
       <div style="display:flex;align-items:center;gap:10px;">
-        <button onclick="event.stopPropagation();loadStats();" style="padding:6px 12px;background:rgba(90,209,255,0.12);border:1px solid rgba(90,209,255,0.35);color:#5ad1ff;border-radius:8px;font-family:inherit;font-size:12px;cursor:pointer;">↻ Yangilash</button>
+        <button id="statsRefreshBtn" onclick="event.stopPropagation();loadStats();" style="display:flex;align-items:center;gap:7px;padding:7px 15px;background:linear-gradient(135deg,rgba(157,123,255,0.18),rgba(90,209,255,0.18));border:1px solid rgba(157,123,255,0.4);color:#c9baff;border-radius:9px;font-family:inherit;font-size:12.5px;font-weight:600;cursor:pointer;transition:transform .15s,box-shadow .15s;">
+          <svg id="statsRefreshIcon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" style="transition:transform .5s cubic-bezier(.4,0,.2,1);"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
+          <span id="statsRefreshLabel">Yangilash</span>
+        </button>
         <span id="statsChevron" style="font-size:18px;color:var(--dim);transition:transform .2s;">▸</span>
       </div>
     </div>
     <div id="statsBody" style="display:none;padding:0 20px 20px;">
       <div id="statsRow" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:14px;"></div>
       <div id="statsExtra"></div>
+    </div>
+  </div>
+
+  <!-- Statistika detail modal -->
+  <div id="statDetailOverlay" onclick="if(event.target===this)closeStatDetail()">
+    <div id="statDetailModal">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 18px;border-bottom:1px solid var(--line);">
+        <div id="statDetailTitle" style="font-size:15px;font-weight:700;">—</div>
+        <button onclick="closeStatDetail()" style="background:none;border:none;color:var(--dim);font-size:20px;cursor:pointer;line-height:1;padding:2px 6px;">×</button>
+      </div>
+      <div id="statDetailBody" style="overflow-y:auto;padding:10px 18px 18px;flex:1;"></div>
     </div>
   </div>
 
@@ -712,10 +740,53 @@ function toggleStats() {
   if (!open && !STATS_LOADED) loadStats();
 }
 function fmt(n){ return (n||0).toLocaleString('ru-RU'); }
-function statCard(label, val, color, icon) {
-  return '<div style="background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:13px 15px;">'
+function statCard(label, val, color, icon, detailKey) {
+  var clickable = !!detailKey;
+  var attrs = clickable ? ' class="stat-card-clickable stat-fade" onclick="openStatDetail(\''+detailKey+'\')"' : ' class="stat-fade"';
+  return '<div'+attrs+' style="background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:13px 15px;position:relative;">'
     + '<div style="font-size:12px;color:var(--dim);margin-bottom:4px;">'+(icon?icon+' ':'')+label+'</div>'
-    + '<div style="font-size:22px;font-weight:700;color:'+(color||'#fff')+';">'+val+'</div></div>';
+    + '<div style="font-size:22px;font-weight:700;color:'+(color||'#fff')+';">'+val+'</div>'
+    + (clickable ? '<div style="position:absolute;top:10px;right:10px;font-size:11px;color:var(--dim);opacity:.6;">↗</div>' : '')
+    + '</div>';
+}
+
+// ── Statistika detail modal ──
+async function openStatDetail(key) {
+  var overlay = document.getElementById('statDetailOverlay');
+  var title = document.getElementById('statDetailTitle');
+  var body = document.getElementById('statDetailBody');
+  title.textContent = 'Yuklanmoqda…';
+  body.innerHTML = '<div style="font-size:13px;color:var(--dim);padding:20px 0;text-align:center;">Yuklanmoqda…</div>';
+  overlay.classList.add('open');
+  try {
+    var r = await fetch('/api/admin/stats/detail', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ password: PASS, key: key })
+    });
+    var d = await r.json();
+    if (d.error) { title.textContent = 'Xato'; body.innerHTML = '<div style="color:#f87171;font-size:13px;">'+esc(d.error)+'</div>'; return; }
+    title.textContent = d.label + ' (' + fmt(d.count) + ')';
+    if (!d.items || !d.items.length) {
+      body.innerHTML = '<div style="font-size:13px;color:var(--dim);padding:20px 0;text-align:center;">Bo\'sh</div>';
+      return;
+    }
+    body.innerHTML = d.items.map(function(it){
+      return '<div onclick="editContentFromStats('+it.id+')" style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 6px;border-bottom:1px solid rgba(255,255,255,0.05);cursor:pointer;">'
+        + '<span style="font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">#'+it.id+' — '+esc(it.title||'(nomsiz)')+'</span>'
+        + '<span style="font-size:12px;color:#5ad1ff;flex-shrink:0;">'+fmt(it.views)+' 👁</span></div>';
+    }).join('');
+  } catch(e) {
+    title.textContent = 'Xato';
+    body.innerHTML = '<div style="color:#f87171;font-size:13px;">Ma\'lumotni yuklab bo\'lmadi</div>';
+  }
+}
+function closeStatDetail() {
+  document.getElementById('statDetailOverlay').classList.remove('open');
+}
+function editContentFromStats(id) {
+  closeStatDetail();
+  if (typeof openEdit === 'function') { openEdit(id); return; }
+  if (typeof editMovie === 'function') { editMovie(id); return; }
 }
 function statBlock(title, innerHtml) {
   return '<div style="background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:12px;">'
@@ -753,8 +824,14 @@ function miniBarChart(days) {
 async function loadStats() {
   var row = document.getElementById('statsRow');
   var extra = document.getElementById('statsExtra');
-  row.innerHTML = '<div style="grid-column:1/-1;font-size:13px;color:var(--dim);">Yuklanmoqda…</div>';
-  extra.innerHTML = '';
+  var btn = document.getElementById('statsRefreshBtn');
+  var lbl = document.getElementById('statsRefreshLabel');
+  if (btn) { btn.classList.add('spinning'); btn.disabled = true; }
+  if (lbl) lbl.textContent = 'Yuklanmoqda…';
+  if (!STATS_LOADED) {
+    row.innerHTML = '<div style="grid-column:1/-1;font-size:13px;color:var(--dim);">Yuklanmoqda…</div>';
+    extra.innerHTML = '';
+  }
   try {
     var r = await fetch('/api/admin/stats', {
       method:'POST', headers:{'Content-Type':'application/json'},
@@ -765,20 +842,20 @@ async function loadStats() {
     STATS_LOADED = true;
     var bt = s.by_type || {};
 
-    // ── Asosiy kartalar ──
+    // ── Asosiy kartalar (bosilsa — tegishli ro'yxat ochiladi) ──
     row.innerHTML =
-        statCard('Jami kontent', fmt(s.total), '#9d7bff')
+        statCard('Jami kontent', fmt(s.total), '#9d7bff', null, 'total')
       + statCard('Jami ko\'rishlar', fmt(s.total_views), '#5ad1ff')
       + statCard('O\'rtacha ko\'rish', fmt(s.avg_views))
-      + statCard('Kino', fmt(bt.movie||0))
-      + statCard('Serial', fmt(bt.series||0))
-      + statCard('Anime', fmt(bt.anime||0))
-      + statCard('Premium', fmt(s.premium_total), '#ffd166')
-      + statCard('Postersiz', fmt(s.no_poster), s.no_poster>0?'#ffc940':'#fff')
-      + statCard('Ko\'rishsiz', fmt(s.no_views), s.no_views>0?'#ffc940':'#fff')
-      + statCard('Bugun qo\'shildi', fmt(s.added_today), '#5ad1ff')
-      + statCard('So\'nggi 7 kun', fmt(s.added_7d), '#5ad1ff')
-      + statCard('So\'nggi 30 kun', fmt(s.added_30d), '#5ad1ff');
+      + statCard('Kino', fmt(bt.movie||0), null, null, 'type_movie')
+      + statCard('Serial', fmt(bt.series||0), null, null, bt.series ? 'type_series' : null)
+      + statCard('Anime', fmt(bt.anime||0), null, null, bt.anime ? 'type_anime' : null)
+      + statCard('Premium', fmt(s.premium_total), '#ffd166', null, s.premium_total ? 'premium_total' : null)
+      + statCard('Postersiz', fmt(s.no_poster), s.no_poster>0?'#ffc940':'#fff', null, s.no_poster ? 'no_poster' : null)
+      + statCard('Ko\'rishsiz', fmt(s.no_views), s.no_views>0?'#ffc940':'#fff', null, s.no_views ? 'no_views' : null)
+      + statCard('Bugun qo\'shildi', fmt(s.added_today), '#5ad1ff', null, s.added_today ? 'added_today' : null)
+      + statCard('So\'nggi 7 kun', fmt(s.added_7d), '#5ad1ff', null, s.added_7d ? 'added_7d' : null)
+      + statCard('So\'nggi 30 kun', fmt(s.added_30d), '#5ad1ff', null, s.added_30d ? 'added_30d' : null);
 
     var html = '';
 
@@ -798,7 +875,7 @@ async function loadStats() {
     if (s.top_rated && s.top_rated.length) {
       html += statBlock('⭐ Eng yuqori reyting',
         s.top_rated.map(function(t){ return listRow(t.title, t.rating.toFixed(1)+' ⭐', '#ffd166'); }).join('')
-        + '<div style="margin-top:8px;font-size:12px;color:var(--dim);">O\'rtacha reyting: <b style="color:#ffd166;">'+s.avg_rating+'</b> · Reytingsiz: <b>'+fmt(s.no_rating)+'</b></div>');
+        + '<div style="margin-top:8px;font-size:12px;color:var(--dim);">O\'rtacha reyting: <b style="color:#ffd166;">'+s.avg_rating+'</b> · Reytingsiz: <b'+(s.no_rating?' style="cursor:pointer;text-decoration:underline;" onclick="openStatDetail(\'no_rating\')"':'')+'>'+fmt(s.no_rating)+'</b></div>');
     }
 
     // Janr bo'yicha
@@ -864,7 +941,12 @@ async function loadStats() {
     html += '</div>'; // grid yopish
 
     extra.innerHTML = html;
-  } catch(e) { row.innerHTML = '<div style="grid-column:1/-1;color:#f87171;font-size:13px;">Statistikani yuklab bo\'lmadi</div>'; }
+  } catch(e) {
+    row.innerHTML = '<div style="grid-column:1/-1;color:#f87171;font-size:13px;">Statistikani yuklab bo\'lmadi</div>';
+  } finally {
+    if (btn) { btn.classList.remove('spinning'); btn.disabled = false; }
+    if (lbl) lbl.textContent = 'Yangilash';
+  }
 }
 
 // ── FON EFFEKTLARI ──
