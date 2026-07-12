@@ -1016,6 +1016,13 @@ async function openMovie(id){
               ${m.rating?`<span class="mm-tag">★ ${m.rating}</span>`:''}
               ${m.tmdb_rating?`<span class="mm-tag tmdb">TMDB ★ ${m.tmdb_rating}</span>`:''}
             </div>
+            ${(m.languages && m.languages.length>1)?`
+            <div class="mm-lang-switch">
+              ${m.languages.map(lv => `
+                <button class="mm-lang-btn ${lv.id===m.id?'active':''}" ${lv.id===m.id?'disabled':''}
+                        onclick="openMovie(${lv.id})">${esc(lv.language || 'Til')}</button>
+              `).join('')}
+            </div>`:''}
           </div>
         </div>
       </div>
