@@ -14,6 +14,8 @@ import time
 import json
 import html
 import threading
+from collections import defaultdict, deque
+from functools import wraps
 from urllib.parse import urlparse, unquote, quote
 import pg8000.dbapi
 import requests
@@ -42,6 +44,35 @@ app.secret_key = os.getenv("SECRET_KEY") or hashlib.sha256(
     (BOT_TOKEN or "astra-fallback-secret").encode()).hexdigest()
 
 import gzip as _gzip   # javoblarni siqish uchun (qo'shimcha kutubxona kerak emas)
+
+# ── Oddiy rate-limit (xotirada, tashqi kutubxonasiz) ──────────────────────────
+# Public GET endpointlarni botlab spam qilishdan himoya qiladi.
+_rl_lock = threading.Lock()
+_rl_hits = defaultdict(deque)   # key -> so'nggi so'rov vaqtlari
+
+def _client_ip():
+    fwd = request.headers.get("X-Forwarded-For", "")
+    if fwd:
+        return fwd.split(",")[0].strip()
+    return request.remote_addr or "unknown"
+
+def rate_limit(max_requests=30, window=60):
+    """max_requests ta so'rov / window soniya, IP + endpoint bo'yicha."""
+    def deco(fn):
+        @wraps(fn)
+        def wrapper(*args, **kwargs):
+            key = f"{_client_ip()}:{fn.__name__}"
+            now = time.time()
+            with _rl_lock:
+                q = _rl_hits[key]
+                while q and now - q[0] > window:
+                    q.popleft()
+                if len(q) >= max_requests:
+                    return jsonify({"error": "Juda ko'p so'rov. Birozdan keyin urinib ko'ring."}), 429
+                q.append(now)
+            return fn(*args, **kwargs)
+        return wrapper
+    return deco
 
 # ── Poster server keshi (xotirada) — Telegram'ga takror bormaslik uchun ────────
 _poster_cache = {}              # poster_id -> (bytes, content_type, timestamp)
@@ -123,12 +154,23 @@ def _notify_release(user_ids, title, movie_id):
     threading.Thread(target=worker, daemon=True).start()
 
 def _all_known_user_ids():
-    """Bazadagi barcha jadvallardan (favorites, reviews, upcoming_subs, notifications)
-    ma'lum bo'lgan foydalanuvchi ID'larini birlashtirib, noyob ro'yxat qaytaradi."""
+    """Foydalanuvchi ID'larini avval `users` jadvalidan o'qiydi (tez).
+    Agar bo'sh bo'lsa (masalan yangi deploy, users hali to'lmagan) —
+    eski jadvallardan (favorites, reviews, upcoming_subs, notifications) zaxira sifatida yig'adi."""
     ids = set()
     try:
         with get_conn() as conn:
             cur = conn.cursor()
+            try:
+                cur.execute("SELECT user_id FROM users")
+                for (uid,) in cur.fetchall():
+                    if uid:
+                        ids.add(int(uid))
+            except Exception as e:
+                log.warning("_all_known_user_ids users: %s", e)
+            if ids:
+                return list(ids)
+            # zaxira yo'l — eski usul
             for q in (
                 "SELECT DISTINCT user_id FROM favorites",
                 "SELECT DISTINCT user_id FROM reviews",
@@ -366,6 +408,39 @@ def init_db():
                     PRIMARY KEY (channel_id, session_id)
                 )
             """)
+            # Ma'lum foydalanuvchilar — login/harakat vaqtida upsert qilinadi.
+            # Bu _all_known_user_ids() ni tezlashtiradi (4 jadval o'rniga 1 tadan o'qish).
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS users (
+                    user_id BIGINT PRIMARY KEY,
+                    name TEXT,
+                    username TEXT,
+                    first_seen TIMESTAMP DEFAULT NOW(),
+                    last_seen TIMESTAMP DEFAULT NOW()
+                )
+            """)
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_users_last_seen ON users(last_seen)")
+            # Poster keshi — Telegram file_id'dan olingan rasm baytlarini DB'da saqlaymiz
+            # (Railway qayta ishga tushganda xotiradagi kesh yo'qoladi, DB qoladi).
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS poster_cache (
+                    poster_id TEXT PRIMARY KEY,
+                    content_type TEXT,
+                    data BYTEA,
+                    cached_at TIMESTAMP DEFAULT NOW()
+                )
+            """)
+            # Admin harakatlar jurnali — kim, qachon, nima qildi
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS admin_log (
+                    id SERIAL PRIMARY KEY,
+                    action TEXT NOT NULL,
+                    target TEXT,
+                    details TEXT,
+                    created_at TIMESTAMP DEFAULT NOW()
+                )
+            """)
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_admin_log_date ON admin_log(created_at DESC)")
             conn.commit()
         log.info("Kino baza tayyor (poster_url + site_settings + favorites + reviews + upcoming)")
     except Exception as e:
@@ -451,6 +526,7 @@ def cors(resp):
 
 # ── Kinolar ro'yxati (filtr/qidiruv bilan) ───────────────────────────────────
 @app.route("/api/movies")
+@rate_limit(max_requests=60, window=60)
 def api_movies():
     q = (request.args.get("q") or "").strip()
     ctype = (request.args.get("type") or "").strip()
@@ -536,6 +612,7 @@ def api_movies():
 
 # ── Bitta kino ──
 @app.route("/api/movie/<int:mid>")
+@rate_limit(max_requests=60, window=60)
 def api_movie(mid):
     try:
         with get_conn() as conn:
@@ -571,9 +648,44 @@ def api_movie(mid):
         return jsonify({"found": False, "error": str(e)}), 500
 
 # ── Poster proxy (Telegram file_id → rasm) ────────────────────────────────────
+def _poster_db_get(pid):
+    """DB keshdan poster o'qiydi (agar muddati o'tmagan bo'lsa)."""
+    try:
+        with get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("""SELECT data, content_type FROM poster_cache
+                           WHERE poster_id=%s AND cached_at > NOW() - INTERVAL '7 days'""", (pid,))
+            r = cur.fetchone()
+            if r and r[0]:
+                return bytes(r[0]), r[1] or "image/jpeg"
+    except Exception as e:
+        log.warning("poster_db_get: %s", e)
+    return None
+
+def _poster_db_save(pid, data, ct):
+    """Poster baytlarini DB keshga yozadi (fon oqimida — javobni sekinlashtirmaslik uchun)."""
+    def worker():
+        try:
+            with get_conn() as conn:
+                cur = conn.cursor()
+                cur.execute("""
+                    INSERT INTO poster_cache (poster_id, content_type, data, cached_at)
+                    VALUES (%s, %s, %s, NOW())
+                    ON CONFLICT (poster_id) DO UPDATE SET
+                        content_type = EXCLUDED.content_type,
+                        data = EXCLUDED.data,
+                        cached_at = NOW()
+                """, (pid, ct, data))
+                conn.commit()
+        except Exception as e:
+            log.warning("poster_db_save: %s", e)
+    threading.Thread(target=worker, daemon=True).start()
+
 @app.route("/api/poster/<int:mid>")
+@rate_limit(max_requests=200, window=60)
 def api_poster(mid):
-    """Telegram'dagi poster_id rasmni web uchun proxy qiladi (server keshi bilan)."""
+    """Telegram'dagi poster_id rasmni web uchun proxy qiladi.
+    Uch qatlamli kesh: xotira (eng tez) → DB (Railway qayta ishga tushsa ham saqlanadi) → Telegram."""
     if not BOT_TOKEN:
         log.warning("Poster: BOT_TOKEN yo'q! Railway Variables'ga BOT_TOKEN qo'shing.")
         return redirect("/static/no-poster.svg")
@@ -591,12 +703,26 @@ def api_poster(mid):
             return redirect("/static/no-poster.svg")
         pid = r[0]
         now = time.time()
-        # Server keshidan (xotirada) — Telegram'ga qaytadan bormaymiz
+        # 1-qatlam: xotira keshi
         hit = _poster_cache.get(pid)
         if hit and (now - hit[2] < _POSTER_TTL):
             return Response(hit[0], mimetype=hit[1],
                             headers={"Cache-Control": "public, max-age=604800"})
-        # Telegram'dan file path olamiz
+        # 2-qatlam: DB keshi (Railway qayta ishga tushganda ham saqlanadi)
+        db_hit = _poster_db_get(pid)
+        if db_hit:
+            data, ct = db_hit
+            try:
+                with _poster_lock:
+                    if len(_poster_cache) >= _POSTER_MAX:
+                        oldest = min(_poster_cache, key=lambda k: _poster_cache[k][2])
+                        _poster_cache.pop(oldest, None)
+                    _poster_cache[pid] = (data, ct, now)
+            except Exception:
+                pass
+            return Response(data, mimetype=ct,
+                            headers={"Cache-Control": "public, max-age=604800"})
+        # 3-qatlam: Telegram'dan file path olamiz
         fr = requests.get(f"https://api.telegram.org/bot{BOT_TOKEN}/getFile",
                           params={"file_id": pid}, timeout=10).json()
         if not fr.get("ok"):
@@ -608,7 +734,7 @@ def api_poster(mid):
             log.warning("Poster yuklab bo'lmadi (id=%s): status %s", mid, img.status_code)
             return redirect("/static/no-poster.svg")
         ct = img.headers.get("Content-Type", "image/jpeg")
-        # Keshga saqlaymiz (hajmni cheklab)
+        # Xotira keshiga saqlaymiz (hajmni cheklab)
         try:
             with _poster_lock:
                 if len(_poster_cache) >= _POSTER_MAX:
@@ -617,6 +743,8 @@ def api_poster(mid):
                 _poster_cache[pid] = (img.content, ct, now)
         except Exception:
             pass
+        # DB keshiga ham saqlaymiz (fon oqimida)
+        _poster_db_save(pid, img.content, ct)
         return Response(img.content, mimetype=ct,
                         headers={"Cache-Control": "public, max-age=604800"})
     except Exception as e:
@@ -708,6 +836,23 @@ def _verify_telegram_auth(data):
         return False
     return True
 
+def _touch_user(uid, name=None, username=None):
+    """Foydalanuvchini users jadvalida yaratadi/yangilaydi (login yoki harakat vaqtida)."""
+    try:
+        with get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                INSERT INTO users (user_id, name, username, first_seen, last_seen)
+                VALUES (%s, %s, %s, NOW(), NOW())
+                ON CONFLICT (user_id) DO UPDATE SET
+                    name = COALESCE(NULLIF(EXCLUDED.name, ''), users.name),
+                    username = COALESCE(NULLIF(EXCLUDED.username, ''), users.username),
+                    last_seen = NOW()
+            """, (int(uid), name or None, username or None))
+            conn.commit()
+    except Exception as e:
+        log.warning("touch_user: %s", e)
+
 @app.route("/api/tg-login", methods=["POST"])
 def tg_login():
     data = request.get_json(silent=True) or {}
@@ -721,6 +866,7 @@ def tg_login():
     session["tg_name"] = name
     session["tg_photo"] = clean.get("photo_url", "")
     session["tg_username"] = clean.get("username", "")
+    _touch_user(session["tg_id"], name, clean.get("username", ""))
     return jsonify({"ok": True, "id": session["tg_id"], "name": name, "photo": session["tg_photo"]})
 
 @app.route("/api/me")
@@ -786,6 +932,7 @@ def api_favorites():
 
 # ── Kino izohlari (fikr bildirish) ────────────────────────────────────────────
 @app.route("/api/reviews/<int:mid>", methods=["GET"])
+@rate_limit(max_requests=60, window=60)
 def api_reviews_get(mid):
     """Kino izohlari (hammaga ochiq). Javoblar asosiy izoh ostiga joylanadi (thread)."""
     me = session.get("tg_id")
@@ -2819,6 +2966,37 @@ def _check(d):
         return True
     return ((d or {}).get("password") or "") == ADMIN_PASSWORD
 
+def _log_admin(action, target="", details=""):
+    """Admin harakatini jurnalga yozadi (fon oqimida — javobni sekinlashtirmaydi)."""
+    def worker():
+        try:
+            with get_conn() as conn:
+                cur = conn.cursor()
+                cur.execute("INSERT INTO admin_log (action, target, details) VALUES (%s,%s,%s)",
+                            (action, str(target)[:200], str(details)[:500]))
+                conn.commit()
+        except Exception as e:
+            log.warning("log_admin: %s", e)
+    threading.Thread(target=worker, daemon=True).start()
+
+@app.route("/api/admin/log", methods=["POST"])
+def admin_log_list():
+    """So'nggi admin harakatlari jurnali."""
+    d = request.get_json() or {}
+    if not _check(d):
+        return jsonify({"error": "ruxsat yo'q"}), 403
+    try:
+        with get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("""SELECT action, target, details, created_at FROM admin_log
+                           ORDER BY created_at DESC LIMIT 100""")
+            rows = cur.fetchall()
+        items = [{"action": r[0], "target": r[1] or "", "details": r[2] or "",
+                   "date": r[3].strftime("%Y-%m-%d %H:%M") if r[3] else ""} for r in rows]
+        return jsonify({"items": items})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @app.route("/api/admin/broadcast", methods=["POST"])
 def admin_broadcast():
     d = request.get_json() or {}
@@ -2830,6 +3008,7 @@ def admin_broadcast():
     btn_label = (d.get("button_label") or "").strip() or None
     btn_url = (d.get("button_url") or "").strip() or None
     count = _broadcast_to_all(text, btn_label, btn_url)
+    _log_admin("broadcast", "", text[:100])
     return jsonify({"ok": True, "recipients": count})
 
 @app.route("/api/admin/login", methods=["POST"])
@@ -2838,6 +3017,7 @@ def admin_login():
     if ok:
         session.permanent = True
         session["is_admin"] = True
+        _log_admin("login", "", _client_ip())
     return jsonify({"ok": ok})
 
 @app.route("/api/admin/logout", methods=["POST"])
@@ -3342,6 +3522,7 @@ def admin_edit():
                   duration, (d.get("age_rating") or "").strip(), tmdb_rating,
                   int(mid)))
             conn.commit()
+        _log_admin("edit_movie", mid, title)
         return jsonify({"ok": True})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -3381,10 +3562,16 @@ def admin_delete():
     if not _check(d):
         return jsonify({"error": "ruxsat yo'q"}), 403
     try:
+        mid = int(d.get("id"))
+        title = ""
         with get_conn() as conn:
             cur = conn.cursor()
-            cur.execute("DELETE FROM movies WHERE id=%s", (int(d.get("id")),))
+            cur.execute("SELECT title FROM movies WHERE id=%s", (mid,))
+            r = cur.fetchone()
+            title = r[0] if r else ""
+            cur.execute("DELETE FROM movies WHERE id=%s", (mid,))
             conn.commit()
+        _log_admin("delete_movie", mid, title)
         return jsonify({"ok": True})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
