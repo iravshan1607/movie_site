@@ -29,10 +29,20 @@ log = logging.getLogger("kino")
 DATABASE_URL   = os.getenv("DATABASE_URL", "")
 BOT_TOKEN      = os.getenv("BOT_TOKEN", "")
 BOT_USERNAME   = os.getenv("BOT_USERNAME", "")          # botga yo'naltirish + Telegram login uchun
-ADMIN_PASSWORD = os.getenv("KINO_ADMIN_PASSWORD", "admin123")
-if ADMIN_PASSWORD == "admin123":
-    log.warning("OGOHLANTIRISH: KINO_ADMIN_PASSWORD environment o'zgaruvchisi o'rnatilmagan — "
-                "standart 'admin123' paroli ishlatilmoqda! Railway'da darhol o'zgartiring.")
+import secrets as _secrets
+
+ADMIN_PASSWORD = os.getenv("KINO_ADMIN_PASSWORD", "")
+if not ADMIN_PASSWORD:
+    # KINO_ADMIN_PASSWORD o'rnatilmagan bo'lsa — standart "admin123" o'rniga
+    # har safar ishga tushganda tasodifiy, kuchli parol generatsiya qilinadi va
+    # faqat serverning o'z logiga chiqariladi. Bu "admin123" bilan production'da
+    # qolib ketishning oldini oladi — parolni faqat log'ga kirish huquqi bor
+    # (ya'ni admin) ko'ra oladi.
+    ADMIN_PASSWORD = _secrets.token_urlsafe(12)
+    log.warning("OGOHLANTIRISH: KINO_ADMIN_PASSWORD environment o'zgaruvchisi o'rnatilmagan! "
+                "Vaqtinchalik tasodifiy parol generatsiya qilindi: %s — "
+                "Railway'da KINO_ADMIN_PASSWORD ni o'rnating, aks holda har deploy'da parol o'zgaradi.",
+                ADMIN_PASSWORD)
 ADMIN_CHAT_ID  = os.getenv("ADMIN_CHAT_ID", "")    # admin(lar) Telegram ID — yangi so'rov xabari uchun (vergul bilan bir nechta)
 REVIEW_COOLDOWN  = int(os.getenv("REVIEW_COOLDOWN", "15"))    # soniya — izoh/javob orasidagi minimal vaqt
 REQUEST_COOLDOWN = int(os.getenv("REQUEST_COOLDOWN", "30"))   # soniya — yangi kino so'rovi orasidagi minimal vaqt
@@ -42,9 +52,33 @@ PORT           = int(os.getenv("PORT", "8080"))
 BASE_URL       = os.getenv("BASE_URL", "https://astramovie.com").rstrip("/")
 
 app = Flask(__name__, static_folder="static")
-# Sessiya imzosi uchun maxfiy kalit (SECRET_KEY bo'lmasa BOT_TOKEN'dan barqaror hosil qilinadi)
-app.secret_key = os.getenv("SECRET_KEY") or hashlib.sha256(
-    (BOT_TOKEN or "astra-fallback-secret").encode()).hexdigest()
+# Sessiya imzosi uchun maxfiy kalit.
+# Eslatma: avval BOT_TOKEN'dan hosil qilinardi — bu xavfli edi, chunki BOT_TOKEN
+# sizib chiqsa session imzosi ham (ikkilamchi tarzda) buzilardi. Endi SECRET_KEY
+# bo'lmasa, /app ichida saqlanadigan alohida tasodifiy fayl orqali barqaror kalit
+# ishlatiladi (deploy qayta tushganda ham bir xil qoladi, lekin BOT_TOKEN'dan mustaqil).
+_secret_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".flask_secret_key")
+def _load_or_create_secret():
+    env_key = os.getenv("SECRET_KEY")
+    if env_key:
+        return env_key
+    try:
+        if os.path.exists(_secret_path):
+            with open(_secret_path, "r") as f:
+                val = f.read().strip()
+                if val:
+                    return val
+        val = _secrets.token_hex(32)
+        with open(_secret_path, "w") as f:
+            f.write(val)
+        return val
+    except Exception:
+        # Fayl tizimi yozib bo'lmaydigan (masalan read-only) bo'lsa —
+        # kamida process davomida barqaror bo'lsin (restart'da o'zgaradi,
+        # bu esa faqat mavjud sessiyalarni bekor qiladi, xavfsizlik muammosi emas).
+        return _secrets.token_hex(32)
+
+app.secret_key = _load_or_create_secret()
 
 # ── Session cookie xavfsizlik sozlamalari ──────────────────────────────────
 app.config.update(
@@ -85,28 +119,78 @@ def rate_limit(max_requests=30, window=60):
         return wrapper
     return deco
 
-# ── Admin login uchun brute-force himoyasi (xotirada, IP bo'yicha) ────────────
+# ── Admin login uchun brute-force himoyasi ────────────────────────────────────
+# MUHIM: avval bu butunlay xotirada (per-process) saqlanardi. Gunicorn bir nechta
+# worker bilan ishga tushirilganda (Procfile'da --workers 2), har bir worker o'z
+# alohida xotirasini saqlaydi — ya'ni haqiqiy limit workerlar soniga ko'paytiriladi
+# (masalan 2 worker = amalda 10 ta urinish, 5 emas). Shuning uchun endi holat
+# PostgreSQL'da saqlanadi (barcha workerlar/instance'lar ko'radi). DB mavjud
+# bo'lmasa yoki xato bersa — xotiradagi eski usulga zaxira qilinadi (0 emas,
+# kamida bitta workerlik himoya bo'lsin).
 _login_lock = threading.Lock()
-_login_fails = defaultdict(list)   # ip -> [muvaffaqiyatsiz urinish vaqtlari]
+_login_fails_mem = defaultdict(list)   # zaxira: ip -> [muvaffaqiyatsiz urinish vaqtlari]
 _LOGIN_MAX_FAILS = 5                # shu vaqt oralig'ida ruxsat etilgan max noto'g'ri urinish
 _LOGIN_WINDOW = 15 * 60             # 15 daqiqa
 _LOGIN_LOCKOUT = 15 * 60            # limitdan oshsa, 15 daqiqaga bloklanadi
 
+_LOGIN_FAILS_DDL = """CREATE TABLE IF NOT EXISTS admin_login_fails (
+    ip TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT NOW()
+)"""
+
 def _login_blocked(ip):
-    now = time.time()
-    with _login_lock:
-        fails = _login_fails[ip]
-        while fails and now - fails[0] > _LOGIN_WINDOW:
-            fails.pop(0)
-        return len(fails) >= _LOGIN_MAX_FAILS
+    try:
+        with get_conn() as conn:
+            cur = conn.cursor()
+            try:
+                cur.execute(
+                    "SELECT COUNT(*) FROM admin_login_fails WHERE ip=%s AND created_at > NOW() - INTERVAL '15 minutes'",
+                    (ip,))
+                count = cur.fetchone()[0]
+            except Exception:
+                conn.rollback()
+                cur.execute(_LOGIN_FAILS_DDL)
+                conn.commit()
+                count = 0
+            return count >= _LOGIN_MAX_FAILS
+    except Exception as e:
+        log.warning("_login_blocked DB xato, xotiradagi zaxiraga o'tildi: %s", e)
+        now = time.time()
+        with _login_lock:
+            fails = _login_fails_mem[ip]
+            while fails and now - fails[0] > _LOGIN_WINDOW:
+                fails.pop(0)
+            return len(fails) >= _LOGIN_MAX_FAILS
 
 def _login_register_fail(ip):
+    try:
+        with get_conn() as conn:
+            cur = conn.cursor()
+            try:
+                cur.execute("INSERT INTO admin_login_fails (ip) VALUES (%s)", (ip,))
+                conn.commit()
+                return
+            except Exception:
+                conn.rollback()
+                cur.execute(_LOGIN_FAILS_DDL)
+                cur.execute("INSERT INTO admin_login_fails (ip) VALUES (%s)", (ip,))
+                conn.commit()
+                return
+    except Exception as e:
+        log.warning("_login_register_fail DB xato, xotiradagi zaxiraga o'tildi: %s", e)
     with _login_lock:
-        _login_fails[ip].append(time.time())
+        _login_fails_mem[ip].append(time.time())
 
 def _login_clear(ip):
+    try:
+        with get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("DELETE FROM admin_login_fails WHERE ip=%s", (ip,))
+            conn.commit()
+    except Exception as e:
+        log.warning("_login_clear DB xato: %s", e)
     with _login_lock:
-        _login_fails.pop(ip, None)
+        _login_fails_mem.pop(ip, None)
 
 # ── Poster server keshi (xotirada) — Telegram'ga takror bormaslik uchun ────────
 _poster_cache = {}              # poster_id -> (bytes, content_type, timestamp)
@@ -443,6 +527,11 @@ def init_db():
                 created_at TIMESTAMP DEFAULT NOW()
             )""",
         "CREATE INDEX IF NOT EXISTS idx_admin_log_date ON admin_log(created_at DESC)",
+        """CREATE TABLE IF NOT EXISTS admin_login_fails (
+                ip TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT NOW()
+            )""",
+        "CREATE INDEX IF NOT EXISTS idx_admin_login_fails_ip ON admin_login_fails(ip, created_at)",
     ]
     ok_count = 0
     try:
