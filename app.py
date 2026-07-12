@@ -283,168 +283,143 @@ def init_db():
     if not DATABASE_URL:
         log.warning("DATABASE_URL yo'q")
         return
-    # poster_url ustuni — web uchun tashqi rasm havolasi (botdagi poster_id'dan mustaqil)
+    # Har bir DDL alohida, xavfsiz bajariladi — bittasi xato bersa ham
+    # qolganlari ishlashda davom etadi (masalan admin_log jadval yaratilmay qolmasin).
+    ddls = [
+        "ALTER TABLE movies ADD COLUMN IF NOT EXISTS poster_url TEXT",
+        "ALTER TABLE movies ADD COLUMN IF NOT EXISTS trailer TEXT",
+        "ALTER TABLE movies ADD COLUMN IF NOT EXISTS is_premium BOOLEAN DEFAULT FALSE",
+        "ALTER TABLE movies ADD COLUMN IF NOT EXISTS original_title TEXT",
+        "ALTER TABLE movies ADD COLUMN IF NOT EXISTS director TEXT",
+        "ALTER TABLE movies ADD COLUMN IF NOT EXISTS actors TEXT",
+        "ALTER TABLE movies ADD COLUMN IF NOT EXISTS country TEXT",
+        "ALTER TABLE movies ADD COLUMN IF NOT EXISTS duration INTEGER",
+        "ALTER TABLE movies ADD COLUMN IF NOT EXISTS age_rating TEXT",
+        "ALTER TABLE movies ADD COLUMN IF NOT EXISTS tmdb_rating NUMERIC",
+        """CREATE TABLE IF NOT EXISTS site_settings (
+                key   TEXT PRIMARY KEY,
+                value TEXT
+            )""",
+        """CREATE TABLE IF NOT EXISTS favorites (
+                user_id BIGINT NOT NULL,
+                item_type TEXT NOT NULL,
+                item_id TEXT NOT NULL,
+                title TEXT,
+                extra TEXT,
+                added_at TIMESTAMP DEFAULT NOW(),
+                PRIMARY KEY (user_id, item_type, item_id)
+            )""",
+        """CREATE TABLE IF NOT EXISTS reviews (
+                id SERIAL PRIMARY KEY,
+                movie_id BIGINT NOT NULL,
+                user_id BIGINT NOT NULL,
+                user_name TEXT,
+                user_photo TEXT,
+                rating SMALLINT,
+                text TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT NOW()
+            )""",
+        "CREATE INDEX IF NOT EXISTS idx_reviews_movie ON reviews(movie_id)",
+        "ALTER TABLE reviews ADD COLUMN IF NOT EXISTS parent_id BIGINT",
+        "CREATE INDEX IF NOT EXISTS idx_reviews_parent ON reviews(parent_id)",
+        """CREATE TABLE IF NOT EXISTS upcoming (
+                id SERIAL PRIMARY KEY,
+                title TEXT NOT NULL,
+                note TEXT,
+                poster_url TEXT,
+                status TEXT NOT NULL DEFAULT 'soon',
+                movie_id BIGINT,
+                created_by BIGINT,
+                created_at TIMESTAMP DEFAULT NOW(),
+                released_at TIMESTAMP
+            )""",
+        "CREATE INDEX IF NOT EXISTS idx_upcoming_status ON upcoming(status)",
+        """CREATE TABLE IF NOT EXISTS upcoming_subs (
+                upcoming_id INTEGER NOT NULL,
+                user_id BIGINT NOT NULL,
+                user_name TEXT,
+                created_at TIMESTAMP DEFAULT NOW(),
+                PRIMARY KEY (upcoming_id, user_id)
+            )""",
+        """CREATE TABLE IF NOT EXISTS notifications (
+                id SERIAL PRIMARY KEY,
+                user_id BIGINT NOT NULL,
+                type TEXT NOT NULL,
+                text TEXT NOT NULL,
+                movie_id BIGINT,
+                is_read BOOLEAN DEFAULT FALSE,
+                created_at TIMESTAMP DEFAULT NOW()
+            )""",
+        "CREATE INDEX IF NOT EXISTS idx_notif_user ON notifications(user_id, is_read)",
+        """CREATE TABLE IF NOT EXISTS ads (
+                id SERIAL PRIMARY KEY,
+                title TEXT NOT NULL,
+                image_url TEXT DEFAULT '',
+                link TEXT DEFAULT '',
+                placement TEXT DEFAULT 'all',
+                is_active BOOLEAN DEFAULT TRUE,
+                created_at TIMESTAMP DEFAULT NOW()
+            )""",
+        """CREATE TABLE IF NOT EXISTS tv_channels (
+                id SERIAL PRIMARY KEY,
+                name TEXT NOT NULL,
+                logo_url TEXT DEFAULT '',
+                stream_url TEXT DEFAULT '',
+                source_type TEXT DEFAULT 'hls',
+                category TEXT DEFAULT 'Umumiy',
+                description TEXT DEFAULT '',
+                sort_order INTEGER DEFAULT 0,
+                is_active BOOLEAN DEFAULT TRUE,
+                created_at TIMESTAMP DEFAULT NOW()
+            )""",
+        "ALTER TABLE tv_channels ADD COLUMN IF NOT EXISTS source_type TEXT DEFAULT 'hls'",
+        """CREATE TABLE IF NOT EXISTS tv_viewers (
+                channel_id INTEGER NOT NULL,
+                session_id TEXT NOT NULL,
+                last_seen TIMESTAMP DEFAULT NOW(),
+                PRIMARY KEY (channel_id, session_id)
+            )""",
+        # Ma'lum foydalanuvchilar — login/harakat vaqtida upsert qilinadi.
+        """CREATE TABLE IF NOT EXISTS users (
+                user_id BIGINT PRIMARY KEY,
+                name TEXT,
+                username TEXT,
+                first_seen TIMESTAMP DEFAULT NOW(),
+                last_seen TIMESTAMP DEFAULT NOW()
+            )""",
+        "CREATE INDEX IF NOT EXISTS idx_users_last_seen ON users(last_seen)",
+        # Poster keshi — Telegram file_id'dan olingan rasm baytlarini DB'da saqlaymiz.
+        """CREATE TABLE IF NOT EXISTS poster_cache (
+                poster_id TEXT PRIMARY KEY,
+                content_type TEXT,
+                data BYTEA,
+                cached_at TIMESTAMP DEFAULT NOW()
+            )""",
+        # Admin harakatlar jurnali — kim, qachon, nima qildi
+        """CREATE TABLE IF NOT EXISTS admin_log (
+                id SERIAL PRIMARY KEY,
+                action TEXT NOT NULL,
+                target TEXT,
+                details TEXT,
+                created_at TIMESTAMP DEFAULT NOW()
+            )""",
+        "CREATE INDEX IF NOT EXISTS idx_admin_log_date ON admin_log(created_at DESC)",
+    ]
+    ok_count = 0
     try:
         with get_conn() as conn:
             cur = conn.cursor()
-            cur.execute("ALTER TABLE movies ADD COLUMN IF NOT EXISTS poster_url TEXT")
-            cur.execute("ALTER TABLE movies ADD COLUMN IF NOT EXISTS trailer TEXT")
-            cur.execute("ALTER TABLE movies ADD COLUMN IF NOT EXISTS is_premium BOOLEAN DEFAULT FALSE")
-            # Asl nomi / boshqa tildagi nomi — sarlavha ostida ko'rsatiladi (masalan: "Tri metra nad urovnem neba")
-            cur.execute("ALTER TABLE movies ADD COLUMN IF NOT EXISTS original_title TEXT")
-            # Qo'shimcha ma'lumotlar — rejissyor, aktyorlar, davlat, davomiylik, yosh chegarasi
-            cur.execute("ALTER TABLE movies ADD COLUMN IF NOT EXISTS director TEXT")
-            cur.execute("ALTER TABLE movies ADD COLUMN IF NOT EXISTS actors TEXT")
-            cur.execute("ALTER TABLE movies ADD COLUMN IF NOT EXISTS country TEXT")
-            cur.execute("ALTER TABLE movies ADD COLUMN IF NOT EXISTS duration INTEGER")
-            cur.execute("ALTER TABLE movies ADD COLUMN IF NOT EXISTS age_rating TEXT")
-            cur.execute("ALTER TABLE movies ADD COLUMN IF NOT EXISTS tmdb_rating NUMERIC")
-            # Fon effektlari sozlamalari uchun kalit-qiymat jadvali
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS site_settings (
-                    key   TEXT PRIMARY KEY,
-                    value TEXT
-                )
-            """)
-            # Sevimlilar — bot bilan umumiy jadval (telegram user_id bo'yicha)
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS favorites (
-                    user_id BIGINT NOT NULL,
-                    item_type TEXT NOT NULL,
-                    item_id TEXT NOT NULL,
-                    title TEXT,
-                    extra TEXT,
-                    added_at TIMESTAMP DEFAULT NOW(),
-                    PRIMARY KEY (user_id, item_type, item_id)
-                )
-            """)
-            # Kino izohlari (fikr bildirish) — telegram foydalanuvchi bo'yicha
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS reviews (
-                    id SERIAL PRIMARY KEY,
-                    movie_id BIGINT NOT NULL,
-                    user_id BIGINT NOT NULL,
-                    user_name TEXT,
-                    user_photo TEXT,
-                    rating SMALLINT,
-                    text TEXT NOT NULL,
-                    created_at TIMESTAMP DEFAULT NOW()
-                )
-            """)
-            cur.execute("CREATE INDEX IF NOT EXISTS idx_reviews_movie ON reviews(movie_id)")
-            # Izohga javob (thread) uchun — parent_id (NULL bo'lsa — asosiy izoh)
-            cur.execute("ALTER TABLE reviews ADD COLUMN IF NOT EXISTS parent_id BIGINT")
-            cur.execute("CREATE INDEX IF NOT EXISTS idx_reviews_parent ON reviews(parent_id)")
-            # "Tez orada" — hali qo'shilmagan, lekin so'ralgan/kutilayotgan kinolar
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS upcoming (
-                    id SERIAL PRIMARY KEY,
-                    title TEXT NOT NULL,
-                    note TEXT,
-                    poster_url TEXT,
-                    status TEXT NOT NULL DEFAULT 'soon',  -- pending | soon | released
-                    movie_id BIGINT,                       -- qo'shilgach bog'lanadigan kino
-                    created_by BIGINT,
-                    created_at TIMESTAMP DEFAULT NOW(),
-                    released_at TIMESTAMP
-                )
-            """)
-            cur.execute("CREATE INDEX IF NOT EXISTS idx_upcoming_status ON upcoming(status)")
-            # "Tez orada" ga obuna — kino qo'shilganda kimga xabar berish kerakligi
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS upcoming_subs (
-                    upcoming_id INTEGER NOT NULL,
-                    user_id BIGINT NOT NULL,
-                    user_name TEXT,
-                    created_at TIMESTAMP DEFAULT NOW(),
-                    PRIMARY KEY (upcoming_id, user_id)
-                )
-            """)
-            # Saytdagi bildirishnomalar (qo'ng'iroq) — javoblar va chiqqan kinolar
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS notifications (
-                    id SERIAL PRIMARY KEY,
-                    user_id BIGINT NOT NULL,
-                    type TEXT NOT NULL,          -- reply | release
-                    text TEXT NOT NULL,
-                    movie_id BIGINT,
-                    is_read BOOLEAN DEFAULT FALSE,
-                    created_at TIMESTAMP DEFAULT NOW()
-                )
-            """)
-            cur.execute("CREATE INDEX IF NOT EXISTS idx_notif_user ON notifications(user_id, is_read)")
-            # Reklama (sayt + bot uchun umumiy) — admin saytdan boshqaradi
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS ads (
-                    id SERIAL PRIMARY KEY,
-                    title TEXT NOT NULL,
-                    image_url TEXT DEFAULT '',
-                    link TEXT DEFAULT '',
-                    placement TEXT DEFAULT 'all',   -- site | bot | all
-                    is_active BOOLEAN DEFAULT TRUE,
-                    created_at TIMESTAMP DEFAULT NOW()
-                )
-            """)
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS tv_channels (
-                    id SERIAL PRIMARY KEY,
-                    name TEXT NOT NULL,
-                    logo_url TEXT DEFAULT '',
-                    stream_url TEXT DEFAULT '',      -- HLS (.m3u8) yoki YouTube havola/ID
-                    source_type TEXT DEFAULT 'hls',  -- hls | youtube
-                    category TEXT DEFAULT 'Umumiy',  -- Umumiy | Yangiliklar | Sport | Bolalar | Kino | Musiqa
-                    description TEXT DEFAULT '',
-                    sort_order INTEGER DEFAULT 0,
-                    is_active BOOLEAN DEFAULT TRUE,
-                    created_at TIMESTAMP DEFAULT NOW()
-                )
-            """)
-            cur.execute("ALTER TABLE tv_channels ADD COLUMN IF NOT EXISTS source_type TEXT DEFAULT 'hls'")
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS tv_viewers (
-                    channel_id INTEGER NOT NULL,
-                    session_id TEXT NOT NULL,
-                    last_seen TIMESTAMP DEFAULT NOW(),
-                    PRIMARY KEY (channel_id, session_id)
-                )
-            """)
-            # Ma'lum foydalanuvchilar — login/harakat vaqtida upsert qilinadi.
-            # Bu _all_known_user_ids() ni tezlashtiradi (4 jadval o'rniga 1 tadan o'qish).
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS users (
-                    user_id BIGINT PRIMARY KEY,
-                    name TEXT,
-                    username TEXT,
-                    first_seen TIMESTAMP DEFAULT NOW(),
-                    last_seen TIMESTAMP DEFAULT NOW()
-                )
-            """)
-            cur.execute("CREATE INDEX IF NOT EXISTS idx_users_last_seen ON users(last_seen)")
-            # Poster keshi — Telegram file_id'dan olingan rasm baytlarini DB'da saqlaymiz
-            # (Railway qayta ishga tushganda xotiradagi kesh yo'qoladi, DB qoladi).
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS poster_cache (
-                    poster_id TEXT PRIMARY KEY,
-                    content_type TEXT,
-                    data BYTEA,
-                    cached_at TIMESTAMP DEFAULT NOW()
-                )
-            """)
-            # Admin harakatlar jurnali — kim, qachon, nima qildi
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS admin_log (
-                    id SERIAL PRIMARY KEY,
-                    action TEXT NOT NULL,
-                    target TEXT,
-                    details TEXT,
-                    created_at TIMESTAMP DEFAULT NOW()
-                )
-            """)
-            cur.execute("CREATE INDEX IF NOT EXISTS idx_admin_log_date ON admin_log(created_at DESC)")
-            conn.commit()
-        log.info("Kino baza tayyor (poster_url + site_settings + favorites + reviews + upcoming)")
+            for ddl in ddls:
+                try:
+                    cur.execute(ddl)
+                    conn.commit()
+                    ok_count += 1
+                except Exception as e:
+                    conn.rollback()
+                    log.warning("init_db DDL xato: %s | %s", e, ddl.strip()[:60])
+        log.info("Kino baza tayyor (%s/%s DDL bajarildi)", ok_count, len(ddls))
     except Exception as e:
-        log.warning("init_db: %s", e)
+        log.warning("init_db conn: %s", e)
 
 # Fon effektlari — standart holat (admin o'zgartirmaguncha)
 FX_DEFAULTS = {
@@ -2966,15 +2941,30 @@ def _check(d):
         return True
     return ((d or {}).get("password") or "") == ADMIN_PASSWORD
 
+_ADMIN_LOG_DDL = """CREATE TABLE IF NOT EXISTS admin_log (
+    id SERIAL PRIMARY KEY,
+    action TEXT NOT NULL,
+    target TEXT,
+    details TEXT,
+    created_at TIMESTAMP DEFAULT NOW()
+)"""
+
 def _log_admin(action, target="", details=""):
     """Admin harakatini jurnalga yozadi (fon oqimida — javobni sekinlashtirmaydi)."""
     def worker():
         try:
             with get_conn() as conn:
                 cur = conn.cursor()
-                cur.execute("INSERT INTO admin_log (action, target, details) VALUES (%s,%s,%s)",
-                            (action, str(target)[:200], str(details)[:500]))
-                conn.commit()
+                try:
+                    cur.execute("INSERT INTO admin_log (action, target, details) VALUES (%s,%s,%s)",
+                                (action, str(target)[:200], str(details)[:500]))
+                    conn.commit()
+                except Exception:
+                    conn.rollback()
+                    cur.execute(_ADMIN_LOG_DDL)
+                    cur.execute("INSERT INTO admin_log (action, target, details) VALUES (%s,%s,%s)",
+                                (action, str(target)[:200], str(details)[:500]))
+                    conn.commit()
         except Exception as e:
             log.warning("log_admin: %s", e)
     threading.Thread(target=worker, daemon=True).start()
@@ -2988,9 +2978,16 @@ def admin_log_list():
     try:
         with get_conn() as conn:
             cur = conn.cursor()
-            cur.execute("""SELECT action, target, details, created_at FROM admin_log
-                           ORDER BY created_at DESC LIMIT 100""")
-            rows = cur.fetchall()
+            try:
+                cur.execute("""SELECT action, target, details, created_at FROM admin_log
+                               ORDER BY created_at DESC LIMIT 100""")
+                rows = cur.fetchall()
+            except Exception:
+                # Jadval hali yo'q bo'lsa (eski deploy) — shu yerda yaratib, bo'sh ro'yxat qaytaramiz
+                conn.rollback()
+                cur.execute(_ADMIN_LOG_DDL)
+                conn.commit()
+                rows = []
         items = [{"action": r[0], "target": r[1] or "", "details": r[2] or "",
                    "date": r[3].strftime("%Y-%m-%d %H:%M") if r[3] else ""} for r in rows]
         return jsonify({"items": items})
