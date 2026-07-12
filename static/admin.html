@@ -1880,10 +1880,13 @@ async function loadLangList(id) {
   const box = document.getElementById('eLangList');
   box.innerHTML = '<span style="font-size:12px;color:var(--dim);">Yuklanmoqda...</span>';
   try {
-    const r = await fetch('/api/movie/' + id);
+    const r = await fetch('/api/admin/lang/list', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ password: PASS, id })
+    });
     const d = await r.json();
-    if (!d.found) { box.innerHTML = ''; return; }
-    const langs = d.movie.languages || [];
+    if (d.error) { box.innerHTML = ''; return; }
+    const langs = d.languages || [];
     if (langs.length <= 1) {
       box.innerHTML = '<span style="font-size:12px;color:var(--dim);">Hali boshqa til bog\'lanmagan.</span>';
       return;
