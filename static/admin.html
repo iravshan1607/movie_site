@@ -678,6 +678,15 @@ button:disabled { cursor: default; filter: none; }
       <div><span class="lbl">Til</span><input id="eLang"></div>
       <div><span class="lbl">Sifat</span><input id="eQuality"></div>
     </div>
+
+    <!-- TIL VERSIYALARINI BOG'LASH -->
+    <span class="lbl">🌐 Boshqa til versiyalari</span>
+    <div id="eLangList" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;"></div>
+    <div style="display:flex;gap:8px;margin-bottom:14px;">
+      <input id="eLangOtherId" type="number" placeholder="Bog'lanadigan kino ID raqami" style="flex:1;">
+      <button onclick="linkLang()" style="padding:9px 14px;background:rgba(90,209,255,0.12);border:1px solid rgba(90,209,255,0.4);border-radius:10px;color:#5ad1ff;font-family:inherit;font-size:13px;cursor:pointer;white-space:nowrap;">🔗 Bog'lash</button>
+    </div>
+
     <span class="lbl">Turi</span>
     <select id="eType">
       <option value="movie">🎬 Kino</option>
@@ -1786,8 +1795,61 @@ async function openEdit(id) {
   document.getElementById('eDesc').value    = m.description;
 
   updatePosterPreview();
+  loadLangList(m.id);
 
   document.getElementById('editOverlay').classList.add('open');
+}
+
+// ── TIL VERSIYALARI RO'YXATI ──
+async function loadLangList(id) {
+  const box = document.getElementById('eLangList');
+  box.innerHTML = '<span style="font-size:12px;color:var(--dim);">Yuklanmoqda...</span>';
+  try {
+    const r = await fetch('/api/movie/' + id);
+    const d = await r.json();
+    if (!d.found) { box.innerHTML = ''; return; }
+    const langs = d.movie.languages || [];
+    if (langs.length <= 1) {
+      box.innerHTML = '<span style="font-size:12px;color:var(--dim);">Hali boshqa til bog\'lanmagan.</span>';
+      return;
+    }
+    box.innerHTML = langs.map(lv => {
+      if (lv.id === id) {
+        return `<span style="font-size:12px;padding:6px 12px;background:var(--red);border-radius:16px;color:#fff;">${lv.language || 'Til'} (shu)</span>`;
+      }
+      return `<span style="display:flex;align-items:center;gap:6px;font-size:12px;padding:6px 6px 6px 12px;background:rgba(255,255,255,0.08);border-radius:16px;">
+        ${lv.language || 'Til'} #${lv.id}
+        <button onclick="unlinkLang(${lv.id})" title="Guruhdan chiqarish" style="background:none;border:none;color:#ff6b6b;cursor:pointer;font-size:14px;line-height:1;padding:2px 4px;">×</button>
+      </span>`;
+    }).join('');
+  } catch (e) {
+    box.innerHTML = '<span style="font-size:12px;color:#ff6b6b;">Xatolik</span>';
+  }
+}
+
+async function linkLang() {
+  const id = parseInt(document.getElementById('eId').value);
+  const otherId = parseInt(document.getElementById('eLangOtherId').value);
+  if (!otherId) { alert('Bog\'lanadigan kino ID raqamini kiriting'); return; }
+  const r = await fetch('/api/admin/lang/link', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ password: PASS, id, other_id: otherId })
+  });
+  const d = await r.json();
+  if (d.error) { alert(d.error); return; }
+  document.getElementById('eLangOtherId').value = '';
+  loadLangList(id);
+}
+
+async function unlinkLang(id) {
+  if (!confirm('Bu kinoni til guruhidan chiqarasizmi?')) return;
+  const r = await fetch('/api/admin/lang/unlink', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ password: PASS, id })
+  });
+  const d = await r.json();
+  if (d.error) { alert(d.error); return; }
+  loadLangList(parseInt(document.getElementById('eId').value));
 }
 
 // ── POSTER OLDINDAN KO'RISH ──
