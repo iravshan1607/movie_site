@@ -1,0 +1,4 @@
+# Faqat lokal/CI test uchun. Production deploy (Dockerfile/nixpacks) buni
+# o'rnatmaydi — faqat requirements.txt asosiy bog'liqliklarni o'rnatadi.
+-r requirements.txt
+pytest==8.3.3
