@@ -43,6 +43,14 @@ app = Flask(__name__, static_folder="static")
 app.secret_key = os.getenv("SECRET_KEY") or hashlib.sha256(
     (BOT_TOKEN or "astra-fallback-secret").encode()).hexdigest()
 
+# ── Session cookie xavfsizlik sozlamalari ──────────────────────────────────
+app.config.update(
+    SESSION_COOKIE_HTTPONLY=True,      # JS orqali o'qib bo'lmaydi (XSS himoyasi)
+    SESSION_COOKIE_SECURE=True,        # faqat HTTPS orqali yuboriladi
+    SESSION_COOKIE_SAMESITE="Lax",     # CSRF xavfini kamaytiradi
+    PERMANENT_SESSION_LIFETIME=60 * 60 * 12,  # 12 soat — session.permanent=True bo'lganda
+)
+
 import gzip as _gzip   # javoblarni siqish uchun (qo'shimcha kutubxona kerak emas)
 
 # ── Oddiy rate-limit (xotirada, tashqi kutubxonasiz) ──────────────────────────
@@ -73,6 +81,29 @@ def rate_limit(max_requests=30, window=60):
             return fn(*args, **kwargs)
         return wrapper
     return deco
+
+# ── Admin login uchun brute-force himoyasi (xotirada, IP bo'yicha) ────────────
+_login_lock = threading.Lock()
+_login_fails = defaultdict(list)   # ip -> [muvaffaqiyatsiz urinish vaqtlari]
+_LOGIN_MAX_FAILS = 5                # shu vaqt oralig'ida ruxsat etilgan max noto'g'ri urinish
+_LOGIN_WINDOW = 15 * 60             # 15 daqiqa
+_LOGIN_LOCKOUT = 15 * 60            # limitdan oshsa, 15 daqiqaga bloklanadi
+
+def _login_blocked(ip):
+    now = time.time()
+    with _login_lock:
+        fails = _login_fails[ip]
+        while fails and now - fails[0] > _LOGIN_WINDOW:
+            fails.pop(0)
+        return len(fails) >= _LOGIN_MAX_FAILS
+
+def _login_register_fail(ip):
+    with _login_lock:
+        _login_fails[ip].append(time.time())
+
+def _login_clear(ip):
+    with _login_lock:
+        _login_fails.pop(ip, None)
 
 # ── Poster server keshi (xotirada) — Telegram'ga takror bormaslik uchun ────────
 _poster_cache = {}              # poster_id -> (bytes, content_type, timestamp)
@@ -3010,11 +3041,20 @@ def admin_broadcast():
 
 @app.route("/api/admin/login", methods=["POST"])
 def admin_login():
+    ip = _client_ip()
+    if _login_blocked(ip):
+        _log_admin("login_blocked", "", ip)
+        return jsonify({"ok": False, "error": "Juda ko'p noto'g'ri urinish. 15 daqiqadan keyin qayta urinib ko'ring."}), 429
+
     ok = ((request.get_json() or {}).get("password") or "") == ADMIN_PASSWORD
     if ok:
+        _login_clear(ip)
         session.permanent = True
         session["is_admin"] = True
-        _log_admin("login", "", _client_ip())
+        _log_admin("login", "", ip)
+    else:
+        _login_register_fail(ip)
+        _log_admin("login_failed", "", ip)
     return jsonify({"ok": ok})
 
 @app.route("/api/admin/logout", methods=["POST"])
