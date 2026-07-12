@@ -13,12 +13,26 @@ function getRecent(){
 function pushRecent(m){
   if (!m || !m.id) return;
   try {
-    let list = getRecent().filter(x => x.id !== m.id);
+    let list = getRecent().filter(x => x.id !== m.id && (!m.lang_group || x.lang_group !== m.lang_group));
     list.unshift({ id:m.id, title:m.title, poster_id:m.poster_id, poster_url:m.poster_url,
-                   type:m.type, year:m.year, rating:m.rating, genre:m.genre });
+                   type:m.type, year:m.year, rating:m.rating, genre:m.genre,
+                   lang_group:m.lang_group||'', languages:(m.languages||[]).map(l=>l.language).filter(Boolean) });
     list = list.slice(0, 12);
     localStorage.setItem('astra_recent', JSON.stringify(list));
   } catch(e){}
+}
+// Bir xil kinoning turli til versiyalari qatorda ikki marta chiqmasin —
+// eski (lang_group'siz) yozuvlar ham shu yerda tozalanadi.
+function dedupeRecent(list){
+  const seen = new Set();
+  const out = [];
+  (list||[]).forEach(function(x){
+    const key = x.lang_group ? ('g:'+x.lang_group) : ('i:'+x.id);
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push(x);
+  });
+  return out;
 }
 let allMovies = [];
 const typeLabel = { movie: 'Kino', series: 'Serial', anime: 'Anime', cartoon: 'Multfilm' };
@@ -173,19 +187,19 @@ fetch('/api/botlink').then(r=>r.json()).then(d=>{ BOT = d.bot || ''; var tg=docu
       var inner;
       if (ad.image_url) {
         inner = '<div style="display:flex;gap:13px;align-items:center;">'
-          + '<img src="'+esc(ad.image_url)+'" alt="" loading="lazy" style="width:96px;height:68px;object-fit:cover;border-radius:8px;flex:0 0 auto;">'
-          + '<div style="min-width:0;"><div style="font-size:15px;color:#fff;font-weight:500;line-height:1.45;">'+esc(ad.title)+'</div>'
+          + '<img class="ad-img" src="'+esc(ad.image_url)+'" alt="" loading="lazy" style="width:96px;height:68px;object-fit:cover;border-radius:8px;flex:0 0 auto;">'
+          + '<div style="min-width:0;"><div class="ad-title" style="font-size:15px;color:#fff;font-weight:500;line-height:1.45;">'+esc(ad.title)+'</div>'
           + (ad.link ? '<div style="font-size:13px;color:#9b93c4;margin-top:4px;">Batafsil →</div>' : '')
           + '</div></div>';
       } else {
         inner = '<div style="display:flex;gap:12px;align-items:center;">'
           + '<div style="width:38px;height:38px;flex:0 0 auto;border-radius:9px;background:rgba(124,92,255,0.25);display:flex;align-items:center;justify-content:center;font-size:19px;">📢</div>'
-          + '<div style="font-size:15px;color:#fff;font-weight:500;line-height:1.45;">'+esc(ad.title)+'</div></div>';
+          + '<div class="ad-title" style="font-size:15px;color:#fff;font-weight:500;line-height:1.45;">'+esc(ad.title)+'</div></div>';
       }
       var style = 'display:block;text-decoration:none;background:rgba(124,92,255,0.10);border:1px solid rgba(124,92,255,0.4);border-radius:12px;padding:16px;margin:20px 0 6px;position:relative;';
       var label = '<span style="position:absolute;top:8px;right:10px;font-size:10px;color:#8a82b8;text-transform:uppercase;letter-spacing:0.5px;">Reklama</span>';
-      if (ad.link) box.innerHTML = '<a href="'+esc(ad.link)+'" target="_blank" rel="noopener nofollow sponsored" style="'+style+'">'+label+inner+'</a>';
-      else box.innerHTML = '<div style="'+style+'">'+label+inner+'</div>';
+      if (ad.link) box.innerHTML = '<a class="ad-box" href="'+esc(ad.link)+'" target="_blank" rel="noopener nofollow sponsored" style="'+style+'">'+label+inner+'</a>';
+      else box.innerHTML = '<div class="ad-box" style="'+style+'">'+label+inner+'</div>';
     }).catch(function(){});
   } catch(e) {}
 })();
@@ -574,7 +588,7 @@ async function loadHome(){
 
     // #1 Ko'rishni davom ettiring (faqat "Yangi" + Barchasi rejimida, tepada)
     if (curSort === 'new' && curType === 'all' && curGenre === 'all') {
-      const recent = getRecent();
+      const recent = dedupeRecent(getRecent());
       if (recent.length) {
         html += rowHtml('▶ Ko\'rishni davom ettiring', recent.map(cardHtml).join(''));
       }
