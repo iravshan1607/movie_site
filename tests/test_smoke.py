@@ -111,5 +111,39 @@ def test_unknown_route_returns_404(client):
     assert resp.status_code == 404
 
 
+def test_safe_jsonld_blocks_script_injection():
+    """MUHIM regression test: JSON-LD ichidagi matnda '</script>' bo'lsa ham,
+    natijada '</script>' harfma-harf uchramasligi kerak (aks holda JSON-LD
+    blokidan HTML'ga chiqib, ixtiyoriy JS bajarilishi mumkin edi).
+    Bu test _safe_jsonld orqali tuzatilgan zaiflikni kelajakda qaytarilishdan himoya qiladi."""
+    from app import _safe_jsonld
+    import json as _json
+
+    evil = "</script><script>alert(1)</script>"
+    result = _safe_jsonld({"name": evil})
+
+    # 1) Natijada literal '</script>' bo'lmasligi kerak
+    assert "</script>" not in result
+
+    # 2) Ammo JSON semantikasi buzilmagan bo'lishi kerak — qayta o'qilganda
+    #    asl matn to'liq va o'zgarmagan holda qaytishi kerak.
+    restored = _json.loads(result.replace("\\u003c", "<"))
+    assert restored["name"] == evil
+
+
+def test_render_listing_escapes_base_path_defense_in_depth():
+    """Defense-in-depth regression test: agar base_path (chaqiruvchi tomonidan
+    odatda quote() bilan tozalanadi) tozalanmagan holda kelib qolsa ham,
+    _render_listing HTML chiqishida xom <script> bo'lmasligi kerak."""
+    from app import _render_listing
+
+    evil_path = '/janr/"><script>alert(1)</script>'
+    resp = _render_listing("Xavfli Janr", "Intro", [], 0, 1, 24, evil_path, "Xavfli")
+    html = resp.get_data(as_text=True) if hasattr(resp, "get_data") else resp
+
+    assert "<script>alert(1)</script>" not in html
+    assert "&lt;script&gt;" in html
+
+
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-v"]))

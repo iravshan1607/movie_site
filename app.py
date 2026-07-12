@@ -221,6 +221,15 @@ def _yt_id(url):
     m = re.search(r"(?:youtu\.be/|youtube\.com/(?:watch\?v=|embed/|v/|shorts/))([A-Za-z0-9_-]{11})", url)
     return m.group(1) if m else ""
 
+def _safe_jsonld(obj):
+    """JSON-LD ma'lumotini <script type="application/ld+json"> ichiga xavfsiz joylashtirish uchun.
+    MUHIM: agar DB'dagi matnda (masalan kino nomi yoki tavsifida) '</script>' satri bo'lsa,
+    oddiy json.dumps natijasi shu joyda script blokini yopib, undan keyingi matnni brauzer
+    HTML sifatida bajarishi mumkin edi (klassik JSON-in-HTML XSS). Shu sababli '<' belgisi
+    '\\u003c'ga almashtiriladi — bu JSON semantikasini o'zgartirmaydi (parser uchun bir xil),
+    lekin HTML parser '</script>'ni tan olmay qoladi."""
+    return json.dumps(obj, ensure_ascii=False).replace("<", "\\u003c")
+
 # ── Telegram bot orqali bildirishnoma yuborish ────────────────────────────────
 def _tg_send(chat_id, text, buttons=None):
     """Botdan foydalanuvchiga xabar yuboradi.
@@ -2412,7 +2421,6 @@ fetch('/api/channels').then(r=>r.json()).then(d=>{
 
 def _get_site_ad():
     """Sayt sahifalari uchun bitta faol reklama (yoki None) — hech qachon xato bermaydi."""
-    """Sayt sahifalari uchun bitta faol reklama (yoki None) — hech qachon xato bermaydi."""
     try:
         with get_conn() as conn:
             cur = conn.cursor()
@@ -2785,10 +2793,10 @@ def movie_page(mid):
             "url": canonical,
             "inLanguage": "uz",
         }
-        video_jsonld = _json.dumps(video_ld, ensure_ascii=False)
+        video_jsonld = _safe_jsonld(video_ld)
 
     # Sahifa struktura ma'lumoti
-    jsonld = _json.dumps(ld, ensure_ascii=False)
+    jsonld = _safe_jsonld(ld)
     video_script = f'<script type="application/ld+json">{video_jsonld}</script>' if video_jsonld else ''
     # BreadcrumbList — qidiruvda "Bosh sahifa › Kcategory › Kino" yo'lini ko'rsatadi
     _cat_path = {"movie":"/kategoriya/movie","series":"/kategoriya/series",
@@ -2803,11 +2811,11 @@ def movie_page(mid):
             {"@type": "ListItem", "position": 3, "name": title, "item": canonical},
         ]
     }
-    breadcrumb_script = f'<script type="application/ld+json">{_json.dumps(breadcrumb_ld, ensure_ascii=False)}</script>'
+    breadcrumb_script = f'<script type="application/ld+json">{_safe_jsonld(breadcrumb_ld)}</script>'
     ad_html = _render_ad_banner(_get_site_ad())   # reklama banner (bo'lmasa bo'sh)
     # Ulashish uchun JS-xavfsiz qiymatlar (kerakli qo'shtirnoq/maxsus belgilar ekranlanadi)
-    share_url_js = _json.dumps(canonical)
-    share_title_js = _json.dumps(title)
+    share_url_js = _safe_jsonld(canonical)
+    share_title_js = _safe_jsonld(title)
 
     # Treyler — to'g'ridan-to'g'ri qo'yilgan iframe (bosish shart emas, ishonchli ochiladi)
     if trailer_id:
@@ -3004,6 +3012,14 @@ def _render_listing(h1, intro, rows, total, page, per, base_path, crumb_label):
     page = max(1, min(page, pages))
     canon_base = f"{base}{base_path}"
     canonical = canon_base + (f"?page={page}" if page > 1 else "")
+    # DIQQAT: base_path chaqiruvchi funksiyalarda (seo_genre, seo_country va h.k.)
+    # har doim quote() bilan URL-encode qilib beriladi, shuning uchun amalda
+    # xavfli belgilar allaqachon foizli kodga aylantirilgan bo'ladi. Shunga
+    # qaramay, HTML atributlariga qo'yishdan oldin yana bir marta html.escape
+    # qilamiz — bu qo'shimcha himoya qatlami (defense-in-depth): agar kelajakda
+    # kimdir base_path'ni tozalamasdan chaqirsa ham, XSS bo'lmaydi.
+    canon_base_html = e(canon_base)
+    canonical_html = e(canonical)
 
     cards, item_list = [], []
     for i, r in enumerate(rows):
@@ -3023,7 +3039,7 @@ def _render_listing(h1, intro, rows, total, page, per, base_path, crumb_label):
 
     pag = ""
     if pages > 1:
-        def lk(p): return base_path + (f"?page={p}" if p > 1 else "")
+        def lk(p): return e(base_path + (f"?page={p}" if p > 1 else ""))
         parts = []
         if page > 1: parts.append(f'<a class="pg" href="{lk(page-1)}" rel="prev">‹</a>')
         for p in _page_window(page, pages):
@@ -3033,9 +3049,9 @@ def _render_listing(h1, intro, rows, total, page, per, base_path, crumb_label):
         if page < pages: parts.append(f'<a class="pg" href="{lk(page+1)}" rel="next">›</a>')
         pag = '<nav class="pglist">' + "".join(parts) + '</nav>'
 
-    prev_link = (f'<link rel="prev" href="{canon_base}'
+    prev_link = (f'<link rel="prev" href="{canon_base_html}'
                  + (f'?page={page-1}' if page-1 > 1 else '') + '">') if page > 1 else ""
-    next_link = f'<link rel="next" href="{canon_base}?page={page+1}">' if page < pages else ""
+    next_link = f'<link rel="next" href="{canon_base_html}?page={page+1}">' if page < pages else ""
 
     import json as _json
     breadcrumb = {"@context": "https://schema.org", "@type": "BreadcrumbList",
@@ -3052,17 +3068,17 @@ def _render_listing(h1, intro, rows, total, page, per, base_path, crumb_label):
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{e(h1)}{(' — sahifa ' + str(page)) if page>1 else ''} | ASTRA</title>
 <meta name="description" content="{e(desc)}">
-<link rel="canonical" href="{canonical}">
+<link rel="canonical" href="{canonical_html}">
 {prev_link}{next_link}
 <meta property="og:title" content="{e(h1)} | ASTRA">
 <meta property="og:description" content="{e(desc)}">
-<meta property="og:type" content="website"><meta property="og:url" content="{canonical}">
+<meta property="og:type" content="website"><meta property="og:url" content="{canonical_html}">
 <link rel="stylesheet" href="/static/style.css">
 <link rel="icon" href="/static/favicon.svg">
 <link rel="icon" type="image/png" sizes="32x32" href="/static/icon-192.png">
 <link rel="shortcut icon" href="/favicon.ico">
-<script type="application/ld+json">{_json.dumps(breadcrumb, ensure_ascii=False)}</script>
-<script type="application/ld+json">{_json.dumps(itemlist, ensure_ascii=False)}</script>
+<script type="application/ld+json">{_safe_jsonld(breadcrumb)}</script>
+<script type="application/ld+json">{_safe_jsonld(itemlist)}</script>
 <style>
   .seo-wrap{{max-width:1200px;margin:0 auto;padding:18px 16px 60px;}}
   .seo-top{{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;}}
