@@ -2849,29 +2849,155 @@ def admin_logout():
 def admin_check():
     return jsonify({"admin": bool(session.get("is_admin"))})
 
-# ── Admin statistika ──
+# ── Admin statistika (batafsil) ──
+def _safe_query(cur, sql, params=None, default=None):
+    """Bitta so'rov xato bersa ham qolgan statistikalar ishlashda davom etsin."""
+    try:
+        cur.execute(sql, params or ())
+        return cur.fetchall()
+    except Exception as e:
+        log.warning("stats query: %s | %s", e, sql[:80])
+        return default if default is not None else []
+
 @app.route("/api/admin/stats", methods=["POST"])
 def admin_stats():
     d = request.get_json() or {}
     if not _check(d):
         return jsonify({"error": "ruxsat yo'q"}), 403
-    out = {"total": 0, "by_type": {}, "total_views": 0, "top": [], "no_poster": 0}
+    out = {
+        "total": 0, "by_type": {}, "total_views": 0, "top": [], "no_poster": 0,
+        "avg_views": 0, "no_views": 0, "by_genre": [], "by_year": [], "by_quality": [],
+        "by_language": [], "by_country": [], "added_7d": 0, "added_30d": 0,
+        "added_today": 0, "by_day": [], "top_rated": [], "no_rating": 0, "avg_rating": 0,
+        "reviews_total": 0, "reviews_7d": 0, "top_reviewed": [], "top_commenters": [],
+        "favorites_total": 0, "most_favorited": [],
+        "upcoming_pending": 0, "upcoming_soon": 0, "upcoming_released": 0, "top_requested": [],
+        "notifications_total": 0, "notifications_unread": 0,
+        "ads_total": 0, "ads_active": 0,
+        "channels_total": 0, "channels_active": 0, "channels_by_category": [],
+        "known_users": 0, "active_users_7d": 0,
+        "premium_total": 0,
+    }
     try:
         with get_conn() as conn:
             cur = conn.cursor()
-            cur.execute("SELECT COUNT(*), COALESCE(SUM(views),0) FROM movies")
-            row = cur.fetchone(); out["total"] = row[0]; out["total_views"] = int(row[1] or 0)
-            cur.execute("SELECT COALESCE(content_type,'movie'), COUNT(*) FROM movies GROUP BY 1")
-            out["by_type"] = {r[0]: r[1] for r in cur.fetchall()}
-            cur.execute("""SELECT id, title, COALESCE(views,0) FROM movies
-                           ORDER BY COALESCE(views,0) DESC LIMIT 5""")
-            out["top"] = [{"id": r[0], "title": r[1], "views": r[2]} for r in cur.fetchall()]
-            cur.execute("""SELECT COUNT(*) FROM movies
-                           WHERE (poster_url IS NULL OR poster_url='')
-                             AND (poster_id IS NULL OR poster_id='')""")
-            out["no_poster"] = cur.fetchone()[0]
+
+            row = _safe_query(cur, "SELECT COUNT(*), COALESCE(SUM(views),0), COALESCE(AVG(views),0) FROM movies", default=[(0,0,0)])[0]
+            out["total"] = row[0]; out["total_views"] = int(row[1] or 0)
+            out["avg_views"] = round(float(row[2] or 0), 1)
+
+            for r in _safe_query(cur, "SELECT COALESCE(content_type,'movie'), COUNT(*) FROM movies GROUP BY 1"):
+                out["by_type"][r[0]] = r[1]
+
+            out["top"] = [{"id": r[0], "title": r[1], "views": r[2]} for r in _safe_query(
+                cur, "SELECT id, title, COALESCE(views,0) FROM movies ORDER BY COALESCE(views,0) DESC LIMIT 10")]
+
+            out["no_poster"] = _safe_query(cur, """SELECT COUNT(*) FROM movies
+                WHERE (poster_url IS NULL OR poster_url='') AND (poster_id IS NULL OR poster_id='')""",
+                default=[(0,)])[0][0]
+            out["no_views"] = _safe_query(cur, "SELECT COUNT(*) FROM movies WHERE COALESCE(views,0)=0", default=[(0,)])[0][0]
+
+            try:
+                out["premium_total"] = _safe_query(cur, "SELECT COUNT(*) FROM movies WHERE is_premium=TRUE", default=[(0,)])[0][0]
+            except Exception:
+                pass
+
+            out["by_genre"] = [{"name": r[0], "count": r[1]} for r in _safe_query(cur, """
+                SELECT TRIM(genre), COUNT(*) FROM movies
+                WHERE genre IS NOT NULL AND genre <> ''
+                GROUP BY 1 ORDER BY 2 DESC LIMIT 12""")]
+
+            out["by_year"] = [{"year": r[0], "count": r[1]} for r in _safe_query(cur, """
+                SELECT year, COUNT(*) FROM movies
+                WHERE year IS NOT NULL GROUP BY 1 ORDER BY 1 DESC LIMIT 15""")]
+
+            out["by_quality"] = [{"name": r[0], "count": r[1]} for r in _safe_query(cur, """
+                SELECT quality, COUNT(*) FROM movies
+                WHERE quality IS NOT NULL AND quality <> ''
+                GROUP BY 1 ORDER BY 2 DESC""")]
+
+            out["by_language"] = [{"name": r[0], "count": r[1]} for r in _safe_query(cur, """
+                SELECT language, COUNT(*) FROM movies
+                WHERE language IS NOT NULL AND language <> ''
+                GROUP BY 1 ORDER BY 2 DESC""")]
+
+            out["by_country"] = [{"name": r[0], "count": r[1]} for r in _safe_query(cur, """
+                SELECT country, COUNT(*) FROM movies
+                WHERE country IS NOT NULL AND country <> ''
+                GROUP BY 1 ORDER BY 2 DESC LIMIT 10""")]
+
+            row = _safe_query(cur, """SELECT
+                    COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days'),
+                    COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '30 days'),
+                    COUNT(*) FILTER (WHERE created_at >= CURRENT_DATE)
+                FROM movies""", default=[(0,0,0)])[0]
+            out["added_7d"], out["added_30d"], out["added_today"] = row[0], row[1], row[2]
+
+            out["by_day"] = [{"date": str(r[0]), "count": r[1]} for r in _safe_query(cur, """
+                SELECT created_at::date, COUNT(*) FROM movies
+                WHERE created_at >= NOW() - INTERVAL '14 days'
+                GROUP BY 1 ORDER BY 1""")]
+
+            row = _safe_query(cur, "SELECT COUNT(*) FILTER (WHERE rating IS NULL), COALESCE(AVG(rating),0) FROM movies", default=[(0,0)])[0]
+            out["no_rating"] = row[0]; out["avg_rating"] = round(float(row[1] or 0), 2)
+            out["top_rated"] = [{"id": r[0], "title": r[1], "rating": float(r[2])} for r in _safe_query(cur, """
+                SELECT id, title, rating FROM movies
+                WHERE rating IS NOT NULL ORDER BY rating DESC LIMIT 5""")]
+
+            row = _safe_query(cur, """SELECT COUNT(*),
+                    COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days')
+                FROM reviews""", default=[(0,0)])[0]
+            out["reviews_total"], out["reviews_7d"] = row[0], row[1]
+
+            out["top_reviewed"] = [{"movie_id": r[0], "title": r[1], "count": r[2]} for r in _safe_query(cur, """
+                SELECT rv.movie_id, m.title, COUNT(*) c FROM reviews rv
+                LEFT JOIN movies m ON m.id = rv.movie_id
+                GROUP BY 1,2 ORDER BY c DESC LIMIT 5""")]
+
+            out["top_commenters"] = [{"user_name": r[0] or "Noma'lum", "count": r[1]} for r in _safe_query(cur, """
+                SELECT user_name, COUNT(*) c FROM reviews
+                GROUP BY 1 ORDER BY c DESC LIMIT 5""")]
+
+            out["favorites_total"] = _safe_query(cur, "SELECT COUNT(*) FROM favorites", default=[(0,)])[0][0]
+            out["most_favorited"] = [{"title": r[0], "count": r[1]} for r in _safe_query(cur, """
+                SELECT title, COUNT(*) c FROM favorites
+                WHERE title IS NOT NULL GROUP BY 1 ORDER BY c DESC LIMIT 5""")]
+
+            for r in _safe_query(cur, "SELECT status, COUNT(*) FROM upcoming GROUP BY 1"):
+                if r[0] == "pending": out["upcoming_pending"] = r[1]
+                elif r[0] == "soon": out["upcoming_soon"] = r[1]
+                elif r[0] == "released": out["upcoming_released"] = r[1]
+            out["top_requested"] = [{"title": r[0], "subs": r[1]} for r in _safe_query(cur, """
+                SELECT u.title, COUNT(us.user_id) c FROM upcoming u
+                LEFT JOIN upcoming_subs us ON us.upcoming_id = u.id
+                WHERE u.status != 'released'
+                GROUP BY u.id, u.title ORDER BY c DESC LIMIT 5""")]
+
+            row = _safe_query(cur, "SELECT COUNT(*), COUNT(*) FILTER (WHERE is_read=FALSE) FROM notifications", default=[(0,0)])[0]
+            out["notifications_total"], out["notifications_unread"] = row[0], row[1]
+
+            row = _safe_query(cur, "SELECT COUNT(*), COUNT(*) FILTER (WHERE is_active=TRUE) FROM ads", default=[(0,0)])[0]
+            out["ads_total"], out["ads_active"] = row[0], row[1]
+
+            row = _safe_query(cur, "SELECT COUNT(*), COUNT(*) FILTER (WHERE is_active=TRUE) FROM tv_channels", default=[(0,0)])[0]
+            out["channels_total"], out["channels_active"] = row[0], row[1]
+            out["channels_by_category"] = [{"name": r[0] or "Umumiy", "count": r[1]} for r in _safe_query(cur, """
+                SELECT category, COUNT(*) FROM tv_channels GROUP BY 1 ORDER BY 2 DESC""")]
+
+            uids = _safe_query(cur, """
+                SELECT user_id FROM favorites
+                UNION SELECT user_id FROM reviews
+                UNION SELECT user_id FROM upcoming_subs
+                UNION SELECT user_id FROM notifications""")
+            out["known_users"] = len(uids)
+
+            out["active_users_7d"] = _safe_query(cur, """
+                SELECT COUNT(DISTINCT user_id) FROM reviews WHERE created_at >= NOW() - INTERVAL '7 days'
+                """, default=[(0,)])[0][0]
+
         return jsonify(out)
     except Exception as e:
+        log.warning("admin_stats: %s", e)
         return jsonify({"error": str(e)}), 500
 
 # ── TMDB qidiruv (poster + ma'lumotni avtomatik olish) ──
