@@ -30,6 +30,9 @@ DATABASE_URL   = os.getenv("DATABASE_URL", "")
 BOT_TOKEN      = os.getenv("BOT_TOKEN", "")
 BOT_USERNAME   = os.getenv("BOT_USERNAME", "")          # botga yo'naltirish + Telegram login uchun
 ADMIN_PASSWORD = os.getenv("KINO_ADMIN_PASSWORD", "admin123")
+if ADMIN_PASSWORD == "admin123":
+    log.warning("OGOHLANTIRISH: KINO_ADMIN_PASSWORD environment o'zgaruvchisi o'rnatilmagan — "
+                "standart 'admin123' paroli ishlatilmoqda! Railway'da darhol o'zgartiring.")
 ADMIN_CHAT_ID  = os.getenv("ADMIN_CHAT_ID", "")    # admin(lar) Telegram ID — yangi so'rov xabari uchun (vergul bilan bir nechta)
 REVIEW_COOLDOWN  = int(os.getenv("REVIEW_COOLDOWN", "15"))    # soniya — izoh/javob orasidagi minimal vaqt
 REQUEST_COOLDOWN = int(os.getenv("REQUEST_COOLDOWN", "30"))   # soniya — yangi kino so'rovi orasidagi minimal vaqt
@@ -500,7 +503,13 @@ def admin_page():
 
 @app.after_request
 def cors(resp):
-    resp.headers["Access-Control-Allow-Origin"] = "*"
+    p = request.path or ""
+    if p.startswith("/api/admin/"):
+        # Admin API — faqat sayt o'zidan (cookie-based session) ishlatiladi,
+        # tashqi domenlarga ochiq bo'lishi shart emas.
+        resp.headers.pop("Access-Control-Allow-Origin", None)
+    else:
+        resp.headers["Access-Control-Allow-Origin"] = "*"
     resp.headers["Access-Control-Allow-Headers"] = "Content-Type"
     p = request.path or ""
     # Statik aktivlar uchun brauzer keshi (takroriy tashriflar — tezroq)
@@ -2970,7 +2979,8 @@ def _check(d):
     # Sessiyada admin bo'lsa — parol shart emas; aks holda parol orqali (zaxira)
     if session.get("is_admin"):
         return True
-    return ((d or {}).get("password") or "") == ADMIN_PASSWORD
+    pw = (d or {}).get("password") or ""
+    return bool(pw) and hmac.compare_digest(pw, ADMIN_PASSWORD)
 
 _ADMIN_LOG_DDL = """CREATE TABLE IF NOT EXISTS admin_log (
     id SERIAL PRIMARY KEY,
@@ -3046,7 +3056,8 @@ def admin_login():
         _log_admin("login_blocked", "", ip)
         return jsonify({"ok": False, "error": "Juda ko'p noto'g'ri urinish. 15 daqiqadan keyin qayta urinib ko'ring."}), 429
 
-    ok = ((request.get_json() or {}).get("password") or "") == ADMIN_PASSWORD
+    pw = (request.get_json() or {}).get("password") or ""
+    ok = bool(pw) and hmac.compare_digest(pw, ADMIN_PASSWORD)
     if ok:
         _login_clear(ip)
         session.permanent = True
