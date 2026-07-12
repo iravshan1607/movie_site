@@ -330,6 +330,7 @@ textarea { resize:vertical; min-height:80px; }
         <span>Statistika</span>
       </div>
       <div style="display:flex;align-items:center;gap:10px;">
+        <button onclick="event.stopPropagation();openAdminLog();" style="padding:7px 13px;background:rgba(255,255,255,0.05);border:1px solid var(--line);color:var(--dim);border-radius:9px;font-family:inherit;font-size:12.5px;cursor:pointer;">📋 Jurnal</button>
         <button id="statsRefreshBtn" onclick="event.stopPropagation();loadStats();" style="display:flex;align-items:center;gap:7px;padding:7px 15px;background:linear-gradient(135deg,rgba(157,123,255,0.18),rgba(90,209,255,0.18));border:1px solid rgba(157,123,255,0.4);color:#c9baff;border-radius:9px;font-family:inherit;font-size:12.5px;font-weight:600;cursor:pointer;transition:transform .15s,box-shadow .15s;">
           <svg id="statsRefreshIcon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" style="transition:transform .5s cubic-bezier(.4,0,.2,1);"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
           <span id="statsRefreshLabel">Yangilash</span>
@@ -787,6 +788,41 @@ function editContentFromStats(id) {
   closeStatDetail();
   if (typeof openEdit === 'function') { openEdit(id); return; }
   if (typeof editMovie === 'function') { editMovie(id); return; }
+}
+
+// ── Admin harakatlar jurnali ──
+var ADMIN_ACTION_LABELS = {
+  edit_movie: '✏️ Tahrirlash', delete_movie: '🗑 O\'chirish', broadcast: '📢 Xabar yuborish',
+  login: '🔑 Kirish'
+};
+async function openAdminLog() {
+  var overlay = document.getElementById('statDetailOverlay');
+  var title = document.getElementById('statDetailTitle');
+  var body = document.getElementById('statDetailBody');
+  title.textContent = 'Harakatlar jurnali';
+  body.innerHTML = '<div style="font-size:13px;color:var(--dim);padding:20px 0;text-align:center;">Yuklanmoqda…</div>';
+  overlay.classList.add('open');
+  try {
+    var r = await fetch('/api/admin/log', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ password: PASS })
+    });
+    var d = await r.json();
+    if (d.error) { body.innerHTML = '<div style="color:#f87171;font-size:13px;">'+esc(d.error)+'</div>'; return; }
+    if (!d.items || !d.items.length) {
+      body.innerHTML = '<div style="font-size:13px;color:var(--dim);padding:20px 0;text-align:center;">Hozircha bo\'sh</div>';
+      return;
+    }
+    body.innerHTML = d.items.map(function(it){
+      var lbl = ADMIN_ACTION_LABELS[it.action] || it.action;
+      return '<div style="padding:9px 6px;border-bottom:1px solid rgba(255,255,255,0.05);">'
+        + '<div style="display:flex;justify-content:space-between;font-size:13px;"><span>'+esc(lbl)+'</span><span style="color:var(--dim);font-size:11.5px;">'+esc(it.date)+'</span></div>'
+        + (it.details ? '<div style="font-size:12px;color:var(--dim);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(it.details)+'</div>' : '')
+        + '</div>';
+    }).join('');
+  } catch(e) {
+    body.innerHTML = '<div style="color:#f87171;font-size:13px;">Yuklab bo\'lmadi</div>';
+  }
 }
 function statBlock(title, innerHtml) {
   return '<div style="background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:12px;">'
