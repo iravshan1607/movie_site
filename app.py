@@ -1888,7 +1888,7 @@ def tv_page():
   .ch-row:hover{border-color:#7c5cff;}
   .ch-row.active{border-color:#7c5cff;background:rgba(124,92,255,.14);box-shadow:0 0 0 1px rgba(124,92,255,.4) inset;}
   .ch-row .ch-logo{width:44px;height:44px;flex:0 0 auto;object-fit:contain;border-radius:8px;background:#0d0b22;}
-  .ch-row .ch-logo.ph{display:flex;align-items:center;justify-content:center;font-size:19px;color:#7c5cff;}
+  .ch-row .ch-logo.ph{display:flex;align-items:center;justify-content:center;font-size:19px;color:#7c5cff;box-shadow:inset 0 0 0 1px rgba(255,255,255,.08);text-shadow:0 1px 2px rgba(0,0,0,.35);}
   .ch-row .ch-info{min-width:0;flex:1 1 auto;}
   .ch-row .ch-name{color:#fff;font-size:13px;font-weight:500;line-height:1.3;white-space:nowrap;
     overflow:hidden;text-overflow:ellipsis;}
@@ -1991,7 +1991,7 @@ function normalizeLogoUrl(url){
 const CAT_LABELS = {
   'undefined':'Umumiy', '':'Umumiy', 'general':'Umumiy', 'public':'Umumiy',
   'news':'Yangiliklar', 'sport':'Sport', 'sports':'Sport', 'kids':'Bolalar',
-  'family':'Oilaviy', 'music':'Musiqa', 'movies':'Kino', 'entertainment':'Ko\\'ngilochar',
+  'family':'Oilaviy', 'music':'Musiqa', 'movies':'Kino', 'entertainment':'Ko\'ngilochar',
   'documentary':'Hujjatli', 'culture':'Madaniyat', 'classic':'Klassik',
   'religious':'Diniy', 'lifestyle':'Turmush tarzi', 'animation':'Multfilm'
 };
@@ -2045,7 +2045,7 @@ function play(ch){
 
   if (ch.source_type === 'youtube'){
     const embed = ch.embed_url;
-    if (!embed){ nowPlaying.innerHTML = '⚠️ Bu kanalning YouTube havolasi noto\\'g\\'ri yoki qo\\'shilmagan.'; liveBadge.style.display='none'; return; }
+    if (!embed){ nowPlaying.innerHTML = '⚠️ Bu kanalning YouTube havolasi noto\'g\'ri yoki qo\'shilmagan.'; liveBadge.style.display='none'; return; }
     video.style.display = 'none';
     frame.style.display = 'block';
     frame.src = embed;
@@ -2055,7 +2055,7 @@ function play(ch){
   }
 
   const url = ch.stream_url;
-  if (!url){ nowPlaying.innerHTML = '⚠️ Bu kanalning oqim havolasi hali qo\\'shilmagan.'; liveBadge.style.display='none'; return; }
+  if (!url){ nowPlaying.innerHTML = '⚠️ Bu kanalning oqim havolasi hali qo\'shilmagan.'; liveBadge.style.display='none'; return; }
   if (video.canPlayType('application/vnd.apple.mpegurl')){
     video.src = url; video.play().catch(()=>{});
   } else if (window.Hls && Hls.isSupported()){
@@ -2072,7 +2072,7 @@ function play(ch){
         hlsRetries++;
         try{ hls.recoverMediaError(); }catch(err){}
       } else {
-        nowPlaying.innerHTML='⚠️ Oqimni ochib bo\\'lmadi (havola ishlamayapti yoki bloklangan).';
+        nowPlaying.innerHTML='⚠️ Oqimni ochib bo\'lmadi (havola ishlamayapti yoki bloklangan).';
         liveBadge.style.display='none';
         try{ hls.destroy(); }catch(err){}
         hls = null;
@@ -2083,6 +2083,24 @@ function play(ch){
   }
   scrollPlayerIntoViewIfNeeded();
   sendHeartbeat();
+}
+
+// Kanal nomidan barqaror rang tanlaydi (bir xil nom doim bir xil rangda bo'lsin)
+const AVATAR_PALETTE = [
+  ['#7c5cff','#3a2e8f'], ['#ff5c8a','#8f2e5c'], ['#5cc8ff','#2e5c8f'],
+  ['#5cffb0','#2e8f6a'], ['#ffb85c','#8f652e'], ['#ff5c5c','#8f2e2e'],
+  ['#c15cff','#652e8f'], ['#5cffe0','#2e8f7d'],
+];
+function avatarColors(name){
+  const s = (name||'?').trim();
+  let hash = 0;
+  for (let i=0;i<s.length;i++){ hash = (hash*31 + s.charCodeAt(i)) >>> 0; }
+  return AVATAR_PALETTE[hash % AVATAR_PALETTE.length];
+}
+function channelLetterAvatar(name){
+  const letter = (name||'?').trim().charAt(0).toUpperCase() || '?';
+  const [c1,c2] = avatarColors(name);
+  return `<div class="ch-logo ph" style="background:linear-gradient(135deg,${c1},${c2});color:#fff;font-weight:700;">${esc(letter)}</div>`;
 }
 
 function render(){
@@ -2099,20 +2117,30 @@ function render(){
   }
   listEl.innerHTML = list.map(c=>{
     const logoUrl = normalizeLogoUrl(c.logo_url);
+    const fallback = channelLetterAvatar(c.name).replace(/"/g, '&quot;');
     const logo = logoUrl
-      ? `<img class="ch-logo" src="${esc(logoUrl)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.onerror=null;this.outerHTML='<div class=\\'ch-logo ph\\'>📺</div>'">`
-      : `<div class="ch-logo ph">📺</div>`;
+      ? `<img class="ch-logo" src="${esc(logoUrl)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.onerror=null;this.outerHTML=&quot;${fallback}&quot;">`
+      : channelLetterAvatar(c.name);
     const n = VIEWERS[String(c.id)] || 0;
     const hasStream = !!(c.stream_url && c.stream_url.trim());
     const statusDot = hasStream
       ? '<span class="ch-status ch-status-on" title="Onlayn"></span>'
-      : '<span class="ch-status ch-status-off" title="Oflayn — havola qo\\'shilmagan"></span>';
-    return `<div class="ch-row ${c.id===activeId?'active':''}" data-id="${c.id}" onclick='play(${JSON.stringify(c).replace(/'/g,"&#39;")})'>
+      : '<span class="ch-status ch-status-off" title="Oflayn — havola qo\'shilmagan"></span>';
+    return `<div class="ch-row ${c.id===activeId?'active':''}" data-id="${c.id}">
       ${logo}<div class="ch-info"><div class="ch-name">${statusDot}${esc(c.name)}${c.source_type==='youtube'?' <span style="color:#ff4444;font-size:10px;">▶</span>':''}</div>
       <div class="ch-cat">${esc(primaryCategory(c.category))}</div>
       <div class="ch-viewers"><span class="dot"></span><span class="ch-viewers-num">${fmtViewers(n)} tomoshada</span></div></div></div>`;
   }).join('');
 }
+
+// Ro'yxatdagi bosishlarni bitta delegated listener orqali ushlaymiz (xavfsiz, escaping muammosiz).
+document.addEventListener('click', function(e){
+  const row = e.target.closest('.ch-row');
+  if (!row) return;
+  const id = row.dataset.id;
+  const ch = CHANNELS.find(x => String(x.id) === String(id));
+  if (ch) play(ch);
+});
 function setCat(c){ curCat=c; render(); }
 function toggleCatBox(){
   const box = document.getElementById('catRow');
@@ -2161,7 +2189,7 @@ const SIDEBAR_KEY = 'tvSidebarOpen';
 
 function applySidebarState(open){
   sidebar.classList.toggle('collapsed', !open);
-  toggleLabel.textContent = open ? 'Kanallarni yashirish' : 'Kanallarni ko\\'rsatish';
+  toggleLabel.textContent = open ? 'Kanallarni yashirish' : 'Kanallarni ko\'rsatish';
 }
 function toggleSidebar(){
   const open = sidebar.classList.contains('collapsed');
