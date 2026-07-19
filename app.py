@@ -2062,7 +2062,22 @@ function play(ch){
     hls = new Hls({lowLatencyMode:true});
     hls.loadSource(url); hls.attachMedia(video);
     hls.on(Hls.Events.MANIFEST_PARSED, ()=>video.play().catch(()=>{}));
-    hls.on(Hls.Events.ERROR, (e,data)=>{ if(data.fatal){ nowPlaying.innerHTML='⚠️ Oqimni ochib bo\\'lmadi (havola ishlamayapti yoki bloklangan).'; liveBadge.style.display='none'; } });
+    let hlsRetries = 0;
+    hls.on(Hls.Events.ERROR, (e,data)=>{
+      if (!data.fatal) return;
+      if (data.type === Hls.ErrorTypes.NETWORK_ERROR && hlsRetries < 5){
+        hlsRetries++;
+        setTimeout(()=>{ try{ hls.startLoad(); }catch(err){} }, 1000 * hlsRetries);
+      } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR && hlsRetries < 5){
+        hlsRetries++;
+        try{ hls.recoverMediaError(); }catch(err){}
+      } else {
+        nowPlaying.innerHTML='⚠️ Oqimni ochib bo\\'lmadi (havola ishlamayapti yoki bloklangan).';
+        liveBadge.style.display='none';
+        try{ hls.destroy(); }catch(err){}
+        hls = null;
+      }
+    });
   } else {
     video.src = url; video.play().catch(()=>{});
   }
