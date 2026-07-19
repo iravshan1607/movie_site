@@ -1991,7 +1991,7 @@ function normalizeLogoUrl(url){
 const CAT_LABELS = {
   'undefined':'Umumiy', '':'Umumiy', 'general':'Umumiy', 'public':'Umumiy',
   'news':'Yangiliklar', 'sport':'Sport', 'sports':'Sport', 'kids':'Bolalar',
-  'family':'Oilaviy', 'music':'Musiqa', 'movies':'Kino', 'entertainment':'Ko\'ngilochar',
+  'family':'Oilaviy', 'music':'Musiqa', 'movies':'Kino', 'entertainment':'Ko\\'ngilochar',
   'documentary':'Hujjatli', 'culture':'Madaniyat', 'classic':'Klassik',
   'religious':'Diniy', 'lifestyle':'Turmush tarzi', 'animation':'Multfilm'
 };
@@ -2045,7 +2045,7 @@ function play(ch){
 
   if (ch.source_type === 'youtube'){
     const embed = ch.embed_url;
-    if (!embed){ nowPlaying.innerHTML = '⚠️ Bu kanalning YouTube havolasi noto\'g\'ri yoki qo\'shilmagan.'; liveBadge.style.display='none'; return; }
+    if (!embed){ nowPlaying.innerHTML = '⚠️ Bu kanalning YouTube havolasi noto\\'g\\'ri yoki qo\\'shilmagan.'; liveBadge.style.display='none'; return; }
     video.style.display = 'none';
     frame.style.display = 'block';
     frame.src = embed;
@@ -2055,30 +2055,14 @@ function play(ch){
   }
 
   const url = ch.stream_url;
-  if (!url){ nowPlaying.innerHTML = '⚠️ Bu kanalning oqim havolasi hali qo\'shilmagan.'; liveBadge.style.display='none'; return; }
+  if (!url){ nowPlaying.innerHTML = '⚠️ Bu kanalning oqim havolasi hali qo\\'shilmagan.'; liveBadge.style.display='none'; return; }
   if (video.canPlayType('application/vnd.apple.mpegurl')){
     video.src = url; video.play().catch(()=>{});
   } else if (window.Hls && Hls.isSupported()){
     hls = new Hls({lowLatencyMode:true});
     hls.loadSource(url); hls.attachMedia(video);
     hls.on(Hls.Events.MANIFEST_PARSED, ()=>video.play().catch(()=>{}));
-    let hlsRetries = 0;
-    hls.on(Hls.Events.ERROR, (e,data)=>{
-      if (!data.fatal) return;
-      if (data.type === Hls.ErrorTypes.NETWORK_ERROR && hlsRetries < 5){
-        // Playlist muddati o'tgan/404 bo'lsa ham, avval qayta yuklashga urinamiz.
-        hlsRetries++;
-        setTimeout(()=>{ try{ hls.startLoad(); }catch(err){} }, 1000 * hlsRetries);
-      } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR && hlsRetries < 5){
-        hlsRetries++;
-        try{ hls.recoverMediaError(); }catch(err){}
-      } else {
-        nowPlaying.innerHTML='⚠️ Oqimni ochib bo\'lmadi (havola ishlamayapti yoki bloklangan).';
-        liveBadge.style.display='none';
-        try{ hls.destroy(); }catch(err){}
-        hls = null;
-      }
-    });
+    hls.on(Hls.Events.ERROR, (e,data)=>{ if(data.fatal){ nowPlaying.innerHTML='⚠️ Oqimni ochib bo\\'lmadi (havola ishlamayapti yoki bloklangan).'; liveBadge.style.display='none'; } });
   } else {
     video.src = url; video.play().catch(()=>{});
   }
@@ -2101,29 +2085,19 @@ function render(){
   listEl.innerHTML = list.map(c=>{
     const logoUrl = normalizeLogoUrl(c.logo_url);
     const logo = logoUrl
-      ? `<img class="ch-logo" src="${esc(logoUrl)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.onerror=null;this.outerHTML=&#39;&lt;div class=&quot;ch-logo ph&quot;&gt;📺&lt;/div&gt;&#39;">`
+      ? `<img class="ch-logo" src="${esc(logoUrl)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.onerror=null;this.outerHTML='<div class=\\'ch-logo ph\\'>📺</div>'">`
       : `<div class="ch-logo ph">📺</div>`;
     const n = VIEWERS[String(c.id)] || 0;
     const hasStream = !!(c.stream_url && c.stream_url.trim());
     const statusDot = hasStream
       ? '<span class="ch-status ch-status-on" title="Onlayn"></span>'
-      : '<span class="ch-status ch-status-off" title="Oflayn — havola qo\'shilmagan"></span>';
-    return `<div class="ch-row ${c.id===activeId?'active':''}" data-id="${c.id}">
+      : '<span class="ch-status ch-status-off" title="Oflayn — havola qo\\'shilmagan"></span>';
+    return `<div class="ch-row ${c.id===activeId?'active':''}" data-id="${c.id}" onclick='play(${JSON.stringify(c).replace(/'/g,"&#39;")})'>
       ${logo}<div class="ch-info"><div class="ch-name">${statusDot}${esc(c.name)}${c.source_type==='youtube'?' <span style="color:#ff4444;font-size:10px;">▶</span>':''}</div>
       <div class="ch-cat">${esc(primaryCategory(c.category))}</div>
       <div class="ch-viewers"><span class="dot"></span><span class="ch-viewers-num">${fmtViewers(n)} tomoshada</span></div></div></div>`;
   }).join('');
 }
-
-// Ro'yxatdagi bosishlarni bitta delegated listener orqali ushlaymiz.
-// Bu HTML atributi ichiga xom JSON qo'yishdan (buzilgan escaping -> "Unexpected identifier" xatosi) qochadi.
-document.addEventListener('click', function(e){
-  const row = e.target.closest('.ch-row');
-  if (!row) return;
-  const id = row.dataset.id;
-  const ch = CHANNELS.find(x => String(x.id) === String(id));
-  if (ch) play(ch);
-});
 function setCat(c){ curCat=c; render(); }
 function toggleCatBox(){
   const box = document.getElementById('catRow');
@@ -2172,7 +2146,7 @@ const SIDEBAR_KEY = 'tvSidebarOpen';
 
 function applySidebarState(open){
   sidebar.classList.toggle('collapsed', !open);
-  toggleLabel.textContent = open ? 'Kanallarni yashirish' : 'Kanallarni ko\'rsatish';
+  toggleLabel.textContent = open ? 'Kanallarni yashirish' : 'Kanallarni ko\\'rsatish';
 }
 function toggleSidebar(){
   const open = sidebar.classList.contains('collapsed');
