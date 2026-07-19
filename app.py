@@ -2101,7 +2101,7 @@ function render(){
   listEl.innerHTML = list.map(c=>{
     const logoUrl = normalizeLogoUrl(c.logo_url);
     const logo = logoUrl
-      ? `<img class="ch-logo" src="${esc(logoUrl)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.onerror=null;this.outerHTML='<div class=\'ch-logo ph\'>📺</div>'">`
+      ? `<img class="ch-logo" src="${esc(logoUrl)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.onerror=null;this.outerHTML=&#39;&lt;div class=&quot;ch-logo ph&quot;&gt;📺&lt;/div&gt;&#39;">`
       : `<div class="ch-logo ph">📺</div>`;
     const n = VIEWERS[String(c.id)] || 0;
     const hasStream = !!(c.stream_url && c.stream_url.trim());
