@@ -1991,7 +1991,7 @@ function normalizeLogoUrl(url){
 const CAT_LABELS = {
   'undefined':'Umumiy', '':'Umumiy', 'general':'Umumiy', 'public':'Umumiy',
   'news':'Yangiliklar', 'sport':'Sport', 'sports':'Sport', 'kids':'Bolalar',
-  'family':'Oilaviy', 'music':'Musiqa', 'movies':'Kino', 'entertainment':'Ko\'ngilochar',
+  'family':'Oilaviy', 'music':'Musiqa', 'movies':'Kino', 'entertainment':'Ko\\'ngilochar',
   'documentary':'Hujjatli', 'culture':'Madaniyat', 'classic':'Klassik',
   'religious':'Diniy', 'lifestyle':'Turmush tarzi', 'animation':'Multfilm'
 };
@@ -2045,7 +2045,7 @@ function play(ch){
 
   if (ch.source_type === 'youtube'){
     const embed = ch.embed_url;
-    if (!embed){ nowPlaying.innerHTML = '⚠️ Bu kanalning YouTube havolasi noto\'g\'ri yoki qo\'shilmagan.'; liveBadge.style.display='none'; return; }
+    if (!embed){ nowPlaying.innerHTML = '⚠️ Bu kanalning YouTube havolasi noto\\'g\\'ri yoki qo\\'shilmagan.'; liveBadge.style.display='none'; return; }
     video.style.display = 'none';
     frame.style.display = 'block';
     frame.src = embed;
@@ -2055,7 +2055,7 @@ function play(ch){
   }
 
   const url = ch.stream_url;
-  if (!url){ nowPlaying.innerHTML = '⚠️ Bu kanalning oqim havolasi hali qo\'shilmagan.'; liveBadge.style.display='none'; return; }
+  if (!url){ nowPlaying.innerHTML = '⚠️ Bu kanalning oqim havolasi hali qo\\'shilmagan.'; liveBadge.style.display='none'; return; }
   if (video.canPlayType('application/vnd.apple.mpegurl')){
     video.src = url; video.play().catch(()=>{});
   } else if (window.Hls && Hls.isSupported()){
@@ -2072,7 +2072,7 @@ function play(ch){
         hlsRetries++;
         try{ hls.recoverMediaError(); }catch(err){}
       } else {
-        nowPlaying.innerHTML='⚠️ Oqimni ochib bo\'lmadi (havola ishlamayapti yoki bloklangan).';
+        nowPlaying.innerHTML='⚠️ Oqimni ochib bo\\'lmadi (havola ishlamayapti yoki bloklangan).';
         liveBadge.style.display='none';
         try{ hls.destroy(); }catch(err){}
         hls = null;
@@ -2125,7 +2125,7 @@ function render(){
     const hasStream = !!(c.stream_url && c.stream_url.trim());
     const statusDot = hasStream
       ? '<span class="ch-status ch-status-on" title="Onlayn"></span>'
-      : '<span class="ch-status ch-status-off" title="Oflayn — havola qo\'shilmagan"></span>';
+      : '<span class="ch-status ch-status-off" title="Oflayn — havola qo\\'shilmagan"></span>';
     return `<div class="ch-row ${c.id===activeId?'active':''}" data-id="${c.id}">
       ${logo}<div class="ch-info"><div class="ch-name">${statusDot}${esc(c.name)}${c.source_type==='youtube'?' <span style="color:#ff4444;font-size:10px;">▶</span>':''}</div>
       <div class="ch-cat">${esc(primaryCategory(c.category))}</div>
@@ -2189,7 +2189,7 @@ const SIDEBAR_KEY = 'tvSidebarOpen';
 
 function applySidebarState(open){
   sidebar.classList.toggle('collapsed', !open);
-  toggleLabel.textContent = open ? 'Kanallarni yashirish' : 'Kanallarni ko\'rsatish';
+  toggleLabel.textContent = open ? 'Kanallarni yashirish' : 'Kanallarni ko\\'rsatish';
 }
 function toggleSidebar(){
   const open = sidebar.classList.contains('collapsed');
